@@ -1,0 +1,35 @@
+{
+  "name": "idol-fan-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "アイドルファンサイト - 会員制ECサイト・ファンクラブ・チケット連携プラットフォーム",
+  "engines": {
+    "node": ">=20.20.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @idol/db prisma:generate",
+    "db:migrate": "pnpm --filter @idol/db prisma:migrate",
+    "db:seed": "pnpm --filter @idol/db seed",
+    "db:studio": "pnpm --filter @idol/db prisma:studio",
+    "infra:synth": "pnpm --filter @idol/infra synth",
+    "infra:diff": "pnpm --filter @idol/infra diff",
+    "infra:deploy": "pnpm --filter @idol/infra deploy",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.6",
+    "typescript": "^5.9.2"
+  }
+}

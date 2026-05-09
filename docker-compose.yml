@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: idol-fansite-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: idol
+      POSTGRES_PASSWORD: idolpass
+      POSTGRES_DB: idol_fansite
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U idol -d idol_fansite']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ローカルでS3代替として使う場合のみ起動
+  minio:
+    image: minio/minio:latest
+    container_name: idol-fansite-minio
+    restart: unless-stopped
+    profiles: ['storage']
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ':9001'
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:

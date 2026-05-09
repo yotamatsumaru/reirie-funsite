@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand-50: #fef2f8;
+  --color-brand-100: #fee5f1;
+  --color-brand-200: #ffcce4;
+  --color-brand-300: #ffa3cf;
+  --color-brand-400: #ff6fb1;
+  --color-brand-500: #ff3d92;
+  --color-brand-600: #ed1c75;
+  --color-brand-700: #c8125c;
+  --color-brand-800: #a5124e;
+  --color-brand-900: #871343;
+  --font-sans:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #fafafa;
+  color: #171717;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* スクロールバー */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+/* フォーカスリング統一 */
+*:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}

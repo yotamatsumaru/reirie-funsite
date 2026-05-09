@@ -1,0 +1,128 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - lambda
+          - ec2
+          - infra
+
+env:
+  NODE_VERSION: '20.20.0'
+  PNPM_VERSION: '9.15.9'
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  deploy-lambda:
+    name: Deploy Stripe Webhook Lambda
+    runs-on: ubuntu-latest
+    if: github.event.inputs.target == 'all' || github.event.inputs.target == 'lambda' || github.event_name == 'push'
+    timeout-minutes: 15
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm db:generate
+      - run: pnpm --filter @idol/stripe-webhook build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update Lambda function code
+        run: |
+          set -e
+          cd functions/stripe-webhook/dist
+          zip -q function.zip index.js index.js.map
+          aws lambda update-function-code \
+            --function-name "${{ secrets.STRIPE_WEBHOOK_FN }}" \
+            --zip-file "fileb://function.zip" \
+            --publish
+
+  deploy-ec2:
+    name: Deploy Web (EC2 via SSM)
+    runs-on: ubuntu-latest
+    if: github.event.inputs.target == 'all' || github.event.inputs.target == 'ec2' || github.event_name == 'push'
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Trigger SSM RunCommand to pull & restart
+        run: |
+          set -e
+          CMD_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:App,Values=idol-fan-site" \
+            --parameters commands='["sudo -u ec2-user bash /home/ec2-user/app/deploy/deploy.sh"]' \
+            --comment "Deploy ${{ github.sha }}" \
+            --query "Command.CommandId" --output text)
+          echo "SSM Command ID: $CMD_ID"
+          sleep 10
+          aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+            --query 'CommandInvocations[].Status' --output text
+
+  deploy-infra:
+    name: Deploy CDK Infrastructure
+    runs-on: ubuntu-latest
+    if: github.event.inputs.target == 'infra'
+    timeout-minutes: 60
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile=false
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK deploy (all stacks)
+        run: pnpm --filter @idol/infra deploy --all --require-approval never

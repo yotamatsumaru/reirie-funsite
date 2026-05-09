@@ -1,0 +1,64 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", "tsconfig.base.json"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "AUTH_SECRET",
+    "AUTH_URL",
+    "AUTH_TRUST_HOST",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PUBLISHABLE_KEY",
+    "STRIPE_PRICE_STANDARD_MONTHLY",
+    "STRIPE_PRICE_STANDARD_YEARLY",
+    "STRIPE_PRICE_PREMIUM_MONTHLY",
+    "STRIPE_PRICE_PREMIUM_YEARLY",
+    "AWS_REGION",
+    "S3_VIDEO_BUCKET",
+    "S3_ASSET_BUCKET",
+    "CLOUDFRONT_VIDEO_DOMAIN",
+    "CLOUDFRONT_ASSET_DOMAIN",
+    "CLOUDFRONT_KEY_PAIR_ID",
+    "CLOUDFRONT_PRIVATE_KEY",
+    "IVS_CHANNEL_ARN",
+    "IVS_PLAYBACK_KEY_PAIR_ID",
+    "IVS_PLAYBACK_PRIVATE_KEY",
+    "SES_FROM_EMAIL",
+    "LAWSON_TICKET_API_BASE",
+    "LAWSON_TICKET_API_KEY",
+    "LAWSON_TICKET_PARTNER_ID",
+    "APP_BASE_URL",
+    "NEXT_PUBLIC_APP_BASE_URL",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_CLOUDFRONT_ASSET_DOMAIN"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "build/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "outputs": ["playwright-report/**", "test-results/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
