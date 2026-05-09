@@ -99,15 +99,43 @@ export function AddToCartForm({
         ))}
       </Select>
 
+      {/* デスクトップ: インラインボタン */}
       <Button
         onClick={onAdd}
         loading={loading}
         disabled={!inStock}
         size="lg"
-        className="w-full"
+        className="hidden w-full sm:block"
       >
         {inStock ? 'カートに追加' : '在庫切れ'}
       </Button>
+
+      {/* モバイル: 画面下部に固定 */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 pt-3 backdrop-blur safe-bottom sm:hidden">
+        <div className="mx-auto flex max-w-6xl items-center gap-3">
+          {selected && (
+            <div className="flex flex-col leading-tight">
+              <span className="text-base font-bold text-brand-600">
+                {formatJpy(selected.effectivePrice)}
+              </span>
+              <span className="text-[10px] text-slate-500">
+                {selected.stockQuantity > 0 ? '在庫あり' : '在庫切れ'}
+              </span>
+            </div>
+          )}
+          <Button
+            onClick={onAdd}
+            loading={loading}
+            disabled={!inStock}
+            size="lg"
+            className="ml-auto flex-1"
+          >
+            {inStock ? 'カートに追加' : '在庫切れ'}
+          </Button>
+        </div>
+      </div>
+      {/* モバイル: スティッキーボタン分の余白 */}
+      <div className="h-20 sm:hidden" aria-hidden="true" />
     </div>
   );
 }

@@ -58,25 +58,25 @@ export function CartView() {
   const hasBlocked = items.some((i) => i.blocked);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
       <div className="space-y-3 lg:col-span-2">
         {items.map((item) => (
           <Card key={item.id}>
-            <CardBody className="flex gap-4">
-              <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-md bg-slate-100">
+            <CardBody className="flex gap-3 sm:gap-4">
+              <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md bg-slate-100 sm:h-24 sm:w-24">
                 {item.thumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover" />
                 ) : null}
               </div>
-              <div className="flex flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col">
                 <Link
                   href={`/products/${item.productSlug}`}
-                  className="text-sm font-semibold text-slate-800 hover:text-brand-600"
+                  className="line-clamp-2 text-sm font-semibold text-slate-800 hover:text-brand-600"
                 >
                   {item.productName}
                 </Link>
-                <p className="text-xs text-slate-500">{item.variantName}</p>
+                <p className="truncate text-xs text-slate-500">{item.variantName}</p>
                 {item.blocked && (
                   <Badge tone="danger" className="mt-1 self-start">
                     {item.blocked.reason === 'plan_required' ? 'プラン要件未達' : '購入不可'}
@@ -87,7 +87,7 @@ export function CartView() {
                     在庫不足 (残{item.available})
                   </Badge>
                 )}
-                <div className="mt-auto flex items-center justify-between">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 sm:mt-auto">
                   <div className="flex items-center gap-2">
                     <label className="text-xs text-slate-500">数量</label>
                     <select
@@ -119,12 +119,12 @@ export function CartView() {
                           toast.error((err as Error).message);
                         }
                       }}
-                      className="text-xs text-rose-600 hover:underline"
+                      className="px-2 py-1 text-xs text-rose-600 hover:underline"
                     >
                       削除
                     </button>
                   </div>
-                  <p className="text-sm font-semibold text-slate-800">
+                  <p className="ml-auto text-sm font-semibold text-slate-800">
                     {formatJpy(item.subtotal)}
                   </p>
                 </div>
@@ -134,7 +134,7 @@ export function CartView() {
         ))}
       </div>
 
-      <Card className="h-fit">
+      <Card className="h-fit lg:sticky lg:top-20">
         <CardBody className="space-y-2 text-sm">
           <Row label="小計" value={formatJpy(totals.subtotal)} />
           <Row label="消費税" value={formatJpy(totals.taxAmount)} />
@@ -144,7 +144,7 @@ export function CartView() {
           <Link
             href="/checkout"
             aria-disabled={hasBlocked}
-            className={`mt-4 block rounded-md px-4 py-3 text-center text-sm font-semibold ${
+            className={`mt-4 block rounded-md px-4 py-3 text-center text-base font-semibold ${
               hasBlocked
                 ? 'pointer-events-none bg-slate-200 text-slate-400'
                 : 'bg-brand-600 text-white hover:bg-brand-700'

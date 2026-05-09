@@ -15,11 +15,58 @@ export default async function AdminOrdersPage() {
     include: { user: { select: { email: true, displayName: true } } },
   });
 
+  const tone = (status: string) =>
+    status === 'PAID' || status === 'PROCESSING'
+      ? 'info'
+      : status === 'SHIPPED' || status === 'DELIVERED'
+        ? 'success'
+        : status === 'CANCELED' || status === 'REFUNDED'
+          ? 'danger'
+          : 'gray';
+
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-800">注文管理</h1>
-      <Card>
-        <CardBody className="p-0">
+      <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">注文管理</h1>
+
+      {/* モバイル: カードリスト */}
+      <div className="space-y-3 md:hidden">
+        {orders.length === 0 ? (
+          <Card>
+            <CardBody className="text-center text-sm text-slate-500">注文はありません</CardBody>
+          </Card>
+        ) : (
+          orders.map((o) => (
+            <Card key={o.id}>
+              <CardBody className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Link
+                    href={`/admin/orders/${o.id}`}
+                    className="font-mono text-xs text-brand-600 hover:underline"
+                  >
+                    {o.orderNumber}
+                  </Link>
+                  <Badge tone={tone(o.status)}>{o.status}</Badge>
+                </div>
+                <p className="truncate text-sm text-slate-700">
+                  {o.user?.displayName ?? o.user?.email}
+                </p>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">
+                    {new Date(o.createdAt).toLocaleString('ja-JP')}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-800">
+                    {formatJpy(o.totalAmount)}
+                  </span>
+                </div>
+              </CardBody>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* デスクトップ: テーブル */}
+      <Card className="hidden md:block">
+        <CardBody className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -41,19 +88,7 @@ export default async function AdminOrdersPage() {
                   <td className="px-4 py-3">{o.user?.displayName ?? o.user?.email}</td>
                   <td className="px-4 py-3">{formatJpy(o.totalAmount)}</td>
                   <td className="px-4 py-3">
-                    <Badge
-                      tone={
-                        o.status === 'PAID' || o.status === 'PROCESSING'
-                          ? 'info'
-                          : o.status === 'SHIPPED' || o.status === 'DELIVERED'
-                            ? 'success'
-                            : o.status === 'CANCELED' || o.status === 'REFUNDED'
-                              ? 'danger'
-                              : 'gray'
-                      }
-                    >
-                      {o.status}
-                    </Badge>
+                    <Badge tone={tone(o.status)}>{o.status}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {new Date(o.createdAt).toLocaleString('ja-JP')}

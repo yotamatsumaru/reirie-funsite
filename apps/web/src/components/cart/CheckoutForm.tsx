@@ -98,19 +98,38 @@ export function CheckoutForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-3">
+    <form onSubmit={onSubmit} className="grid gap-4 sm:gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold">お届け先</h2>
+            <h2 className="text-base font-semibold sm:text-lg">お届け先</h2>
           </CardHeader>
           <CardBody className="space-y-4">
-            <Input label="お名前" name="name" required value={form.name} onChange={update('name')} />
-            <Input label="電話番号" name="phone" required value={form.phone} onChange={update('phone')} placeholder="090-1234-5678" />
+            <Input
+              label="お名前"
+              name="name"
+              required
+              autoComplete="name"
+              value={form.name}
+              onChange={update('name')}
+            />
+            <Input
+              label="電話番号"
+              name="phone"
+              required
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              value={form.phone}
+              onChange={update('phone')}
+              placeholder="090-1234-5678"
+            />
             <Input
               label="郵便番号"
               name="postalCode"
               required
+              autoComplete="postal-code"
+              inputMode="numeric"
               value={form.postalCode}
               onChange={update('postalCode')}
               placeholder="123-4567"
@@ -128,8 +147,21 @@ export function CheckoutForm() {
                 ))}
               </select>
             </div>
-            <Input label="住所1 (市区町村・番地)" name="addressLine1" required value={form.addressLine1} onChange={update('addressLine1')} />
-            <Input label="住所2 (建物名・部屋番号)" name="addressLine2" value={form.addressLine2} onChange={update('addressLine2')} />
+            <Input
+              label="住所1 (市区町村・番地)"
+              name="addressLine1"
+              required
+              autoComplete="address-line1"
+              value={form.addressLine1}
+              onChange={update('addressLine1')}
+            />
+            <Input
+              label="住所2 (建物名・部屋番号)"
+              name="addressLine2"
+              autoComplete="address-line2"
+              value={form.addressLine2}
+              onChange={update('addressLine2')}
+            />
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">備考 (任意)</label>
               <textarea
@@ -144,9 +176,9 @@ export function CheckoutForm() {
         </Card>
       </div>
 
-      <Card className="h-fit">
+      <Card className="h-fit lg:sticky lg:top-20">
         <CardHeader>
-          <h2 className="text-lg font-semibold">ご注文内容</h2>
+          <h2 className="text-base font-semibold sm:text-lg">ご注文内容</h2>
         </CardHeader>
         <CardBody className="space-y-2 text-sm">
           {items.map((i) => (

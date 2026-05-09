@@ -24,25 +24,75 @@ body {
   background: #fafafa;
   color: #171717;
   min-height: 100%;
+  /* スマホで横スクロール暴発を防ぐ */
+  overflow-x: hidden;
+}
+
+html {
+  /* iOS Safari の自動文字サイズ調整を抑止 (横向き回転対策) */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* iOS のオーバースクロール時にチェイン挙動を抑止 */
+  overscroll-behavior-y: contain;
 }
 
-/* スクロールバー */
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* iOS でフォーム入力時のズーム防止 (16px 以上で発火しない) */
+input,
+select,
+textarea {
+  font-size: 16px;
 }
-*::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+@media (min-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+}
+
+/* タップ領域 (Apple HIG: 44x44pt 推奨) */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a[role='button'],
+  [type='button'],
+  [type='submit'] {
+    min-height: 44px;
+  }
+}
+
+/* iOS タップ時のハイライト除去 */
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* スクロールバー (デスクトップのみ) */
+@media (hover: hover) {
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
 }
 
 /* フォーカスリング統一 */
 *:focus-visible {
   outline: 2px solid var(--color-brand-500);
   outline-offset: 2px;
+}
+
+/* セーフエリア (iPhone X 以降のノッチ対応) */
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
 }

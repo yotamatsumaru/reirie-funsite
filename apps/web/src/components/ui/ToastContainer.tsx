@@ -17,7 +17,7 @@ export function ToastContainer() {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4"
+      className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 safe-bottom"
     >
       {toasts.map((t) => (
         <div

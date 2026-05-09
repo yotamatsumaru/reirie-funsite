@@ -26,8 +26,8 @@ export default async function AdminContentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">コンテンツ管理</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">コンテンツ管理</h1>
         <Link
           href="/admin/contents/new"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
@@ -35,8 +35,45 @@ export default async function AdminContentsPage() {
           + 新規作成
         </Link>
       </div>
-      <Card>
-        <CardBody className="p-0">
+
+      {/* モバイル: カードリスト */}
+      <div className="space-y-3 md:hidden">
+        {items.length === 0 ? (
+          <Card>
+            <CardBody className="text-center text-sm text-slate-500">
+              コンテンツはありません
+            </CardBody>
+          </Card>
+        ) : (
+          items.map((c) => (
+            <Card key={c.id}>
+              <CardBody className="space-y-2">
+                <Link
+                  href={`/admin/contents/${c.id}`}
+                  className="block font-semibold text-brand-600 hover:underline"
+                >
+                  {c.title}
+                </Link>
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Badge tone="gray">{c.type}</Badge>
+                  <Badge tone={c.accessLevel === 'PREMIUM' ? 'brand' : c.accessLevel === 'MEMBERS' ? 'info' : 'gray'}>
+                    {c.accessLevel}
+                  </Badge>
+                  <Badge tone={c.status === 'PUBLISHED' ? 'success' : 'gray'}>{c.status}</Badge>
+                </div>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>閲覧 {c.viewCount}</span>
+                  <span>{new Date(c.updatedAt).toLocaleString('ja-JP')}</span>
+                </div>
+              </CardBody>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* デスクトップ: テーブル */}
+      <Card className="hidden md:block">
+        <CardBody className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>

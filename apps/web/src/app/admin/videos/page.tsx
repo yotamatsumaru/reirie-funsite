@@ -22,10 +22,13 @@ export default async function AdminVideosPage() {
     },
   });
 
+  const tone = (status: string) =>
+    status === 'READY' ? 'success' : status === 'FAILED' ? 'danger' : 'info';
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">動画管理</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">動画管理</h1>
         <Link
           href="/admin/videos/new"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
@@ -33,8 +36,42 @@ export default async function AdminVideosPage() {
           + アップロード
         </Link>
       </div>
-      <Card>
-        <CardBody className="p-0">
+
+      {/* モバイル: カードリスト */}
+      <div className="space-y-3 md:hidden">
+        {videos.length === 0 ? (
+          <Card>
+            <CardBody className="text-center text-sm text-slate-500">動画はありません</CardBody>
+          </Card>
+        ) : (
+          videos.map((v) => (
+            <Card key={v.id}>
+              <CardBody className="space-y-2">
+                <Link
+                  href={`/admin/videos/${v.id}`}
+                  className="block font-semibold text-brand-600 hover:underline"
+                >
+                  {v.title}
+                </Link>
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Badge tone="gray">{v.accessLevel}</Badge>
+                  <Badge tone={tone(v.status)}>{v.status}</Badge>
+                  {v.durationSeconds && (
+                    <Badge tone="gray">{Math.floor(v.durationSeconds / 60)}分</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  {new Date(v.createdAt).toLocaleString('ja-JP')}
+                </p>
+              </CardBody>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* デスクトップ: テーブル */}
+      <Card className="hidden md:block">
+        <CardBody className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -58,17 +95,7 @@ export default async function AdminVideosPage() {
                     {v.durationSeconds ? `${Math.floor(v.durationSeconds / 60)}分` : '-'}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge
-                      tone={
-                        v.status === 'READY'
-                          ? 'success'
-                          : v.status === 'FAILED'
-                            ? 'danger'
-                            : 'info'
-                      }
-                    >
-                      {v.status}
-                    </Badge>
+                    <Badge tone={tone(v.status)}>{v.status}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {new Date(v.createdAt).toLocaleString('ja-JP')}

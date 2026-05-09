@@ -62,8 +62,8 @@ export default async function ProductDetailPage({
   }));
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10">
-      <div className="grid gap-8 md:grid-cols-2">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:py-10">
+      <div className="grid gap-6 md:grid-cols-2 md:gap-8">
         <div>
           <div className="aspect-square w-full overflow-hidden rounded-lg bg-slate-100">
             {product.images[0]?.url ? (
@@ -102,7 +102,7 @@ export default async function ProductDetailPage({
               <Badge tone="info">会員限定</Badge>
             )}
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">{product.name}</h1>
+          <h1 className="text-xl font-bold leading-snug text-slate-800 sm:text-2xl">{product.name}</h1>
           {product.description && (
             <p className="mt-3 whitespace-pre-line text-sm text-slate-600">{product.description}</p>
           )}

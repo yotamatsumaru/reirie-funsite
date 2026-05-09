@@ -9,30 +9,31 @@ export default function HomePage() {
     <div>
       {/* Hero */}
       <section className="bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 text-white">
-        <div className="mx-auto max-w-6xl px-4 py-20 md:py-28">
-          <p className="mb-4 text-sm font-semibold tracking-widest text-white/80">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:py-20 md:py-28">
+          <p className="mb-3 text-xs font-semibold tracking-widest text-white/80 sm:mb-4 sm:text-sm">
             OFFICIAL FAN CLUB
           </p>
-          <h1 className="text-4xl font-bold leading-tight md:text-5xl">
+          <h1 className="text-2xl font-bold leading-tight sm:text-4xl md:text-5xl">
             アイドルとファンを繋ぐ
-            <br />
+            <br className="hidden sm:inline" />
+            <span className="sm:hidden"> </span>
             公式コミュニティへようこそ
           </h1>
-          <p className="mt-6 max-w-2xl text-base text-white/90 md:text-lg">
+          <p className="mt-4 max-w-2xl text-sm text-white/90 sm:mt-6 sm:text-base md:text-lg">
             限定コンテンツ・ライブ配信・先行チケット・公式グッズ。
-            <br />
+            <br className="hidden sm:inline" />
             プレミアム会員ならではの特別な体験をお届けします。
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
             <Link
               href="/signup"
-              className="rounded-lg bg-white px-6 py-3 font-semibold text-brand-700 shadow hover:bg-brand-50"
+              className="rounded-lg bg-white px-6 py-3 text-center font-semibold text-brand-700 shadow hover:bg-brand-50"
             >
               無料会員登録
             </Link>
             <Link
               href="/contents"
-              className="rounded-lg border border-white/40 bg-white/10 px-6 py-3 font-semibold text-white hover:bg-white/20"
+              className="rounded-lg border border-white/40 bg-white/10 px-6 py-3 text-center font-semibold text-white hover:bg-white/20"
             >
               コンテンツを見る
             </Link>
@@ -41,9 +42,9 @@ export default function HomePage() {
       </section>
 
       {/* 特典 */}
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="mb-8 text-2xl font-bold text-slate-800">会員特典</h2>
-        <div className="grid gap-6 md:grid-cols-3">
+      <section className="mx-auto max-w-6xl px-4 py-10 sm:py-16">
+        <h2 className="mb-6 text-xl font-bold text-slate-800 sm:mb-8 sm:text-2xl">会員特典</h2>
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
           <FeatureCard
             title="限定コンテンツ"
             description="メンバー限定の動画・写真・ブログをいち早くチェック"
@@ -60,10 +61,10 @@ export default function HomePage() {
       </section>
 
       {/* プラン */}
-      <section className="bg-white py-16">
+      <section className="bg-white py-10 sm:py-16">
         <div className="mx-auto max-w-6xl px-4">
-          <h2 className="mb-8 text-2xl font-bold text-slate-800">会員プラン</h2>
-          <div className="grid gap-6 md:grid-cols-3">
+          <h2 className="mb-6 text-xl font-bold text-slate-800 sm:mb-8 sm:text-2xl">会員プラン</h2>
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
             <PlanCard plan="FREE" />
             <PlanCard plan="STANDARD" highlight />
             <PlanCard plan="PREMIUM" />

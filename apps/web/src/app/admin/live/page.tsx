@@ -22,10 +22,19 @@ export default async function AdminLivePage() {
     },
   });
 
+  const tone = (status: string) =>
+    status === 'LIVE'
+      ? 'danger'
+      : status === 'ENDED'
+        ? 'gray'
+        : status === 'CANCELED'
+          ? 'warning'
+          : 'info';
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">ライブ配信管理</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">ライブ配信管理</h1>
         <Link
           href="/admin/live/new"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
@@ -33,8 +42,43 @@ export default async function AdminLivePage() {
           + 新規配信
         </Link>
       </div>
-      <Card>
-        <CardBody className="p-0">
+
+      {/* モバイル: カードリスト */}
+      <div className="space-y-3 md:hidden">
+        {lives.length === 0 ? (
+          <Card>
+            <CardBody className="text-center text-sm text-slate-500">配信はありません</CardBody>
+          </Card>
+        ) : (
+          lives.map((l) => (
+            <Card key={l.id}>
+              <CardBody className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <Link
+                    href={`/admin/live/${l.id}`}
+                    className="font-semibold text-brand-600 hover:underline"
+                  >
+                    {l.title}
+                  </Link>
+                  <Badge tone={tone(l.status)}>{l.status}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Badge tone="gray">{l.accessLevel}</Badge>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {l.scheduledStartAt
+                    ? new Date(l.scheduledStartAt).toLocaleString('ja-JP')
+                    : '-'}
+                </p>
+              </CardBody>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* デスクトップ: テーブル */}
+      <Card className="hidden md:block">
+        <CardBody className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
@@ -54,22 +98,12 @@ export default async function AdminLivePage() {
                   </td>
                   <td className="px-4 py-3">{l.accessLevel}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {l.scheduledStartAt ? new Date(l.scheduledStartAt).toLocaleString('ja-JP') : '-'}
+                    {l.scheduledStartAt
+                      ? new Date(l.scheduledStartAt).toLocaleString('ja-JP')
+                      : '-'}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge
-                      tone={
-                        l.status === 'LIVE'
-                          ? 'danger'
-                          : l.status === 'ENDED'
-                            ? 'gray'
-                            : l.status === 'CANCELED'
-                              ? 'warning'
-                              : 'info'
-                      }
-                    >
-                      {l.status}
-                    </Badge>
+                    <Badge tone={tone(l.status)}>{l.status}</Badge>
                   </td>
                 </tr>
               ))}

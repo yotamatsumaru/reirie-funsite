@@ -39,14 +39,14 @@ export default async function ContentDetailPage({
   const canView = canAccess(session?.user?.plan, content.accessLevel);
 
   return (
-    <article className="mx-auto max-w-3xl px-4 py-10">
-      <div className="mb-3 flex items-center gap-2">
+    <article className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge tone="gray">{content.type}</Badge>
         {content.accessLevel === 'PREMIUM' && <Badge tone="brand">PREMIUM</Badge>}
         {content.accessLevel === 'MEMBERS' && <Badge tone="info">MEMBERS</Badge>}
       </div>
-      <h1 className="text-3xl font-bold text-slate-800">{content.title}</h1>
-      <p className="mt-2 text-sm text-slate-500">
+      <h1 className="text-2xl font-bold leading-snug text-slate-800 sm:text-3xl">{content.title}</h1>
+      <p className="mt-2 text-xs text-slate-500 sm:text-sm">
         {content.publishedAt
           ? new Date(content.publishedAt).toLocaleDateString('ja-JP')
           : ''}
