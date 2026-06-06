@@ -8,3 +8,4 @@ export * from './schemas/live';
 export * from './schemas/subscription';
 export * from './schemas/ticket';
 export * from './schemas/admin';
+export * from './schemas/game';

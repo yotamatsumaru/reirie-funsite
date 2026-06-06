@@ -1,0 +1,29 @@
+/**
+ * GET /api/game/characters
+ *   - 公開済キャラクター一覧 (sortOrder 順)
+ *   - 認証不要 (LP / 一覧画面で使用)
+ */
+import { NextResponse } from 'next/server';
+import { prisma } from '@idol/db';
+import { handle } from '@/lib/errors';
+
+export const runtime = 'nodejs';
+
+export const GET = handle(async () => {
+  const items = await prisma.gameCharacter.findMany({
+    where: { status: 'PUBLISHED' },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      furigana: true,
+      catchcopy: true,
+      portraitUrl: true,
+      themeColor: true,
+      isPremiumOnly: true,
+      affinityMax: true,
+    },
+  });
+  return NextResponse.json({ items });
+});

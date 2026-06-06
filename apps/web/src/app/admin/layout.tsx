@@ -12,6 +12,7 @@ const NAV = [
   { href: '/admin/orders', label: '注文' },
   { href: '/admin/videos', label: '動画' },
   { href: '/admin/live', label: 'ライブ' },
+  { href: '/admin/game', label: 'ゲーム' },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
