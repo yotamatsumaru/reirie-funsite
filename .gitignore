@@ -51,3 +51,7 @@ test-results/
 packages/shared/dist/
 apps/web/.next/
 functions/*/dist/
+
+# crash dumps
+core
+core.*

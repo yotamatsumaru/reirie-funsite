@@ -69,6 +69,34 @@ function matches(row: Record<string, unknown>, where: AnyArgs): boolean {
   return true;
 }
 
+/**
+ * include 名 → fixture テーブル名のマッピング
+ * Prisma リレーション名 (relation name) と fixtures map のキー名がズレる場合に補正
+ */
+const RELATION_TO_FIXTURE: Record<string, string> = {
+  // belongsTo (単数)
+  character: 'gameCharacter',
+  scenario: 'gameScenario',
+  item: 'gameItem',
+  user: 'user',
+  product: 'product',
+  variant: 'productVariant',
+  order: 'order',
+  subscription: 'subscription',
+  // hasMany (複数)
+  characters: 'gameCharacter',
+  scenarios: 'gameScenario',
+  items: 'gameItem',
+  users: 'user',
+  products: 'product',
+  variants: 'productVariant',
+  orders: 'order',
+  subscriptions: 'subscription',
+  orderItems: 'orderItem',
+  comments: 'comment',
+  payments: 'payment',
+};
+
 function applyInclude(
   row: Record<string, unknown>,
   include: AnyArgs,
@@ -94,8 +122,42 @@ function applyInclude(
     }
     // 既に row に同名のリレーションがあれば尊重
     if (row[key] !== undefined) continue;
-    // include 名は適当に空配列 / null を返す
-    out[key] = Array.isArray(allFixtures[key]) ? [] : null;
+
+    // include: false の場合はスキップ
+    if (val === false) continue;
+
+    // リレーション名から fixture テーブルを推測
+    const fixtureKey =
+      RELATION_TO_FIXTURE[key] ??
+      (Array.isArray(allFixtures[key]) ? key : null);
+    const targetRows = fixtureKey ? allFixtures[fixtureKey] : undefined;
+
+    if (!Array.isArray(targetRows)) {
+      // fixture テーブルが見つからない → 配列か null かは推測不可、配列でデフォルト null
+      out[key] = null;
+      continue;
+    }
+
+    // belongsTo: row[<key>Id] で単一 row を引く
+    const fkSingular = `${key}Id`;
+    if (fkSingular in row) {
+      const targetId = row[fkSingular];
+      const found = targetRows.find(
+        (r) => (r as Record<string, unknown>).id === targetId,
+      );
+      out[key] = found ?? null;
+      continue;
+    }
+
+    // hasMany: 対象テーブルから row.id を <currentModel>Id で参照する行を集める
+    // currentModel 名を推測するのは難しいので、代表的な FK 候補を試行
+    const myId = row['id'];
+    const fkCandidates = ['userId', 'characterId', 'scenarioId', 'itemId', 'orderId', 'productId'];
+    const matched = targetRows.filter((r) => {
+      const rec = r as Record<string, unknown>;
+      return fkCandidates.some((fk) => fk in rec && rec[fk] === myId);
+    });
+    out[key] = matched;
   }
   return out;
 }

@@ -241,51 +241,251 @@ const subscription = [
 ];
 
 // =====================================================================
-// Order (注文)
+// Order (注文)  — schema 準拠: subtotal / taxAmount / shippingFee / totalAmount
 // =====================================================================
 const order = [
   {
     id: 'ord-001',
+    orderNumber: 'ORD-20260606-001',
     userId: '00000000-0000-0000-0000-000000000010',
     status: 'PAID',
     subtotal: 3500,
     shippingFee: 600,
-    tax: 410,
-    total: 4510,
+    taxAmount: 410,
+    discountAmount: 0,
+    totalAmount: 4510,
     currency: 'JPY',
+    shippingName: '田中 美咲',
+    shippingPhone: '090-1234-5678',
+    shippingPostalCode: '150-0001',
+    shippingPrefecture: '東京都',
+    shippingAddress1: '渋谷区神宮前1-1-1',
+    shippingAddress2: 'コーポ渋谷101',
+    trackingNumber: null,
+    paidAt: daysAgo(3),
+    shippedAt: null,
+    deliveredAt: null,
+    canceledAt: null,
     createdAt: daysAgo(3),
     updatedAt: daysAgo(2),
-    user: { email: 'fan01@example.com', displayName: 'ファン001' },
-    items: [],
+    user: { id: '00000000-0000-0000-0000-000000000010', email: 'fan01@example.com', displayName: 'ファン001' },
+    items: [
+      { id: 'oi-001', productName: '公式ロゴ T シャツ', variantName: 'Mサイズ', unitPrice: 3500, quantity: 1, subtotal: 3500 },
+    ],
   },
   {
     id: 'ord-002',
+    orderNumber: 'ORD-20260604-001',
     userId: '00000000-0000-0000-0000-000000000011',
     status: 'SHIPPED',
     subtotal: 5000,
     shippingFee: 0,
-    tax: 500,
-    total: 5500,
+    taxAmount: 500,
+    discountAmount: 0,
+    totalAmount: 5500,
     currency: 'JPY',
+    shippingName: '鈴木 翔',
+    shippingPhone: '090-2345-6789',
+    shippingPostalCode: '160-0022',
+    shippingPrefecture: '東京都',
+    shippingAddress1: '新宿区新宿2-2-2',
+    shippingAddress2: null,
+    trackingNumber: 'JP1234567890',
+    paidAt: daysAgo(5),
+    shippedAt: daysAgo(4),
+    deliveredAt: null,
+    canceledAt: null,
     createdAt: daysAgo(5),
     updatedAt: daysAgo(4),
-    user: { email: 'fan02@example.com', displayName: 'ファン002' },
-    items: [],
+    user: { id: '00000000-0000-0000-0000-000000000011', email: 'fan02@example.com', displayName: 'ファン002' },
+    items: [
+      { id: 'oi-002', productName: 'プレミアム限定アクリルスタンド', variantName: 'STD', unitPrice: 5000, quantity: 1, subtotal: 5000 },
+    ],
   },
   {
     id: 'ord-003',
+    orderNumber: 'ORD-20260530-001',
     userId: '00000000-0000-0000-0000-000000000012',
     status: 'DELIVERED',
     subtotal: 9000,
     shippingFee: 0,
-    tax: 900,
-    total: 9900,
+    taxAmount: 900,
+    discountAmount: 0,
+    totalAmount: 9900,
     currency: 'JPY',
+    shippingName: '高橋 真',
+    shippingPhone: '090-3456-7890',
+    shippingPostalCode: '100-0001',
+    shippingPrefecture: '東京都',
+    shippingAddress1: '千代田区千代田3-3-3',
+    shippingAddress2: 'パークレジデンス301',
+    trackingNumber: 'JP9876543210',
+    paidAt: daysAgo(10),
+    shippedAt: daysAgo(9),
+    deliveredAt: daysAgo(7),
+    canceledAt: null,
     createdAt: daysAgo(10),
     updatedAt: daysAgo(7),
-    user: { email: 'fan03@example.com', displayName: 'プレミアム愛好家' },
-    items: [],
+    user: { id: '00000000-0000-0000-0000-000000000012', email: 'fan03@example.com', displayName: 'プレミアム愛好家' },
+    items: [
+      { id: 'oi-003', productName: '会員限定キーホルダー', variantName: 'STD', unitPrice: 1500, quantity: 2, subtotal: 3000 },
+      { id: 'oi-004', productName: '公式ロゴ T シャツ', variantName: 'Lサイズ', unitPrice: 3000, quantity: 2, subtotal: 6000 },
+    ],
   },
+  {
+    id: 'ord-004',
+    orderNumber: 'ORD-20260601-001',
+    userId: DEMO_USER_ID,
+    status: 'PROCESSING',
+    subtotal: 3000,
+    shippingFee: 0,
+    taxAmount: 300,
+    discountAmount: 0,
+    totalAmount: 3300,
+    currency: 'JPY',
+    shippingName: '山田 太郎',
+    shippingPhone: '090-1111-2222',
+    shippingPostalCode: '150-0002',
+    shippingPrefecture: '東京都',
+    shippingAddress1: '渋谷区代官山町4-4-4',
+    shippingAddress2: null,
+    trackingNumber: null,
+    paidAt: daysAgo(2),
+    shippedAt: null,
+    deliveredAt: null,
+    canceledAt: null,
+    createdAt: daysAgo(2),
+    updatedAt: daysAgo(2),
+    user: { id: DEMO_USER_ID, email: 'demo@example.com', displayName: 'デモユーザー' },
+    items: [
+      { id: 'oi-005', productName: '公式ロゴ T シャツ', variantName: 'Sサイズ', unitPrice: 3000, quantity: 1, subtotal: 3000 },
+    ],
+  },
+  {
+    id: 'ord-005',
+    orderNumber: 'ORD-20260520-001',
+    userId: '00000000-0000-0000-0000-000000000014',
+    status: 'REFUNDED',
+    subtotal: 1500,
+    shippingFee: 600,
+    taxAmount: 210,
+    discountAmount: 0,
+    totalAmount: 2310,
+    currency: 'JPY',
+    shippingName: '退会 一郎',
+    shippingPhone: '090-9999-9999',
+    shippingPostalCode: '000-0000',
+    shippingPrefecture: '東京都',
+    shippingAddress1: '不明',
+    shippingAddress2: null,
+    trackingNumber: null,
+    paidAt: daysAgo(20),
+    shippedAt: null,
+    deliveredAt: null,
+    canceledAt: daysAgo(15),
+    createdAt: daysAgo(20),
+    updatedAt: daysAgo(15),
+    user: { id: '00000000-0000-0000-0000-000000000014', email: 'banned@example.com', displayName: 'BAN済みユーザー' },
+    items: [
+      { id: 'oi-006', productName: '会員限定キーホルダー', variantName: 'STD', unitPrice: 1500, quantity: 1, subtotal: 1500 },
+    ],
+  },
+];
+
+// =====================================================================
+// Payment (決済履歴) — subscription / order / game DLC を統合
+// =====================================================================
+const payment = [
+  // サブスク決済
+  { id: 'pay-sub-001', userId: '00000000-0000-0000-0000-000000000010', kind: 'SUBSCRIPTION', status: 'SUCCEEDED', amount: 980, currency: 'JPY', subscriptionId: 'sub-001', orderId: null, createdAt: daysAgo(15), updatedAt: daysAgo(15) },
+  { id: 'pay-sub-002', userId: '00000000-0000-0000-0000-000000000011', kind: 'SUBSCRIPTION', status: 'SUCCEEDED', amount: 1980, currency: 'JPY', subscriptionId: 'sub-002', orderId: null, createdAt: daysAgo(7), updatedAt: daysAgo(7) },
+  { id: 'pay-sub-003', userId: '00000000-0000-0000-0000-000000000012', kind: 'SUBSCRIPTION', status: 'SUCCEEDED', amount: 19800, currency: 'JPY', subscriptionId: 'sub-003', orderId: null, createdAt: daysAgo(45), updatedAt: daysAgo(45) },
+  { id: 'pay-sub-004', userId: DEMO_USER_ID, kind: 'SUBSCRIPTION', status: 'SUCCEEDED', amount: 1980, currency: 'JPY', subscriptionId: 'sub-004', orderId: null, createdAt: daysAgo(10), updatedAt: daysAgo(10) },
+  // EC 注文決済
+  { id: 'pay-ord-001', userId: '00000000-0000-0000-0000-000000000010', kind: 'ONE_TIME_ORDER', status: 'SUCCEEDED', amount: 4510, currency: 'JPY', subscriptionId: null, orderId: 'ord-001', createdAt: daysAgo(3), updatedAt: daysAgo(3) },
+  { id: 'pay-ord-002', userId: '00000000-0000-0000-0000-000000000011', kind: 'ONE_TIME_ORDER', status: 'SUCCEEDED', amount: 5500, currency: 'JPY', subscriptionId: null, orderId: 'ord-002', createdAt: daysAgo(5), updatedAt: daysAgo(5) },
+  { id: 'pay-ord-003', userId: '00000000-0000-0000-0000-000000000012', kind: 'ONE_TIME_ORDER', status: 'SUCCEEDED', amount: 9900, currency: 'JPY', subscriptionId: null, orderId: 'ord-003', createdAt: daysAgo(10), updatedAt: daysAgo(10) },
+  { id: 'pay-ord-004', userId: DEMO_USER_ID, kind: 'ONE_TIME_ORDER', status: 'SUCCEEDED', amount: 3300, currency: 'JPY', subscriptionId: null, orderId: 'ord-004', createdAt: daysAgo(2), updatedAt: daysAgo(2) },
+  { id: 'pay-ord-005', userId: '00000000-0000-0000-0000-000000000014', kind: 'ONE_TIME_ORDER', status: 'REFUNDED', amount: 2310, currency: 'JPY', subscriptionId: null, orderId: 'ord-005', createdAt: daysAgo(20), updatedAt: daysAgo(15) },
+];
+
+// =====================================================================
+// PlayerPurchase (ゲーム DLC 購入)
+// =====================================================================
+const playerPurchase = [
+  { id: 'pp-001', userId: '00000000-0000-0000-0000-000000000010', kind: 'SCENARIO', scenarioId: 'gs-ch1', itemId: null, quantity: 1, amountJpy: 300, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(5), refundedAt: null, createdAt: daysAgo(5), updatedAt: daysAgo(5) },
+  { id: 'pp-002', userId: '00000000-0000-0000-0000-000000000011', kind: 'SCENARIO', scenarioId: 'gs-ch1', itemId: null, quantity: 1, amountJpy: 300, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(3), refundedAt: null, createdAt: daysAgo(3), updatedAt: daysAgo(3) },
+  { id: 'pp-003', userId: '00000000-0000-0000-0000-000000000012', kind: 'SCENARIO', scenarioId: 'gs-premium-ch', itemId: null, quantity: 1, amountJpy: 800, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(7), refundedAt: null, createdAt: daysAgo(7), updatedAt: daysAgo(7) },
+  { id: 'pp-004', userId: DEMO_USER_ID, kind: 'ITEM', scenarioId: null, itemId: 'gi-bouquet', quantity: 3, amountJpy: 600, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(8), refundedAt: null, createdAt: daysAgo(8), updatedAt: daysAgo(8) },
+  { id: 'pp-005', userId: '00000000-0000-0000-0000-000000000012', kind: 'ITEM', scenarioId: null, itemId: 'gi-chocolate', quantity: 2, amountJpy: 1000, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(4), refundedAt: null, createdAt: daysAgo(4), updatedAt: daysAgo(4) },
+  { id: 'pp-006', userId: '00000000-0000-0000-0000-000000000012', kind: 'ITEM', scenarioId: null, itemId: 'gi-ring', quantity: 1, amountJpy: 1500, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(2), refundedAt: null, createdAt: daysAgo(2), updatedAt: daysAgo(2) },
+  { id: 'pp-007', userId: '00000000-0000-0000-0000-000000000010', kind: 'ITEM', scenarioId: null, itemId: 'gi-chocolate', quantity: 1, amountJpy: 500, paymentStatus: 'SUCCEEDED', paidAt: daysAgo(1), refundedAt: null, createdAt: daysAgo(1), updatedAt: daysAgo(1) },
+];
+
+// =====================================================================
+// PlayerProgress (キャラ別の好感度)
+// =====================================================================
+// 注: GAME_CHAR_ID は後方で定義されているため、リテラルで直接記述
+const playerProgress = [
+  { id: 'pg-001', userId: '00000000-0000-0000-0000-000000000010', characterId: 'gc-hiroto', affinity: 45, scenariosCleared: 1, lastPlayedAt: daysAgo(1), createdAt: daysAgo(30), updatedAt: daysAgo(1) },
+  { id: 'pg-002', userId: '00000000-0000-0000-0000-000000000011', characterId: 'gc-hiroto', affinity: 78, scenariosCleared: 2, lastPlayedAt: hoursAgo(3), createdAt: daysAgo(15), updatedAt: hoursAgo(3) },
+  { id: 'pg-003', userId: '00000000-0000-0000-0000-000000000012', characterId: 'gc-hiroto', affinity: 92, scenariosCleared: 3, lastPlayedAt: hoursAgo(6), createdAt: daysAgo(60), updatedAt: hoursAgo(6) },
+  { id: 'pg-004', userId: '00000000-0000-0000-0000-000000000012', characterId: 'gc-ren', affinity: 60, scenariosCleared: 1, lastPlayedAt: daysAgo(2), createdAt: daysAgo(20), updatedAt: daysAgo(2) },
+  { id: 'pg-005', userId: DEMO_USER_ID, characterId: 'gc-hiroto', affinity: 25, scenariosCleared: 0, lastPlayedAt: daysAgo(5), createdAt: daysAgo(10), updatedAt: daysAgo(5) },
+];
+
+// =====================================================================
+// Announcements (お知らせ) — Prisma schema 未定義 (デモ専用テーブル)
+// =====================================================================
+const announcement = [
+  {
+    id: 'ann-001',
+    title: '【重要】システムメンテナンスのお知らせ',
+    body: '6月15日 2:00 - 5:00 にメンテナンスを実施します。\n\n■ 影響範囲\n・全機能停止\n\nご不便をおかけしますが、ご理解の程よろしくお願いいたします。',
+    audience: 'ALL',
+    status: 'PUBLISHED',
+    publishedAt: hoursAgo(2),
+    createdAt: hoursAgo(3),
+    updatedAt: hoursAgo(2),
+    authorId: DEMO_SUPER_ID,
+  },
+  {
+    id: 'ann-002',
+    title: 'プレミアム会員限定: 新章『海辺の告白』公開!',
+    body: 'プレミアム会員の皆さま、お待たせしました!\n蒼井大翔の新章が本日公開されました。',
+    audience: 'PREMIUM',
+    status: 'PUBLISHED',
+    publishedAt: daysAgo(2),
+    createdAt: daysAgo(3),
+    updatedAt: daysAgo(2),
+    authorId: DEMO_ADMIN_ID,
+  },
+  {
+    id: 'ann-003',
+    title: '新グッズ予約受付開始(下書き)',
+    body: '夏のスペシャルグッズが新登場。',
+    audience: 'ALL',
+    status: 'DRAFT',
+    publishedAt: null,
+    createdAt: hoursAgo(8),
+    updatedAt: hoursAgo(8),
+    authorId: DEMO_ADMIN_ID,
+  },
+];
+
+// =====================================================================
+// SystemSetting (システム設定) — デモ専用テーブル
+// =====================================================================
+const systemSetting = [
+  { key: 'maintenance.enabled', value: false, label: 'メンテナンスモード', description: '有効にすると全ユーザーが /maintenance にリダイレクト', category: 'system' },
+  { key: 'features.gameEnabled', value: true, label: 'ゲーム機能', description: '恋愛 ADV ゲーム全体を ON/OFF', category: 'features' },
+  { key: 'features.commentsEnabled', value: true, label: 'コメント機能', description: 'コンテンツのコメント投稿を ON/OFF', category: 'features' },
+  { key: 'features.liveEnabled', value: true, label: 'ライブ配信機能', description: 'IVS ライブ機能の ON/OFF', category: 'features' },
+  { key: 'features.ticketsEnabled', value: true, label: 'チケット連携', description: 'Lawson チケット連携機能の ON/OFF', category: 'features' },
+  { key: 'shipping.freeThresholdStandard', value: 8000, label: 'STANDARD 送料無料閾値', description: 'STANDARD 会員の送料無料金額 (円)', category: 'pricing' },
+  { key: 'shipping.fee', value: 600, label: '標準送料', description: '基本送料 (円)', category: 'pricing' },
+  { key: 'monthlyBonus.standard', value: 1, label: 'STANDARD 月次ボーナス', description: 'STANDARD 会員の月次プレゼント数', category: 'pricing' },
+  { key: 'monthlyBonus.premium', value: 5, label: 'PREMIUM 月次ボーナス', description: 'PREMIUM 会員の月次プレゼント数', category: 'pricing' },
 ];
 
 // =====================================================================
@@ -724,7 +924,7 @@ const fixtures: Record<string, unknown[]> = {
   cartItem: empty,
   order,
   orderItem: empty,
-  payment: empty,
+  payment,
   video: empty,
   videoViewLog: empty,
   liveStream: empty,
@@ -736,11 +936,14 @@ const fixtures: Record<string, unknown[]> = {
   gameScenario,
   gameAsset: empty,
   gameItem,
-  playerProgress: empty,
+  playerProgress,
   playerInventory: empty,
-  playerPurchase: empty,
+  playerPurchase,
   playerSaveSlot: empty,
   bonusGiftGrant: empty,
+  // デモ専用 (Prisma schema には未登録、メモリ上のみで動作)
+  announcement,
+  systemSetting,
 };
 
 export default fixtures;

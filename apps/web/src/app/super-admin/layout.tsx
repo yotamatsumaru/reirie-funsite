@@ -15,6 +15,10 @@ const NAV = [
   { href: '/super-admin', label: 'ダッシュボード', icon: '📊' },
   { href: '/super-admin/users', label: 'ユーザー', icon: '👥' },
   { href: '/super-admin/subscriptions', label: 'サブスク', icon: '💳' },
+  { href: '/super-admin/orders', label: '注文・売上', icon: '🛒' },
+  { href: '/super-admin/game', label: 'ゲーム経済', icon: '🎮' },
+  { href: '/super-admin/announcements', label: 'お知らせ', icon: '📧' },
+  { href: '/super-admin/settings', label: 'システム設定', icon: '🔧' },
   { href: '/super-admin/audit', label: '監査ログ', icon: '📜' },
   { href: '/super-admin/admins', label: '管理者', icon: '🛡️' },
 ];
