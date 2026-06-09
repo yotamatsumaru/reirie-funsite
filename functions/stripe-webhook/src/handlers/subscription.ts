@@ -34,7 +34,8 @@ async function resolveUserId(
 
   // 2) Stripe から customer を取得して email で検索
   try {
-    const customer = await getStripe().customers.retrieve(customerId);
+    const stripe = await getStripe();
+    const customer = await stripe.customers.retrieve(customerId);
     if (!('deleted' in customer) || customer.deleted) return null;
     if (!customer.email) return null;
     const u = await prisma.user.findUnique({ where: { email: customer.email } });

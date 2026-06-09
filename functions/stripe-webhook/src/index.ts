@@ -20,6 +20,7 @@ import type {
 import type Stripe from 'stripe';
 import { prisma } from './db';
 import { getStripe } from './stripe-client';
+import { getSecrets } from './secrets';
 import {
   handleSubscriptionDeleted,
   handleSubscriptionUpsert,
@@ -76,12 +77,6 @@ export const handler = async (
     getHeader(event.headers, 'stripe-signature') ??
     getHeader(event.headers, 'Stripe-Signature');
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    // eslint-disable-next-line no-console
-    console.error('[stripe-webhook] STRIPE_WEBHOOK_SECRET not configured');
-    return jsonResponse(500, { error: 'webhook_secret_missing' });
-  }
   if (!sigHeader) {
     return jsonResponse(400, { error: 'missing_stripe_signature' });
   }
@@ -91,10 +86,23 @@ export const handler = async (
     return jsonResponse(400, { error: 'empty_body' });
   }
 
+  // SSM から secret を取得 (コンテナ再利用時はキャッシュ)
+  let webhookSecret: string;
+  let stripe: Stripe;
+  try {
+    const secrets = await getSecrets();
+    webhookSecret = secrets.stripeWebhookSecret;
+    stripe = await getStripe();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[stripe-webhook] failed to resolve secrets from SSM', err);
+    return jsonResponse(500, { error: 'secrets_unavailable' });
+  }
+
   // 署名検証
   let stripeEvent: Stripe.Event;
   try {
-    stripeEvent = getStripe().webhooks.constructEvent(rawBody, sigHeader, webhookSecret);
+    stripeEvent = stripe.webhooks.constructEvent(rawBody, sigHeader, webhookSecret);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[stripe-webhook] signature verification failed', (err as Error).message);
