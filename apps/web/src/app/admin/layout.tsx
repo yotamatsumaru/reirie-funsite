@@ -18,7 +18,8 @@ const NAV = [
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/admin');
-  if (session.user.role !== 'ADMIN') redirect('/');
+  // ADMIN または SUPER_ADMIN
+  if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') redirect('/');
 
   return (
     <div className="mx-auto min-h-[calc(100vh-3.5rem)] max-w-7xl px-3 py-4 sm:px-4 sm:py-6 lg:flex lg:gap-6">

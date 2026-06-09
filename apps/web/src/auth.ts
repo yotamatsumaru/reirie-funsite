@@ -11,7 +11,12 @@ import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
 import { verifyPassword } from './lib/password';
-import { canAccess, type AccessLevelLiteral, type PlanTypeLiteral } from '@idol/shared';
+import {
+  canAccess,
+  type AccessLevelLiteral,
+  type PlanTypeLiteral,
+  type UserRoleLiteral,
+} from '@idol/shared';
 import { env } from './lib/env';
 
 declare module 'next-auth' {
@@ -19,13 +24,13 @@ declare module 'next-auth' {
     user: {
       id: string;
       email: string;
-      role: 'USER' | 'ADMIN';
+      role: UserRoleLiteral;
       plan: PlanTypeLiteral;
     } & DefaultSession['user'];
   }
   interface User {
     id?: string;
-    role?: 'USER' | 'ADMIN';
+    role?: UserRoleLiteral;
     plan?: PlanTypeLiteral;
   }
 }
@@ -37,7 +42,7 @@ declare module 'next-auth' {
  */
 interface AppJWT {
   userId: string;
-  role: 'USER' | 'ADMIN';
+  role: UserRoleLiteral;
   plan: PlanTypeLiteral;
   planRefreshedAt?: number;
 }
@@ -70,14 +75,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // --- デモモード: パスワード検証をスキップしてログイン可能にする ---
         if (env.demoMode) {
           const email = parsed.data.email.toLowerCase();
-          // demo@example.com (PREMIUM) と admin@example.com (ADMIN) を許可
-          // それ以外は STANDARD ゲストとしてログイン許可
+          // メールごとに権限を割り当て (デモ用)
+          if (email === 'super@example.com' || email === 'superadmin@example.com') {
+            return {
+              id: '00000000-0000-4000-8000-000000000003',
+              email,
+              name: 'スーパー管理者',
+              role: 'SUPER_ADMIN' as UserRoleLiteral,
+              plan: 'PREMIUM' as PlanTypeLiteral,
+            };
+          }
           if (email === 'admin@example.com') {
             return {
               id: '00000000-0000-4000-8000-000000000002',
               email: 'admin@example.com',
               name: 'デモ管理者',
-              role: 'ADMIN',
+              role: 'ADMIN' as UserRoleLiteral,
               plan: 'PREMIUM' as PlanTypeLiteral,
             };
           }
@@ -86,7 +99,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               id: '00000000-0000-4000-8000-000000000001',
               email: 'demo@example.com',
               name: 'デモユーザー',
-              role: 'USER',
+              role: 'USER' as UserRoleLiteral,
               plan: 'PREMIUM' as PlanTypeLiteral,
             };
           }
@@ -95,7 +108,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             id: '00000000-0000-4000-8000-000000000099',
             email: parsed.data.email,
             name: 'ゲスト',
-            role: 'USER',
+            role: 'USER' as UserRoleLiteral,
             plan: 'FREE' as PlanTypeLiteral,
           };
         }
@@ -132,7 +145,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const t = token as unknown as AppJWT & Record<string, unknown>;
       if (user) {
         t.userId = user.id as string;
-        t.role = (user.role ?? 'USER') as 'USER' | 'ADMIN';
+        t.role = (user.role ?? 'USER') as UserRoleLiteral;
         t.plan = (user.plan ?? 'FREE') as PlanTypeLiteral;
         t.planRefreshedAt = Date.now();
       }
@@ -155,7 +168,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           },
         });
         if (u) {
-          t.role = u.role as 'USER' | 'ADMIN';
+          t.role = u.role as UserRoleLiteral;
           t.plan = (u.subscriptions[0]?.planType as PlanTypeLiteral) ?? 'FREE';
           t.planRefreshedAt = Date.now();
         }
@@ -188,9 +201,24 @@ export async function requireSession() {
 
 export async function requireAdmin() {
   const session = await requireSession();
-  if (session.user.role !== 'ADMIN') {
+  // ADMIN または SUPER_ADMIN を許可
+  if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') {
     const { errors } = await import('./lib/errors');
     throw errors.forbidden('管理者権限が必要です');
+  }
+  return session;
+}
+
+/**
+ * SUPER_ADMIN (システム最高権限) 必須
+ *  - KPI 閲覧 / ユーザー BAN / 管理者ロール付与剥奪 / 監査ログ閲覧 / 強制返金 などに利用
+ *  - ADMIN ではアクセスできない (権限境界を明確化)
+ */
+export async function requireSuperAdmin() {
+  const session = await requireSession();
+  if (session.user.role !== 'SUPER_ADMIN') {
+    const { errors } = await import('./lib/errors');
+    throw errors.forbidden('スーパー管理者権限が必要です');
   }
   return session;
 }

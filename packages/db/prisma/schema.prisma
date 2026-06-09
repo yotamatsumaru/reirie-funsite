@@ -101,6 +101,7 @@ enum TicketLinkStatus {
 enum UserRole {
   USER
   ADMIN
+  SUPER_ADMIN
 }
 
 // =====================================================================

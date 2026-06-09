@@ -6,11 +6,13 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { useCartItemCount } from '@/stores/cart-store';
 import { Badge } from '@/components/ui/Badge';
+import { isAdmin as roleIsAdmin, isSuperAdmin } from '@idol/shared';
 
 export function Header() {
   const { data: session, status } = useSession();
   const cartCount = useCartItemCount();
-  const isAdmin = session?.user?.role === 'ADMIN';
+  const isAdmin = roleIsAdmin(session?.user?.role);
+  const isSuper = isSuperAdmin(session?.user?.role);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -96,6 +98,14 @@ export function Header() {
           {isAdmin && (
             <Link href="/admin" className="text-slate-500 hover:text-brand-600">
               管理
+            </Link>
+          )}
+          {isSuper && (
+            <Link
+              href="/super-admin"
+              className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+            >
+              SUPER
             </Link>
           )}
         </nav>
@@ -197,6 +207,7 @@ export function Header() {
             カート{cartCount > 0 ? ` (${cartCount})` : ''}
           </MobileLink>
           {isAdmin && <MobileLink href="/admin">管理ダッシュボード</MobileLink>}
+          {isSuper && <MobileLink href="/super-admin">スーパー管理者</MobileLink>}
 
           <hr className="my-2 border-slate-200" />
 

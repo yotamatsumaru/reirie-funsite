@@ -34,7 +34,9 @@ export const GET = handle(
     });
 
     if (!order) throw errors.notFound('注文が見つかりません');
-    if (order.userId !== session.user.id && session.user.role !== 'ADMIN') {
+    const isAdminRole =
+      session.user.role === 'ADMIN' || session.user.role === 'SUPER_ADMIN';
+    if (order.userId !== session.user.id && !isAdminRole) {
       throw errors.forbidden();
     }
     return NextResponse.json(order);

@@ -18,7 +18,7 @@ export const DELETE = handle(
     if (!comment) throw errors.notFound('コメントが見つかりません');
 
     const isOwner = comment.userId === session.user.id;
-    const isAdmin = session.user.role === 'ADMIN';
+    const isAdmin = session.user.role === 'ADMIN' || session.user.role === 'SUPER_ADMIN';
     if (!isOwner && !isAdmin) {
       throw errors.forbidden('自分のコメントのみ削除できます');
     }

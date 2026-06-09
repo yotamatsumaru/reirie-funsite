@@ -4,6 +4,44 @@ export type PlanTypeLiteral = (typeof PLAN_TYPES)[number];
 export const ACCESS_LEVELS = ['PUBLIC', 'MEMBERS', 'PREMIUM'] as const;
 export type AccessLevelLiteral = (typeof ACCESS_LEVELS)[number];
 
+/**
+ * ユーザーロール (Prisma UserRole enum と同期)
+ *  - USER:        通常会員
+ *  - ADMIN:       運営編集者 (コンテンツ・商品・ゲーム編集権限)
+ *  - SUPER_ADMIN: システム最高権限 (KPI / 課金 / ユーザー BAN / 管理者管理 / 監査)
+ */
+export const USER_ROLES = ['USER', 'ADMIN', 'SUPER_ADMIN'] as const;
+export type UserRoleLiteral = (typeof USER_ROLES)[number];
+
+export const USER_ROLE_LABELS: Record<UserRoleLiteral, string> = {
+  USER: '一般会員',
+  ADMIN: '管理者',
+  SUPER_ADMIN: 'スーパー管理者',
+};
+
+/** ロール階層: SUPER_ADMIN > ADMIN > USER */
+const ROLE_RANK: Record<UserRoleLiteral, number> = {
+  USER: 0,
+  ADMIN: 1,
+  SUPER_ADMIN: 2,
+};
+
+export function hasRoleAtLeast(
+  userRole: UserRoleLiteral | undefined | null,
+  required: UserRoleLiteral,
+): boolean {
+  if (!userRole) return false;
+  return ROLE_RANK[userRole] >= ROLE_RANK[required];
+}
+
+export function isAdmin(role: UserRoleLiteral | undefined | null): boolean {
+  return hasRoleAtLeast(role, 'ADMIN');
+}
+
+export function isSuperAdmin(role: UserRoleLiteral | undefined | null): boolean {
+  return role === 'SUPER_ADMIN';
+}
+
 export const BILLING_INTERVALS = ['MONTH', 'YEAR'] as const;
 export type BillingIntervalLiteral = (typeof BILLING_INTERVALS)[number];
 
