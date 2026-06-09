@@ -52,3 +52,17 @@ export const CreateVideoSchema = z.object({
   expiresAt: z.iso.datetime().optional(),
 });
 export type CreateVideoInput = z.infer<typeof CreateVideoSchema>;
+
+// コメント投稿 (STANDARD 以上限定)
+export const CreateContentCommentSchema = z.object({
+  contentId: z.uuid(),
+  body: z.string().min(1, '本文を入力してください').max(2000, '2000文字以内で入力してください'),
+});
+export type CreateContentCommentInput = z.infer<typeof CreateContentCommentSchema>;
+
+export const ListContentCommentsQuerySchema = z.object({
+  contentId: z.uuid(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ListContentCommentsQuery = z.infer<typeof ListContentCommentsQuerySchema>;

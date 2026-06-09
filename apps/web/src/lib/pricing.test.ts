@@ -1,4 +1,10 @@
-import { effectiveUnitPrice, calculateOrderTotals, generateOrderNumber, formatJpy } from './pricing';
+import {
+  effectiveUnitPrice,
+  calculateOrderTotals,
+  generateOrderNumber,
+  formatJpy,
+  freeShippingThresholdFor,
+} from './pricing';
 
 describe('pricing', () => {
   describe('effectiveUnitPrice', () => {
@@ -38,6 +44,34 @@ describe('pricing', () => {
     it('小数税は切り捨て', () => {
       const t = calculateOrderTotals(999);
       expect(t.taxAmount).toBe(99); // floor(99.9)
+    });
+
+    it('FREE / STANDARD は 8000 未満で送料 600 円', () => {
+      expect(calculateOrderTotals(3000, 'FREE').shippingFee).toBe(600);
+      expect(calculateOrderTotals(3000, 'STANDARD').shippingFee).toBe(600);
+    });
+    it('FREE / STANDARD は 8000 以上で送料無料', () => {
+      expect(calculateOrderTotals(8000, 'FREE').shippingFee).toBe(0);
+      expect(calculateOrderTotals(8000, 'STANDARD').shippingFee).toBe(0);
+    });
+    it('PREMIUM は金額に関わらず送料無料', () => {
+      expect(calculateOrderTotals(100, 'PREMIUM').shippingFee).toBe(0);
+      expect(calculateOrderTotals(3000, 'PREMIUM').shippingFee).toBe(0);
+      expect(calculateOrderTotals(50000, 'PREMIUM').shippingFee).toBe(0);
+    });
+  });
+
+  describe('freeShippingThresholdFor', () => {
+    it('FREE / STANDARD は 8000', () => {
+      expect(freeShippingThresholdFor('FREE')).toBe(8000);
+      expect(freeShippingThresholdFor('STANDARD')).toBe(8000);
+    });
+    it('PREMIUM は 0 (常時無料)', () => {
+      expect(freeShippingThresholdFor('PREMIUM')).toBe(0);
+    });
+    it('null / undefined はデフォルト (8000)', () => {
+      expect(freeShippingThresholdFor(null)).toBe(8000);
+      expect(freeShippingThresholdFor(undefined)).toBe(8000);
     });
   });
 

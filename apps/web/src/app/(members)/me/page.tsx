@@ -3,7 +3,15 @@ import Link from 'next/link';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
-import { PLAN_LABELS } from '@idol/shared';
+import {
+  PLAN_LABELS,
+  SAVE_SLOT_LIMIT,
+  MONTHLY_BONUS_GIFT_COUNT,
+  MAX_VIDEO_QUALITY,
+  FREE_SHIPPING_THRESHOLD_BY_PLAN,
+  currentYearMonth,
+  type PlanTypeLiteral,
+} from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
@@ -16,31 +24,44 @@ export default async function MePage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me');
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: {
-      subscriptions: {
-        where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-      },
-    },
-  });
+  const plan = session.user.plan as PlanTypeLiteral;
+  const yearMonth = currentYearMonth();
 
-  const orders = await prisma.order.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    select: {
-      id: true,
-      orderNumber: true,
-      status: true,
-      totalAmount: true,
-      createdAt: true,
-    },
-  });
+  const [user, orders, saveSlotCount, bonusGrant] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        subscriptions: {
+          where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    }),
+    prisma.order.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
+      },
+    }),
+    prisma.playerSaveSlot.count({ where: { userId: session.user.id } }),
+    prisma.bonusGiftGrant.findUnique({
+      where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
+      include: { item: { select: { name: true, iconUrl: true } } },
+    }),
+  ]);
 
   const sub = user?.subscriptions[0];
+  const slotLimit = SAVE_SLOT_LIMIT[plan];
+  const bonusEligible = MONTHLY_BONUS_GIFT_COUNT[plan];
+  const maxQuality = MAX_VIDEO_QUALITY[plan];
+  const freeShippingThreshold = FREE_SHIPPING_THRESHOLD_BY_PLAN[plan];
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 py-10">
@@ -51,12 +72,17 @@ export default async function MePage() {
 
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">会員プラン</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">会員プラン</h2>
+            <Link href="/plans" className="text-sm text-brand-600 hover:underline">
+              プラン一覧を見る
+            </Link>
+          </div>
         </CardHeader>
         <CardBody className="space-y-3">
           <div className="flex items-center gap-3">
-            <Badge tone={session.user.plan === 'PREMIUM' ? 'brand' : session.user.plan === 'STANDARD' ? 'info' : 'gray'}>
-              {PLAN_LABELS[session.user.plan]}
+            <Badge tone={plan === 'PREMIUM' ? 'brand' : plan === 'STANDARD' ? 'info' : 'gray'}>
+              {PLAN_LABELS[plan]}
             </Badge>
             {sub && (
               <span className="text-sm text-slate-600">
@@ -70,7 +96,76 @@ export default async function MePage() {
               次回更新日: {new Date(sub.currentPeriodEnd).toLocaleDateString('ja-JP')}
             </p>
           )}
+          {plan === 'FREE' && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              現在は無料プランです。
+              <Link href="/plans" className="ml-1 font-semibold underline">
+                有料プランの特典を見る →
+              </Link>
+            </p>
+          )}
           <ManageSubscriptionButtons hasActiveSub={Boolean(sub)} />
+        </CardBody>
+      </Card>
+
+      {/* プラン特典の利用状況 */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">あなたの特典 ({PLAN_LABELS[plan]})</h2>
+        </CardHeader>
+        <CardBody className="grid gap-4 sm:grid-cols-2">
+          {/* 動画画質 */}
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs text-slate-500">動画最大画質</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">{maxQuality}</p>
+            {plan !== 'PREMIUM' && (
+              <p className="mt-1 text-xs text-slate-500">プレミアムで 1080p に</p>
+            )}
+          </div>
+          {/* 送料 */}
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs text-slate-500">送料</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {freeShippingThreshold === 0
+                ? '常時無料'
+                : `¥${freeShippingThreshold.toLocaleString()} 以上で無料`}
+            </p>
+            {plan !== 'PREMIUM' && (
+              <p className="mt-1 text-xs text-slate-500">プレミアムで常時無料</p>
+            )}
+          </div>
+          {/* セーブスロット */}
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs text-slate-500">ゲームセーブスロット</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              {saveSlotCount} / {slotLimit} スロット
+            </p>
+            {plan !== 'PREMIUM' && (
+              <p className="mt-1 text-xs text-slate-500">
+                プレミアムで {SAVE_SLOT_LIMIT.PREMIUM} スロットに
+              </p>
+            )}
+          </div>
+          {/* 月次ボーナス */}
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs text-slate-500">月次ボーナスギフト ({yearMonth})</p>
+            {bonusEligible === 0 ? (
+              <p className="mt-1 text-xl font-bold text-slate-400">対象外</p>
+            ) : bonusGrant ? (
+              <p className="mt-1 text-xl font-bold text-emerald-600">
+                受取済み (×{bonusGrant.count})
+              </p>
+            ) : (
+              <p className="mt-1 text-xl font-bold text-slate-900">
+                対象 (×{bonusEligible}) / 未受取
+              </p>
+            )}
+            {plan !== 'PREMIUM' && (
+              <p className="mt-1 text-xs text-slate-500">
+                プレミアムで月 {MONTHLY_BONUS_GIFT_COUNT.PREMIUM} 個に
+              </p>
+            )}
+          </div>
         </CardBody>
       </Card>
 

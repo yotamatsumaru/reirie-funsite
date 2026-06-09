@@ -106,11 +106,12 @@ export const GET = handle(async () => {
     });
   }
 
-  const totals = calculateOrderTotals(subtotal);
+  const totals = calculateOrderTotals(subtotal, plan);
 
   return NextResponse.json({
     cartId: cart.id,
     items: lineItems,
+    plan,
     ...totals,
   });
 });

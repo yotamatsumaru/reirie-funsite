@@ -1,5 +1,6 @@
 export * from './constants';
 export * from './access-control';
+export * from './plan-benefits';
 export * from './schemas/auth';
 export * from './schemas/common';
 export * from './schemas/content';

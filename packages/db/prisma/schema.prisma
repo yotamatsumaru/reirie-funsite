@@ -196,6 +196,7 @@ model User {
   playerInventories PlayerInventory[]
   playerPurchases   PlayerPurchase[]
   playerSaveSlots   PlayerSaveSlot[]
+  bonusGiftGrants   BonusGiftGrant[]
 
   @@index([email])
   @@map("users")
@@ -793,6 +794,7 @@ model GameItem {
   character    GameCharacter?    @relation(fields: [characterId], references: [id], onDelete: SetNull)
   inventories  PlayerInventory[]
   purchases    PlayerPurchase[]
+  bonusGrants  BonusGiftGrant[]
 
   @@index([kind, isActive])
   @@index([characterId])
@@ -900,12 +902,12 @@ model PlayerPurchase {
   @@map("player_purchases")
 }
 
-/// セーブスロット (5 枠まで)
+/// セーブスロット (プラン別上限: FREE=1 / STANDARD=3 / PREMIUM=10)
 model PlayerSaveSlot {
   id           String   @id @default(uuid()) @db.Uuid
   userId       String   @map("user_id") @db.Uuid
   characterId  String   @map("character_id") @db.Uuid
-  slotIndex    Int      @map("slot_index") // 0-4
+  slotIndex    Int      @map("slot_index") // 0-9 (プランによって有効範囲が変わる)
   // セーブデータ (現在のシナリオ・シーン・親密度・フラグ)
   snapshotJson Json     @map("snapshot_json")
   label        String?  // ユーザーが付けるラベル
@@ -918,4 +920,30 @@ model PlayerSaveSlot {
   @@unique([userId, characterId, slotIndex])
   @@index([userId])
   @@map("player_save_slots")
+}
+
+// =====================================================================
+// Game (恋愛 ADV) — 月次ボーナスギフト (会員特典)
+// =====================================================================
+
+/// 月次ボーナスギフト付与履歴
+///
+/// STANDARD 会員: 1 個/月、PREMIUM 会員: 5 個/月 を自動付与。
+/// (yearMonth, userId) でユニークにすることで二重付与を防止。
+/// 実際の付与処理は POST /api/subscriptions/monthly-bonus (Cron / 管理画面から起動)
+model BonusGiftGrant {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  yearMonth String   @map("year_month") // "YYYY-MM" 形式
+  plan      PlanType                    // 付与時点のプラン
+  count     Int                         // 付与数 (STANDARD=1, PREMIUM=5)
+  itemId    String   @map("item_id") @db.Uuid  // 付与した GameItem (DEFAULT_BONUS_ITEM_SLUG)
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item GameItem  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, yearMonth])
+  @@index([yearMonth])
+  @@map("bonus_gift_grants")
 }

@@ -79,6 +79,12 @@ export function Header() {
           <Link href="/products" className="hover:text-brand-600">
             グッズ
           </Link>
+          <Link href="/game" className="hover:text-brand-600">
+            ゲーム
+          </Link>
+          <Link href="/plans" className="hover:text-brand-600">
+            プラン
+          </Link>
           <Link href="/cart" className="relative hover:text-brand-600">
             カート
             {cartCount > 0 && (
@@ -185,6 +191,8 @@ export function Header() {
           <MobileLink href="/">ホーム</MobileLink>
           <MobileLink href="/contents">コンテンツ</MobileLink>
           <MobileLink href="/products">グッズ</MobileLink>
+          <MobileLink href="/game">ゲーム</MobileLink>
+          <MobileLink href="/plans">プラン</MobileLink>
           <MobileLink href="/cart">
             カート{cartCount > 0 ? ` (${cartCount})` : ''}
           </MobileLink>

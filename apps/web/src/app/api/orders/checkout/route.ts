@@ -96,7 +96,7 @@ export const POST = handle(async (req: Request) => {
     });
   }
 
-  const totals = calculateOrderTotals(subtotal);
+  const totals = calculateOrderTotals(subtotal, plan);
 
   // 4) ユーザー (Stripe customerId 取得 or 生成)
   const user = await prisma.user.findUnique({ where: { id: userId } });

@@ -64,4 +64,12 @@ export const env = {
     apiKey: optional('LAWSON_TICKET_API_KEY') ?? '',
     partnerId: optional('LAWSON_TICKET_PARTNER_ID') ?? '',
   },
+
+  /**
+   * Cron 起動エンドポイント認証用シークレット
+   * (月次ボーナスギフト付与等の内部 API で利用)
+   */
+  cron: {
+    secret: optional('CRON_SECRET') ?? '',
+  },
 };
