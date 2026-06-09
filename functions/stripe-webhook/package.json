@@ -19,6 +19,7 @@
     "stripe": "^17.4.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-ssm": "^3.682.0",
     "@types/aws-lambda": "^8.10.145",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.10",

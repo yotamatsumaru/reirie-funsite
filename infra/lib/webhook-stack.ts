@@ -53,17 +53,22 @@ export class WebhookStack extends Stack {
       this.tags.setTag(k, v);
     }
 
-    // ---- Stripe シークレットを SSM SecureString 経由で参照 ----
-    // 値そのものは CDK 外で aws ssm put-parameter 済みであることが前提
+    // ---- Stripe シークレットは Lambda 実行時に SSM から動的取得 ----
+    // CFn 制約により Lambda Environment Variables には SecureString を直接埋め込めないため、
+    // 「Parameter 名だけ」を env で渡し、Lambda コード内で SDK 経由で値を取得する。
+    // (Lambda コンテナ再利用時はキャッシュされるためコストはほぼゼロ)
+    const stripeSecretKeyParamName = `/${config.appName}/${config.envName}/stripe/secret-key`;
+    const stripeWebhookSecretParamName = `/${config.appName}/${config.envName}/stripe/webhook-secret`;
+    // IAM 用に SecureString リソースを参照 (値そのものは読まない)
     const stripeSecretParam = ssm.StringParameter.fromSecureStringParameterAttributes(
       this,
       'StripeSecretKeyParam',
-      { parameterName: `/${config.appName}/${config.envName}/stripe/secret-key` },
+      { parameterName: stripeSecretKeyParamName },
     );
     const stripeWebhookSecretParam = ssm.StringParameter.fromSecureStringParameterAttributes(
       this,
       'StripeWebhookSecretParam',
-      { parameterName: `/${config.appName}/${config.envName}/stripe/webhook-secret` },
+      { parameterName: stripeWebhookSecretParamName },
     );
     // Price ID 群 (SecureString ではなく String で管理)
     const priceParams: Record<string, ssm.IStringParameter> = {
@@ -141,8 +146,10 @@ export class WebhookStack extends Stack {
         APP_NAME: config.appName,
         ENV_NAME: config.envName,
         DATABASE_URL: dbUrlBase,
-        STRIPE_SECRET_KEY: stripeSecretParam.stringValue,
-        STRIPE_WEBHOOK_SECRET: stripeWebhookSecretParam.stringValue,
+        // SecureString は値ではなく Parameter 名で渡し、Lambda 内で SDK 取得
+        STRIPE_SECRET_KEY_PARAM: stripeSecretKeyParamName,
+        STRIPE_WEBHOOK_SECRET_PARAM: stripeWebhookSecretParamName,
+        // Price ID は String なので値そのまま埋め込み OK
         STRIPE_PRICE_STANDARD_MONTHLY:
           priceParams.STRIPE_PRICE_STANDARD_MONTHLY!.stringValue,
         STRIPE_PRICE_STANDARD_YEARLY:
