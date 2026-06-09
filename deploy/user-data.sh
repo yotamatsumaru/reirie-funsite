@@ -27,6 +27,7 @@ VIDEO_BUCKET="__VIDEO_BUCKET__"
 ASSET_BUCKET="__ASSET_BUCKET__"
 MEDIA_OUTPUT_BUCKET="__MEDIA_OUTPUT_BUCKET__"
 APP_REPO_URL="__APP_REPO_URL__"
+APP_BRANCH="__APP_BRANCH__"
 
 APP_USER="ec2-user"
 APP_DIR="/home/${APP_USER}/app"
@@ -135,6 +136,10 @@ APP_BASE_URL=$(ssm_get "${SSM_BASE}/app/base-url")
 
 cat > "${APP_DIR}/.env.production" <<ENVEOF
 NODE_ENV=production
+# DEMO_MODE は本番では明示的に OFF (デモ用のモック Prisma を絶対に有効化しない)
+DEMO_MODE=0
+NEXT_PUBLIC_DEMO_MODE=0
+
 APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
 NEXT_PUBLIC_APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
 
@@ -184,15 +189,20 @@ set -euo pipefail
 export NVM_DIR="/home/${APP_USER}/.nvm"
 . "\$NVM_DIR/nvm.sh"
 
+BRANCH="${APP_BRANCH:-main}"
 if [ ! -d "${APP_DIR}/.git" ]; then
-  git clone "${APP_REPO_URL}" "${APP_DIR}"
+  git clone --branch "\$BRANCH" "${APP_REPO_URL}" "${APP_DIR}"
 fi
 cd "${APP_DIR}"
 git fetch --all
-git checkout main
+git checkout "\$BRANCH"
 git pull --ff-only
 
+# pnpm がモノレポルートで全 workspace 依存を解決
 pnpm install --frozen-lockfile
+
+# Prisma generate (build 前に必須)
+pnpm --filter @idol/db prisma:generate || true
 
 # Prisma migrate (失敗しても起動は続行)
 pnpm --filter @idol/db prisma:migrate:deploy || echo "[user-data] prisma migrate failed, continuing"
@@ -296,5 +306,8 @@ systemctl enable amazon-cloudwatch-agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a fetch-config -m ec2 \
   -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+echo "[user-data] done $(date -u +%FT%TZ)"
+e:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
 echo "[user-data] done $(date -u +%FT%TZ)"

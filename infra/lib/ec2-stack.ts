@@ -159,7 +159,8 @@ dnf -y install git tar gzip jq postgresql15
       .replace(/__VIDEO_BUCKET__/g, videoBucket.bucketName)
       .replace(/__ASSET_BUCKET__/g, assetBucket.bucketName)
       .replace(/__MEDIA_OUTPUT_BUCKET__/g, mediaOutputBucket.bucketName)
-      .replace(/__APP_REPO_URL__/g, config.appRepoUrl ?? '');
+      .replace(/__APP_REPO_URL__/g, config.appRepoUrl ?? '')
+      .replace(/__APP_BRANCH__/g, config.appBranch);
 
     const userData = ec2.UserData.forLinux();
     userData.addCommands(userDataScript);

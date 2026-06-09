@@ -82,18 +82,37 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Trigger SSM RunCommand to pull & restart
+        env:
+          # CDK の commonTags() で付与されるタグキー/値と一致させる
+          TAG_KEY: Application
+          TAG_VALUE: idol-fansite
         run: |
           set -e
           CMD_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:App,Values=idol-fan-site" \
-            --parameters commands='["sudo -u ec2-user bash /home/ec2-user/app/deploy/deploy.sh"]' \
+            --targets "Key=tag:${TAG_KEY},Values=${TAG_VALUE}" \
+            --parameters commands='["sudo -u ec2-user APP_BRANCH=main bash /home/ec2-user/app/deploy/deploy.sh"]' \
             --comment "Deploy ${{ github.sha }}" \
             --query "Command.CommandId" --output text)
           echo "SSM Command ID: $CMD_ID"
-          sleep 10
-          aws ssm list-command-invocations --command-id "$CMD_ID" --details \
-            --query 'CommandInvocations[].Status' --output text
+          # 結果待ち (最大 10 分)
+          for i in {1..60}; do
+            sleep 10
+            STATUS=$(aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+              --query 'CommandInvocations[0].Status' --output text 2>/dev/null || echo "Pending")
+            echo "  status: $STATUS"
+            if [ "$STATUS" = "Success" ]; then
+              echo "Deploy succeeded."
+              exit 0
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
+              echo "Deploy failed with status: $STATUS"
+              aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+                --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text
+              exit 1
+            fi
+          done
+          echo "Deploy timed out (waited 10 min)."
+          exit 1
 
   deploy-infra:
     name: Deploy CDK Infrastructure

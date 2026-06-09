@@ -18,6 +18,8 @@ export interface AppConfig {
   ec2InstanceType: string;
   /** EC2 起動時に GitHub から pull する想定のリポジトリ (CodeDeploy 不使用版) */
   appRepoUrl?: string;
+  /** EC2 が pull する Git ブランチ (デフォルト `main`) */
+  appBranch: string;
 
   /** RDS */
   rdsInstanceType: string;
@@ -57,6 +59,7 @@ export function loadConfig(scope: Construct): AppConfig {
     domainName,
     ec2InstanceType: isProd ? 't3.medium' : 't3.small',
     appRepoUrl: node.tryGetContext('appRepoUrl') as string | undefined,
+    appBranch: (node.tryGetContext('appBranch') as string) ?? 'main',
     rdsInstanceType: isProd ? 't3.medium' : 't3.micro',
     rdsAllocatedStorage: isProd ? 100 : 20,
     rdsMultiAz: isProd,

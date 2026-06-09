@@ -55,3 +55,7 @@ functions/*/dist/
 # crash dumps
 core
 core.*
+
+# GitHub Actions workflows are managed via docs/github-workflows/
+# (GitHub App lacks workflows permission, see docs/github-workflows/README.md)
+.github/workflows/

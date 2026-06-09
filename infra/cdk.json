@@ -24,6 +24,11 @@
     "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
     "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
     "appName": "idol-fansite",
-    "envName": "dev"
+    "envName": "dev",
+    "region": "ap-northeast-1",
+    "account": "700918785224",
+    "appRepoUrl": "https://github.com/yotamatsumaru/reirie-funsite.git",
+    "appBranch": "main",
+    "alertEmail": ""
   }
 }
