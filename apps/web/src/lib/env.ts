@@ -12,6 +12,17 @@ export const env = {
 
   appBaseUrl: optional('APP_BASE_URL') ?? 'http://localhost:3000',
 
+  /**
+   * デモモード: モックデータで UI のみを表示する。
+   * - DB / Stripe / CloudFront 等の外部依存を全て無効化
+   * - 認証は demo@example.com / admin@example.com の任意パスワードでログイン可能
+   */
+  demoMode:
+    process.env.DEMO_MODE === '1' ||
+    process.env.DEMO_MODE === 'true' ||
+    process.env.NEXT_PUBLIC_DEMO_MODE === '1' ||
+    process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
+
   auth: {
     secret: optional('AUTH_SECRET') ?? 'dev-insecure-secret-change-me',
     trustHost: process.env.AUTH_TRUST_HOST === 'true',

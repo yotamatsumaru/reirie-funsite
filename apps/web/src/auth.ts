@@ -67,6 +67,39 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const parsed = CredentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
 
+        // --- デモモード: パスワード検証をスキップしてログイン可能にする ---
+        if (env.demoMode) {
+          const email = parsed.data.email.toLowerCase();
+          // demo@example.com (PREMIUM) と admin@example.com (ADMIN) を許可
+          // それ以外は STANDARD ゲストとしてログイン許可
+          if (email === 'admin@example.com') {
+            return {
+              id: '00000000-0000-4000-8000-000000000002',
+              email: 'admin@example.com',
+              name: 'デモ管理者',
+              role: 'ADMIN',
+              plan: 'PREMIUM' as PlanTypeLiteral,
+            };
+          }
+          if (email === 'demo@example.com') {
+            return {
+              id: '00000000-0000-4000-8000-000000000001',
+              email: 'demo@example.com',
+              name: 'デモユーザー',
+              role: 'USER',
+              plan: 'PREMIUM' as PlanTypeLiteral,
+            };
+          }
+          // 任意メールでも閲覧できるようゲスト扱いで通す
+          return {
+            id: '00000000-0000-4000-8000-000000000099',
+            email: parsed.data.email,
+            name: 'ゲスト',
+            role: 'USER',
+            plan: 'FREE' as PlanTypeLiteral,
+          };
+        }
+
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email, deletedAt: null },
           include: {
@@ -102,6 +135,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         t.role = (user.role ?? 'USER') as 'USER' | 'ADMIN';
         t.plan = (user.plan ?? 'FREE') as PlanTypeLiteral;
         t.planRefreshedAt = Date.now();
+      }
+      // デモモードでは DB アクセスせずトークン値をそのまま使う
+      if (env.demoMode) {
+        return token;
       }
       // 5分以上経過 or "update" トリガで plan を再取得
       const stale =
