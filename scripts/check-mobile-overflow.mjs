@@ -22,6 +22,8 @@ const PAGES = [
   { path: '/cart', name: 'カート' },
   { path: '/signin', name: 'サインイン' },
   { path: '/signup', name: 'サインアップ' },
+  { path: '/notices', name: 'お知らせ一覧' },
+  { path: '/maintenance', name: 'メンテナンス' },
   // 認証必須(super)
   { path: '/me', name: 'マイページ', auth: 'super' },
   { path: '/admin', name: '管理TOP', auth: 'super' },

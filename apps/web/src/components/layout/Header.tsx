@@ -84,6 +84,9 @@ export function Header() {
           <Link href="/game" className="hover:text-brand-600">
             ゲーム
           </Link>
+          <Link href="/notices" className="hover:text-brand-600">
+            お知らせ
+          </Link>
           <Link href="/plans" className="hover:text-brand-600">
             プラン
           </Link>
@@ -202,6 +205,7 @@ export function Header() {
           <MobileLink href="/contents">コンテンツ</MobileLink>
           <MobileLink href="/products">グッズ</MobileLink>
           <MobileLink href="/game">ゲーム</MobileLink>
+          <MobileLink href="/notices">お知らせ</MobileLink>
           <MobileLink href="/plans">プラン</MobileLink>
           <MobileLink href="/cart">
             カート{cartCount > 0 ? ` (${cartCount})` : ''}

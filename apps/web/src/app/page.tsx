@@ -3,8 +3,24 @@ import { PLAN_LABELS, PLAN_PRICES } from '@idol/shared';
 import { formatJpy } from '@/lib/pricing';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { listAnnouncements } from '@/lib/demo-store';
 
-export default function HomePage() {
+export const dynamic = 'force-dynamic';
+
+function formatDate(d: Date | null): string {
+  if (!d) return '';
+  return new Intl.DateTimeFormat('ja-JP', {
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+export default async function HomePage() {
+  // 最新お知らせ 3 件 (ALL 公開のみ — 未ログインユーザーも見られるもの)
+  const latestNotices = listAnnouncements()
+    .filter((a) => a.status === 'PUBLISHED' && a.audience === 'ALL')
+    .slice(0, 3);
+
   return (
     <div>
       {/* Hero */}
@@ -40,6 +56,48 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* 最新お知らせ */}
+      {latestNotices.length > 0 && (
+        <section className="border-b border-slate-200 bg-slate-50">
+          <div className="mx-auto max-w-6xl px-4 py-8 sm:py-10">
+            <div className="mb-4 flex items-baseline justify-between gap-2">
+              <h2 className="text-lg font-bold text-slate-800 sm:text-xl">
+                📣 最新のお知らせ
+              </h2>
+              <Link
+                href="/notices"
+                className="text-xs font-semibold text-brand-600 hover:underline sm:text-sm"
+              >
+                すべて見る →
+              </Link>
+            </div>
+            <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+              {latestNotices.map((a) => (
+                <li key={a.id}>
+                  <Link
+                    href={`/notices/${a.id}`}
+                    className="flex items-start gap-3 px-4 py-3 transition hover:bg-slate-50 sm:items-center sm:gap-4 sm:px-5 sm:py-3.5"
+                  >
+                    <time
+                      dateTime={a.publishedAt?.toISOString()}
+                      className="shrink-0 text-xs font-medium tabular-nums text-slate-500 sm:text-sm"
+                    >
+                      {formatDate(a.publishedAt)}
+                    </time>
+                    <p className="line-clamp-2 flex-1 text-sm text-slate-800 sm:line-clamp-1 sm:text-base">
+                      {a.title}
+                    </p>
+                    <span className="hidden text-slate-300 sm:inline" aria-hidden="true">
+                      ›
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {/* 特典 */}
       <section className="mx-auto max-w-6xl px-4 py-10 sm:py-16">
