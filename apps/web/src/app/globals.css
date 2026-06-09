@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-brand-50: #fef2f8;
+  --color-brand-100: #fee5f1;
+  --color-brand-200: #ffcce4;
+  --color-brand-300: #ffa3cf;
+  --color-brand-400: #ff6fb1;
+  --color-brand-500: #ff3d92;
+  --color-brand-600: #ed1c75;
+  --color-brand-700: #c8125c;
+  --color-brand-800: #a5124e;
+  --color-brand-900: #871343;
+  --font-sans:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #fafafa;
+  color: #171717;
+  min-height: 100%;
+  /* スマホで横スクロール暴発を防ぐ */
+  overflow-x: hidden;
+}
+
+html {
+  /* iOS Safari の自動文字サイズ調整を抑止 (横向き回転対策) */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* iOS のオーバースクロール時にチェイン挙動を抑止 */
+  overscroll-behavior-y: contain;
+}
+
+/* iOS でフォーム入力時のズーム防止 (16px 以上で発火しない) */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+@media (min-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+}
+
+/* タップ領域 (Apple HIG: 44x44pt 推奨) */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a[role='button'],
+  [type='button'],
+  [type='submit'] {
+    min-height: 44px;
+  }
+}
+
+/* iOS タップ時のハイライト除去 */
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* スクロールバー (デスクトップのみ) */
+@media (hover: hover) {
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
+}
+
+/* フォーカスリング統一 */
+*:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* セーフエリア (iPhone X 以降のノッチ対応) */
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ===== ゲーム演出 (shake / flash / fade) ===== */
+@keyframes shake-light {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  25% { transform: translate3d(-2px, 0, 0); }
+  75% { transform: translate3d(2px, 0, 0); }
+}
+@keyframes shake-medium {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-5px, 1px, 0); }
+  40% { transform: translate3d(5px, -1px, 0); }
+  60% { transform: translate3d(-4px, 2px, 0); }
+  80% { transform: translate3d(4px, -2px, 0); }
+}
+@keyframes shake-heavy {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10% { transform: translate3d(-9px, 2px, 0); }
+  30% { transform: translate3d(8px, -3px, 0); }
+  50% { transform: translate3d(-7px, 3px, 0); }
+  70% { transform: translate3d(7px, -2px, 0); }
+  90% { transform: translate3d(-4px, 2px, 0); }
+}
+.animate-shake-light { animation: shake-light 0.4s linear infinite; }
+.animate-shake-medium { animation: shake-medium 0.5s linear infinite; }
+.animate-shake-heavy { animation: shake-heavy 0.5s linear infinite; }
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

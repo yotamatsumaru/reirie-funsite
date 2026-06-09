@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main, genspark_ai_developer]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20.20.0'
+  PNPM_VERSION: '9.15.9'
+
+jobs:
+  lint-typecheck-test:
+    name: Lint / Typecheck / Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: idol
+          POSTGRES_PASSWORD: idol_password
+          POSTGRES_DB: idol_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://idol:idol_password@localhost:5432/idol_dev
+        run: pnpm db:generate
+
+      - name: Apply migrations (deploy)
+        env:
+          DATABASE_URL: postgresql://idol:idol_password@localhost:5432/idol_dev
+        run: pnpm --filter @idol/db prisma migrate deploy || pnpm --filter @idol/db prisma db push --accept-data-loss
+
+      - name: Typecheck
+        env:
+          DATABASE_URL: postgresql://idol:idol_password@localhost:5432/idol_dev
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+        continue-on-error: true
+
+      - name: Unit tests
+        env:
+          DATABASE_URL: postgresql://idol:idol_password@localhost:5432/idol_dev
+          AUTH_SECRET: ci-secret-key-do-not-use-in-prod
+          STRIPE_SECRET_KEY: sk_test_dummy
+          STRIPE_WEBHOOK_SECRET: whsec_dummy
+        run: pnpm test
+
+  build-web:
+    name: Build Next.js (standalone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: lint-typecheck-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+        run: pnpm db:generate
+
+      - name: Build (next build standalone)
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+          AUTH_SECRET: ci-secret-key-do-not-use-in-prod
+          STRIPE_SECRET_KEY: sk_test_dummy
+          STRIPE_WEBHOOK_SECRET: whsec_dummy
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: pnpm --filter @idol/web build
+
+      - name: Upload standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-standalone
+          path: |
+            apps/web/.next/standalone
+            apps/web/.next/static
+          retention-days: 7
+
+  build-lambda:
+    name: Build Stripe Webhook Lambda
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint-typecheck-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile=false
+
+      - run: pnpm db:generate
+
+      - name: Build Lambda bundle
+        run: pnpm --filter @idol/stripe-webhook build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stripe-webhook-dist
+          path: functions/stripe-webhook/dist
+          retention-days: 7
+
+  cdk-synth:
+    name: CDK Synth
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint-typecheck-test
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile=false
+
+      - name: CDK synth (stack templates)
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-1
+          CDK_DEFAULT_REGION: ap-northeast-1
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+        run: pnpm --filter @idol/infra synth

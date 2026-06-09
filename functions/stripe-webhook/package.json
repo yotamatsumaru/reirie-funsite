@@ -1,0 +1,31 @@
+{
+  "name": "@idol/stripe-webhook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stripe Webhook Lambda - 独立配置で EC2 障害時も継続受信可能",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:@aws-sdk/* --external:aws-sdk --minify --sourcemap",
+    "build:zip": "pnpm run build && cd dist && zip -r function.zip index.js index.js.map ../prisma 2>/dev/null || zip -r function.zip index.js index.js.map",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo 'no lint'",
+    "test": "jest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@idol/db": "workspace:*",
+    "@idol/shared": "workspace:*",
+    "@prisma/client": "^5.22.0",
+    "stripe": "^17.4.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.14.10",
+    "ts-node": "^10.9.2",
+    "esbuild": "^0.24.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.9.2"
+  }
+}

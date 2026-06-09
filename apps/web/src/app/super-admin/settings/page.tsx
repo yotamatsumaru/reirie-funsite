@@ -1,0 +1,154 @@
+/**
+ * /super-admin/settings — システム設定画面
+ *
+ * メンテナンスモード、機能ON/OFF、価格設定などをカテゴリ別に表示・編集。
+ * デモモードでは demo-store にメモリ保存。
+ */
+import type { Metadata } from 'next';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { listSettings } from '@/lib/demo-store';
+import { requireSuperAdmin } from '@/auth';
+import { SettingRow } from './setting-row';
+
+export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
+export const dynamic = 'force-dynamic';
+
+const CATEGORY_META: Record<
+  'system' | 'features' | 'pricing',
+  { label: string; description: string; icon: string }
+> = {
+  system: {
+    label: 'システム',
+    description: 'サイト全体の挙動を制御する基幹設定',
+    icon: '⚙️',
+  },
+  features: {
+    label: '機能フラグ',
+    description: '個別機能の有効/無効を切り替え',
+    icon: '🚦',
+  },
+  pricing: {
+    label: '価格・送料・特典',
+    description: '料金や月次プレゼント数などの数値設定',
+    icon: '💴',
+  },
+};
+
+export default async function SuperAdminSettingsPage() {
+  await requireSuperAdmin();
+
+  const settings = listSettings();
+  const grouped = {
+    system: settings.filter((s) => s.category === 'system'),
+    features: settings.filter((s) => s.category === 'features'),
+    pricing: settings.filter((s) => s.category === 'pricing'),
+  };
+
+  const maintenance = settings.find((s) => s.key === 'maintenance.enabled');
+  const disabledFeatures = settings.filter(
+    (s) => s.category === 'features' && s.value === false,
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">システム設定</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          サイト全体の挙動を制御します。変更は即時反映されます。
+        </p>
+      </div>
+
+      {/* サマリー */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card>
+          <CardBody>
+            <p className="text-xs font-medium text-slate-500">運用ステータス</p>
+            <p className="mt-2 text-lg font-bold">
+              {maintenance?.value ? (
+                <Badge tone="danger">メンテナンス中</Badge>
+              ) : (
+                <Badge tone="success">通常運用</Badge>
+              )}
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-xs font-medium text-slate-500">設定項目数</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">
+              {settings.length}
+              <span className="ml-1 text-sm font-normal text-slate-500">件</span>
+            </p>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardBody>
+            <p className="text-xs font-medium text-slate-500">無効中の機能</p>
+            <p className="mt-2 text-2xl font-bold text-slate-900">
+              {disabledFeatures.length}
+              <span className="ml-1 text-sm font-normal text-slate-500">件</span>
+            </p>
+          </CardBody>
+        </Card>
+      </div>
+
+      {/* カテゴリ別 */}
+      {(['system', 'features', 'pricing'] as const).map((category) => {
+        const meta = CATEGORY_META[category];
+        const items = grouped[category];
+        if (items.length === 0) return null;
+        return (
+          <Card key={category}>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{meta.icon}</span>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">
+                    {meta.label}
+                  </h2>
+                  <p className="text-xs text-slate-500">{meta.description}</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardBody className="p-0">
+              <ul className="divide-y divide-slate-200">
+                {items.map((s) => (
+                  <li
+                    key={s.key}
+                    className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {s.label}
+                        </p>
+                        <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-600">
+                          {s.key}
+                        </code>
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {s.description}
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <SettingRow
+                        settingKey={s.key}
+                        value={s.value}
+                        valueType={typeof s.value as 'boolean' | 'number' | 'string'}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </CardBody>
+          </Card>
+        );
+      })}
+
+      <p className="text-xs text-slate-400">
+        ※ デモモードではサーバ再起動で初期値にリセットされます。本番環境では永続化されます。
+      </p>
+    </div>
+  );
+}

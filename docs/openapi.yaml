@@ -1,0 +1,549 @@
+openapi: 3.1.0
+info:
+  title: Idol Fan Site API
+  version: 0.1.0
+  description: |
+    アイドルファンサイト REST API 仕様。Next.js 16 Route Handlers で実装。
+    認証は Auth.js v5 (Credentials Provider, JWT cookie)。
+
+servers:
+  - url: https://example.com
+    description: 本番
+  - url: http://localhost:3000
+    description: ローカル開発
+
+tags:
+  - name: Auth
+  - name: Subscriptions
+  - name: Contents
+  - name: Videos
+  - name: Live
+  - name: Products
+  - name: Cart
+  - name: Orders
+  - name: Tickets
+  - name: Me
+  - name: Admin
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Secure-next-auth.session-token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        hasMore: { type: boolean }
+
+    Plan:
+      type: string
+      enum: [FREE, STANDARD, PREMIUM]
+
+    AccessLevel:
+      type: string
+      enum: [PUBLIC, MEMBERS, PREMIUM]
+
+    Content:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string, nullable: true }
+        type: { type: string, enum: [BLOG, GALLERY] }
+        accessLevel: { $ref: '#/components/schemas/AccessLevel' }
+        coverImageUrl: { type: string, nullable: true }
+        publishedAt: { type: string, format: date-time, nullable: true }
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        basePrice: { type: integer }
+        effectivePrice: { type: integer }
+        isMembersOnly: { type: boolean }
+        isPremiumExclusive: { type: boolean }
+        thumbnailUrl: { type: string, nullable: true }
+        inStock: { type: boolean }
+
+    CartItem:
+      type: object
+      properties:
+        id: { type: string }
+        variantId: { type: string }
+        productId: { type: string }
+        productSlug: { type: string }
+        productName: { type: string }
+        variantName: { type: string }
+        quantity: { type: integer }
+        unitPrice: { type: integer }
+        subtotal: { type: integer }
+        thumbnailUrl: { type: string, nullable: true }
+        inStock: { type: boolean }
+        available: { type: integer }
+        blocked:
+          oneOf:
+            - { type: boolean, enum: [false] }
+            - type: object
+              properties:
+                reason: { type: string }
+
+    Cart:
+      type: object
+      properties:
+        cartId: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        subtotal: { type: integer }
+        taxAmount: { type: integer }
+        shippingFee: { type: integer }
+        totalAmount: { type: integer }
+
+    ShippingAddress:
+      type: object
+      required: [name, phone, postalCode, prefecture, addressLine1]
+      properties:
+        name: { type: string, maxLength: 100 }
+        phone: { type: string, maxLength: 20 }
+        postalCode: { type: string, pattern: '^\d{3}-?\d{4}$' }
+        prefecture: { type: string }
+        addressLine1: { type: string, maxLength: 200 }
+        addressLine2: { type: string, maxLength: 200 }
+
+paths:
+  # ─── Auth ─────────────────────────────────────────────────────────
+  /api/auth/signup:
+    post:
+      tags: [Auth]
+      summary: 新規会員登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                displayName: { type: string, maxLength: 50 }
+      responses:
+        '200': { description: 登録成功 }
+        '422':
+          description: バリデーションエラー
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409': { description: メールアドレス重複 }
+
+  /api/auth/[...nextauth]:
+    post:
+      tags: [Auth]
+      summary: ログイン (Auth.js Credentials)
+      description: |
+        実体は `/api/auth/callback/credentials` 等。
+        通常は `next-auth/react` の `signIn('credentials', ...)` を使用。
+
+  # ─── Subscriptions ────────────────────────────────────────────────
+  /api/subscriptions/checkout:
+    post:
+      tags: [Subscriptions]
+      summary: Stripe Checkout (mode=subscription) URL を発行
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planType, billingInterval]
+              properties:
+                planType: { type: string, enum: [STANDARD, PREMIUM] }
+                billingInterval: { type: string, enum: [MONTH, YEAR] }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { url: { type: string } }
+
+  /api/subscriptions/portal:
+    post:
+      tags: [Subscriptions]
+      summary: Stripe Billing Portal URL を発行
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/subscriptions/me:
+    get:
+      tags: [Subscriptions]
+      summary: 現在のサブスクリプション情報
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/subscriptions/cancel:
+    post:
+      tags: [Subscriptions]
+      summary: 解約予約 (cancel_at_period_end=true)
+      security: [{ sessionCookie: [] }]
+
+  /api/subscriptions/change-plan:
+    post:
+      tags: [Subscriptions]
+      summary: プラン変更 (即時 proration)
+      security: [{ sessionCookie: [] }]
+
+  # ─── Contents ─────────────────────────────────────────────────────
+  /api/contents:
+    get:
+      tags: [Contents]
+      summary: 公開コンテンツ一覧 (プラン別表示制御)
+      parameters:
+        - { in: query, name: type, schema: { type: string, enum: [BLOG, GALLERY] } }
+        - { in: query, name: tag, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 12 } }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagination'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Content' }
+
+  /api/contents/{slug}:
+    get:
+      tags: [Contents]
+      summary: コンテンツ詳細
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+        '403': { description: プラン要件未達 }
+        '404': { description: 見つからない }
+
+  # ─── Videos ───────────────────────────────────────────────────────
+  /api/videos/{id}/playback:
+    get:
+      tags: [Videos]
+      summary: 動画 HLS の CloudFront 署名URL を発行
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signedUrl: { type: string, format: uri }
+                  expiresAt: { type: string, format: date-time }
+
+  # ─── Live ─────────────────────────────────────────────────────────
+  /api/live:
+    get:
+      tags: [Live]
+      summary: 配信予定/配信中一覧
+
+  /api/live/{id}/playback:
+    get:
+      tags: [Live]
+      summary: IVS 署名 playback URL を発行
+      security: [{ sessionCookie: [] }]
+
+  # ─── Products ─────────────────────────────────────────────────────
+  /api/products:
+    get:
+      tags: [Products]
+      summary: 商品一覧 (プラン別単価)
+      parameters:
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: q, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer } }
+        - { in: query, name: limit, schema: { type: integer } }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+
+  /api/products/{slug}:
+    get:
+      tags: [Products]
+      summary: 商品詳細
+
+  /api/products/categories:
+    get:
+      tags: [Products]
+      summary: カテゴリ一覧
+
+  # ─── Cart ─────────────────────────────────────────────────────────
+  /api/cart:
+    get:
+      tags: [Cart]
+      summary: 自分のカート
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+
+  /api/cart/items:
+    post:
+      tags: [Cart]
+      summary: カートに追加
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, quantity]
+              properties:
+                variantId: { type: string }
+                quantity: { type: integer, minimum: 1 }
+
+  /api/cart/items/{id}:
+    patch:
+      tags: [Cart]
+      summary: 数量変更
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+    delete:
+      tags: [Cart]
+      summary: 削除
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+
+  # ─── Orders ───────────────────────────────────────────────────────
+  /api/orders/checkout:
+    post:
+      tags: [Orders]
+      summary: カートから注文確定 + Stripe Checkout URL
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shipping, successUrl, cancelUrl]
+              properties:
+                shipping: { $ref: '#/components/schemas/ShippingAddress' }
+                notes: { type: string, maxLength: 500 }
+                successUrl: { type: string, format: uri }
+                cancelUrl: { type: string, format: uri }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId: { type: string }
+                  orderNumber: { type: string }
+                  checkoutUrl: { type: string }
+
+  /api/orders/{id}:
+    get:
+      tags: [Orders]
+      summary: 注文詳細
+      security: [{ sessionCookie: [] }]
+
+  # ─── Tickets ──────────────────────────────────────────────────────
+  /api/tickets/events:
+    get:
+      tags: [Tickets]
+      summary: チケットイベント一覧
+      parameters:
+        - { in: query, name: upcoming, schema: { type: boolean } }
+
+  /api/tickets/events/{id}:
+    get:
+      tags: [Tickets]
+      summary: イベント詳細
+
+  /api/tickets/link:
+    get:
+      tags: [Tickets]
+      summary: ローソンチケット連携状態
+      security: [{ sessionCookie: [] }]
+    delete:
+      tags: [Tickets]
+      summary: 連携解除
+      security: [{ sessionCookie: [] }]
+
+  /api/tickets/link/start:
+    post:
+      tags: [Tickets]
+      summary: 連携開始 (verifyToken 発行)
+      security: [{ sessionCookie: [] }]
+
+  /api/tickets/link/confirm:
+    post:
+      tags: [Tickets]
+      summary: 連携確定 (token + Lawson API 検証)
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, lawsonUserId]
+              properties:
+                token: { type: string }
+                lawsonUserId: { type: string }
+
+  /api/tickets/presale/request:
+    post:
+      tags: [Tickets]
+      summary: 先行受付申請 (LINKED + プラン + 期間チェック)
+      security: [{ sessionCookie: [] }]
+
+  /api/tickets/presale/grants:
+    get:
+      tags: [Tickets]
+      summary: 自分の先行受付状況
+      security: [{ sessionCookie: [] }]
+
+  # ─── Me ───────────────────────────────────────────────────────────
+  /api/me:
+    get:
+      tags: [Me]
+      summary: 自分のプロフィール
+      security: [{ sessionCookie: [] }]
+    patch:
+      tags: [Me]
+      summary: 表示名・住所などの更新
+      security: [{ sessionCookie: [] }]
+
+  /api/me/orders:
+    get:
+      tags: [Me]
+      summary: 注文履歴
+      security: [{ sessionCookie: [] }]
+
+  /api/me/payments:
+    get:
+      tags: [Me]
+      summary: 支払い履歴
+      security: [{ sessionCookie: [] }]
+
+  # ─── Admin (require role=ADMIN) ───────────────────────────────────
+  /api/admin/stats:
+    get:
+      tags: [Admin]
+      summary: ダッシュボード統計
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/contents:
+    get:
+      tags: [Admin]
+      security: [{ sessionCookie: [] }]
+    post:
+      tags: [Admin]
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/products:
+    get:
+      tags: [Admin]
+      security: [{ sessionCookie: [] }]
+    post:
+      tags: [Admin]
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/products/{id}/variants:
+    post:
+      tags: [Admin]
+      summary: バリアント追加 (在庫初期化込み)
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/inventories/{variantId}:
+    put:
+      tags: [Admin]
+      summary: 在庫数更新 (quantity < reserved は拒否)
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/orders:
+    get:
+      tags: [Admin]
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/orders/{id}/ship:
+    post:
+      tags: [Admin]
+      summary: 発送 (在庫減算 + SES通知)
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/orders/{id}/cancel:
+    post:
+      tags: [Admin]
+      summary: キャンセル (reserved のみ戻す)
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/videos/upload-url:
+    post:
+      tags: [Admin]
+      summary: S3 presigned PUT URL を発行
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/videos/{id}/publish:
+    post:
+      tags: [Admin]
+      summary: HLS 完成後に公開状態へ
+      security: [{ sessionCookie: [] }]
+
+  /api/admin/live:
+    get:
+      tags: [Admin]
+      security: [{ sessionCookie: [] }]
+    post:
+      tags: [Admin]
+      summary: ライブ配信を作成 (IVS Channel ARN 指定)
+      security: [{ sessionCookie: [] }]

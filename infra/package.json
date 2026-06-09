@@ -1,0 +1,39 @@
+{
+  "name": "@idol/infra",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "bootstrap": "cdk bootstrap",
+    "deploy": "cdk deploy --all --require-approval never",
+    "deploy:network": "cdk deploy '*-network' --require-approval never",
+    "deploy:database": "cdk deploy '*-database' --require-approval never",
+    "deploy:storage": "cdk deploy '*-storage' --require-approval never",
+    "deploy:email": "cdk deploy '*-email' --require-approval never",
+    "deploy:live": "cdk deploy '*-live' --require-approval never",
+    "deploy:webhook": "cdk deploy '*-webhook' --require-approval never",
+    "deploy:ec2": "cdk deploy '*-ec2' --require-approval never",
+    "deploy:monitoring": "cdk deploy '*-monitoring' --require-approval never",
+    "destroy": "cdk destroy --all --force",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'no lint'",
+    "test": "echo 'no tests'",
+    "clean": "rm -rf cdk.out dist"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/source-map-support": "^0.5.10",
+    "aws-cdk": "^2.150.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

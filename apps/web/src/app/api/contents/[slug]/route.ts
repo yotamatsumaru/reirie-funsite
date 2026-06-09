@@ -1,0 +1,31 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@idol/db';
+import { canAccess } from '@idol/shared';
+import { auth } from '@/auth';
+import { handle, errors } from '@/lib/errors';
+
+export const runtime = 'nodejs';
+
+export const GET = handle(async (_req: Request, ctx: { params: Promise<{ slug: string }> }) => {
+  const { slug } = await ctx.params;
+  const session = await auth();
+
+  const content = await prisma.content.findUnique({
+    where: { slug },
+    include: { images: { orderBy: { sortOrder: 'asc' } } },
+  });
+  if (!content || content.status !== 'PUBLISHED') {
+    throw errors.notFound('記事が見つかりません');
+  }
+  if (!canAccess(session?.user?.plan, content.accessLevel)) {
+    if (!session?.user) throw errors.unauthorized();
+    throw errors.planRequired(content.accessLevel === 'PREMIUM' ? 'プレミアム' : 'スタンダード');
+  }
+
+  // 閲覧数カウント (best-effort)
+  prisma.content
+    .update({ where: { id: content.id }, data: { viewCount: { increment: 1 } } })
+    .catch(() => {});
+
+  return NextResponse.json(content);
+});
