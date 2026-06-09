@@ -159,7 +159,10 @@ export class WebhookStack extends Stack {
         STRIPE_PRICE_PREMIUM_YEARLY:
           priceParams.STRIPE_PRICE_PREMIUM_YEARLY!.stringValue,
       },
-      reservedConcurrentExecutions: config.envName === 'prod' ? 50 : 5,
+      // 新規 AWS アカウントは同時実行クォータが 10 に制限されているため、
+      // dev では reservedConcurrentExecutions を指定しない (= unreserved を使う)。
+      // prod では明示的に枠を確保 (要: Service Quotas で 1000 に引き上げ済み)。
+      ...(config.envName === 'prod' ? { reservedConcurrentExecutions: 50 } : {}),
       tracing: lambda.Tracing.ACTIVE,
       retryAttempts: 0, // Stripe 側で自動リトライするので Lambda 側は不要
     });
