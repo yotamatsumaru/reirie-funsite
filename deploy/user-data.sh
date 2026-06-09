@@ -1,6 +1,11 @@
-#!/bin/bash
 # =====================================================================
 # EC2 (Amazon Linux 2023) UserData
+#
+# 注意: ここでは shebang を書かない。
+#   CDK の ec2.UserData.forLinux() が自動で '#!/bin/bash' を先頭に付与する。
+#   ここでもう一度 '#!/bin/bash' を書くと cloud-init が "shebang 2行" の
+#   user-data として誤認し、scripts-user モジュールが sh で実行してしまう
+#   (= 'set -o pipefail' が invalid option name で落ちる)。
 #
 # プロビジョニング内容:
 #   - 基本パッケージ (git, nginx, postgresql15-client, jq 等)
@@ -13,6 +18,11 @@
 #
 # CDK ec2-stack.ts によりプレースホルダ (__APP_NAME__ 等) は置換される
 # =====================================================================
+
+# 何があっても /var/log/user-data.log にすべてミラーする (デバッグ最優先)
+exec > >(tee -a /var/log/user-data.log) 2>&1
+echo "[user-data] === start at $(date -Is) ==="
+
 set -euo pipefail
 
 # ---- 0. プレースホルダ (CDK が置換) ----

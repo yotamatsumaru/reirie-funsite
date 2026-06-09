@@ -140,13 +140,17 @@ export class Ec2Stack extends Stack {
       userDataScript = fs.readFileSync(userDataPath, 'utf8');
     } else {
       // フォールバック (deploy/user-data.sh が未作成の場合の最低限スクリプト)
-      userDataScript = `#!/bin/bash
-set -euo pipefail
+      userDataScript = `set -euo pipefail
 dnf -y update
 dnf -y install git tar gzip jq postgresql15
 # 詳細は deploy/user-data.sh を参照
 `;
     }
+    // CRLF 防護: Windows でクローンされたリポジトリでも安全に動作するように
+    // 改行コードを LF に正規化 + 先頭の "#!" shebang を除去 (CDK が自動付与するため)
+    userDataScript = userDataScript
+      .replace(/\r\n/g, '\n')
+      .replace(/^#!\s*\/[^\n]*\n/, '');
     // 環境変数の埋め込み
     userDataScript = userDataScript
       .replace(/__APP_NAME__/g, config.appName)
