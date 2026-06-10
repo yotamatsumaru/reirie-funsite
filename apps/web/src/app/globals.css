@@ -24,11 +24,17 @@ body {
   background: #fafafa;
   color: #171717;
   min-height: 100%;
-  /* スマホで横スクロール暴発を防ぐ */
-  overflow-x: hidden;
 }
 
 html {
+  /*
+   * スマホで横スクロール暴発を防ぐ。`overflow-x: hidden` は
+   * 仕様上 overflow-y を visible -> auto に変換し、html/body の両方を
+   * スクロールコンテナ化してマウスホイールを阻害してしまうため、
+   * 副作用のない `overflow-x: clip` を <html> のみに適用する。
+   * (clip 対応: Chrome 90+, Edge 90+, Firefox 81+, Safari 16+)
+   */
+  overflow-x: clip;
   /* iOS Safari の自動文字サイズ調整を抑止 (横向き回転対策) */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
