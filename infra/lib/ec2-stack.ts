@@ -194,6 +194,11 @@ dnf -y install git tar gzip jq postgresql15
       securityGroup: ec2SecurityGroup,
       role,
       userData,
+      // UserData の内容が変わったら必ずインスタンスを置き換える。
+      // これが false (デフォルト) だと CFn は UserData プロパティだけの差分では
+      // 何もせず UPDATE_COMPLETE になり、修正したスクリプトが既存インスタンスに
+      // 反映されない (実機 i-05e35460834d4ef18 で発生)。
+      userDataCausesReplacement: true,
       blockDevices: [
         {
           deviceName: '/dev/xvda',
