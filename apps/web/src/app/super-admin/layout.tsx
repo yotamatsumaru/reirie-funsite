@@ -3,24 +3,45 @@
  *
  * - SUPER_ADMIN 専用 (ADMIN は /admin に誘導)
  * - サイドナビ + モバイル横スクロールタブ
+ * - lucide-react アイコンに統一
  */
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Users,
+  CreditCard,
+  Receipt,
+  Gamepad2,
+  Megaphone,
+  Settings,
+  ScrollText,
+  ShieldCheck,
+  ArrowLeftRight,
+  ShieldAlert,
+  type LucideIcon,
+} from 'lucide-react';
 import { auth } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
-const NAV = [
-  { href: '/super-admin', label: 'ダッシュボード', icon: '📊' },
-  { href: '/super-admin/users', label: 'ユーザー', icon: '👥' },
-  { href: '/super-admin/subscriptions', label: 'サブスク', icon: '💳' },
-  { href: '/super-admin/orders', label: '注文・売上', icon: '🛒' },
-  { href: '/super-admin/game', label: 'ゲーム経済', icon: '🎮' },
-  { href: '/super-admin/announcements', label: 'お知らせ', icon: '📧' },
-  { href: '/super-admin/settings', label: 'システム設定', icon: '🔧' },
-  { href: '/super-admin/audit', label: '監査ログ', icon: '📜' },
-  { href: '/super-admin/admins', label: '管理者', icon: '🛡️' },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const NAV: NavItem[] = [
+  { href: '/super-admin', label: 'ダッシュボード', icon: LayoutDashboard },
+  { href: '/super-admin/users', label: 'ユーザー', icon: Users },
+  { href: '/super-admin/subscriptions', label: 'サブスク', icon: CreditCard },
+  { href: '/super-admin/orders', label: '注文・売上', icon: Receipt },
+  { href: '/super-admin/game', label: 'ゲーム経済', icon: Gamepad2 },
+  { href: '/super-admin/announcements', label: 'お知らせ', icon: Megaphone },
+  { href: '/super-admin/settings', label: 'システム設定', icon: Settings },
+  { href: '/super-admin/audit', label: '監査ログ', icon: ScrollText },
+  { href: '/super-admin/admins', label: '管理者', icon: ShieldCheck },
 ];
 
 export default async function SuperAdminLayout({ children }: { children: ReactNode }) {
@@ -31,57 +52,70 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
       {/* SUPER_ADMIN バナー */}
-      <div className="border-b border-rose-200 bg-gradient-to-r from-rose-50 via-pink-50 to-rose-50 px-3 py-2 sm:px-4">
+      <div className="border-b border-rose-200/70 bg-rose-50/80 px-3 py-2 sm:px-4">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 text-xs">
-          <p className="flex items-center gap-2 font-semibold text-rose-800">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-white">
-              ⚡
-            </span>
+          <p className="flex items-center gap-2 font-semibold text-rose-700">
+            <ShieldAlert className="h-4 w-4" aria-hidden />
             SUPER ADMIN モード
           </p>
-          <p className="hidden text-rose-700 sm:block">
+          <p className="hidden text-rose-600/80 sm:block">
             {session.user.email} としてログイン中
           </p>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6 lg:flex lg:gap-6">
+      <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8 lg:flex lg:gap-8">
         {/* モバイル: 横スクロールタブ */}
-        <nav className="-mx-3 mb-4 flex gap-1 overflow-x-auto px-3 pb-2 text-sm lg:hidden">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex flex-shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 hover:border-rose-500 hover:text-rose-700"
-            >
-              <span>{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-
-        {/* デスクトップ: サイドバー */}
-        <aside className="hidden w-56 flex-shrink-0 lg:block">
-          <nav className="sticky top-20 space-y-1 text-sm">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Super Admin
-            </p>
-            {NAV.map((item) => (
+        <nav className="-mx-3 mb-4 flex gap-1.5 overflow-x-auto px-3 pb-2 text-sm lg:hidden">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-slate-700 hover:bg-rose-50 hover:text-rose-700"
+                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
               >
-                <span className="text-base">{item.icon}</span>
+                <Icon className="h-4 w-4" aria-hidden />
                 {item.label}
               </Link>
-            ))}
-            <hr className="my-3 border-slate-200" />
+            );
+          })}
+        </nav>
+
+        {/* デスクトップ: サイドバー */}
+        <aside className="hidden w-60 flex-shrink-0 lg:block">
+          <nav className="sticky top-20">
+            <p className="px-3 pb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Super Admin
+            </p>
+            <ul className="space-y-0.5">
+              {NAV.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      <Icon
+                        className="h-4 w-4 text-slate-400 transition-colors group-hover:text-rose-500"
+                        aria-hidden
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <hr className="my-4 border-slate-200" />
+
             <Link
               href="/admin"
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-500 hover:bg-slate-100"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
             >
-              <span>↩</span> 通常管理画面 へ
+              <ArrowLeftRight className="h-4 w-4" aria-hidden />
+              通常管理画面 へ
             </Link>
           </nav>
         </aside>
