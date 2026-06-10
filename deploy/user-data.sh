@@ -97,10 +97,14 @@ export NVM_DIR="$HOME/.nvm"
 BRC
 fi
 
-# ---- 4. 作業ディレクトリ作成 ----
-sudo -u "$APP_USER" mkdir -p "$APP_DIR" "$LOG_DIR"
+# ---- 4. 作業ディレクトリ (ログのみ先に作る) ----
+# 注意: $APP_DIR は git clone より前に作らない。
+#   git clone は "既存の非空ディレクトリ" を拒否するため、
+#   先に .env.production を書くと clone が fatal で死ぬ (過去デグレ済 e984d69)。
+#   このため $APP_DIR の作成と .env.production の書き込みは clone の "後" にやる。
+sudo -u "$APP_USER" mkdir -p "$LOG_DIR"
 
-# ---- 5. SSM Parameter Store から secrets 取得して .env.production 作成 ----
+# ---- 5. SSM Parameter Store から secrets 取得 ----
 echo "[user-data] fetching secrets from SSM..."
 SSM_BASE="/${APP_NAME}/${ENV_NAME}"
 
@@ -144,6 +148,42 @@ LAWSON_API_KEY=$(ssm_get "${SSM_BASE}/lawson/api-key")
 LAWSON_PARTNER_ID=$(ssm_get "${SSM_BASE}/lawson/partner-id")
 APP_BASE_URL=$(ssm_get "${SSM_BASE}/app/base-url")
 
+# ---- 5.5. アプリのチェックアウト (env 書き込み前に必須) ----
+# git clone は "空でない既存ディレクトリ" に対して fatal で失敗するため、
+# 一旦 temp ディレクトリ (同一 FS) に clone してから cp -a で $APP_DIR に展開する。
+# こうすることで、後から .env.production を $APP_DIR に書き込んでも
+# 次回再起動 (= 同インスタンス内での cloud-init 再実行は無いが、運用上の手動再実行時) でも壊れない。
+if [ -n "$APP_REPO_URL" ]; then
+  sudo -u "$APP_USER" -H bash <<EOF
+set -euo pipefail
+export NVM_DIR="/home/${APP_USER}/.nvm"
+. "\$NVM_DIR/nvm.sh"
+
+BRANCH="${APP_BRANCH:-main}"
+APP_DIR="${APP_DIR}"
+TMP_CLONE="/home/${APP_USER}/.app-clone-\$\$"
+
+if [ ! -d "\${APP_DIR}/.git" ]; then
+  # 既存ディレクトリ (空でも) を一旦排除して、同一FS上にtemp cloneする
+  rm -rf "\$TMP_CLONE"
+  git clone --branch "\$BRANCH" "${APP_REPO_URL}" "\$TMP_CLONE"
+  mkdir -p "\$APP_DIR"
+  shopt -s dotglob
+  cp -a "\$TMP_CLONE"/. "\$APP_DIR/"
+  shopt -u dotglob
+  rm -rf "\$TMP_CLONE"
+fi
+cd "\$APP_DIR"
+git fetch --all
+git checkout "\$BRANCH"
+git pull --ff-only
+EOF
+else
+  echo "[user-data] APP_REPO_URL is empty - skipping clone."
+  sudo -u "$APP_USER" mkdir -p "$APP_DIR"
+fi
+
+# ---- 5.6. .env.production を書き込む (clone 完了後) ----
 cat > "${APP_DIR}/.env.production" <<ENVEOF
 NODE_ENV=production
 # DEMO_MODE は本番では明示的に OFF (デモ用のモック Prisma を絶対に有効化しない)
@@ -192,21 +232,13 @@ ENVEOF
 chown "${APP_USER}:${APP_USER}" "${APP_DIR}/.env.production"
 chmod 600 "${APP_DIR}/.env.production"
 
-# ---- 6. アプリのチェックアウト & ビルド ----
-if [ -n "$APP_REPO_URL" ]; then
+# ---- 6. 依存解決 & ビルド ----
+if [ -d "${APP_DIR}/.git" ]; then
   sudo -u "$APP_USER" -H bash <<EOF
 set -euo pipefail
 export NVM_DIR="/home/${APP_USER}/.nvm"
 . "\$NVM_DIR/nvm.sh"
-
-BRANCH="${APP_BRANCH:-main}"
-if [ ! -d "${APP_DIR}/.git" ]; then
-  git clone --branch "\$BRANCH" "${APP_REPO_URL}" "${APP_DIR}"
-fi
 cd "${APP_DIR}"
-git fetch --all
-git checkout "\$BRANCH"
-git pull --ff-only
 
 # pnpm がモノレポルートで全 workspace 依存を解決
 pnpm install --frozen-lockfile
@@ -219,9 +251,24 @@ pnpm --filter @idol/db prisma:migrate:deploy || echo "[user-data] prisma migrate
 
 # Next.js standalone build
 pnpm --filter @idol/web build
+
+# Next.js 16 standalone は .next/static と public を自動コピーしないため手動でコピー
+# (これが無いと CSS/JS chunk が 404 になる)
+STANDALONE_DIR="${APP_DIR}/apps/web/.next/standalone/apps/web"
+if [ -d "\$STANDALONE_DIR" ]; then
+  echo "[user-data] copying .next/static and public into standalone..."
+  rm -rf "\$STANDALONE_DIR/.next/static"
+  cp -a "${APP_DIR}/apps/web/.next/static" "\$STANDALONE_DIR/.next/static"
+  if [ -d "${APP_DIR}/apps/web/public" ]; then
+    rm -rf "\$STANDALONE_DIR/public"
+    cp -a "${APP_DIR}/apps/web/public" "\$STANDALONE_DIR/public"
+  fi
+else
+  echo "[user-data] WARN: standalone dir not found at \$STANDALONE_DIR"
+fi
 EOF
 else
-  echo "[user-data] APP_REPO_URL is empty - skipping app deploy. Run manual deploy via SSM."
+  echo "[user-data] APP_DIR has no .git - skipping build. Run manual deploy via SSM."
 fi
 
 # ---- 7. nginx をリバースプロキシとして起動 (3000 -> 80/443) ----
@@ -268,7 +315,13 @@ set -euo pipefail
 export NVM_DIR="/home/${APP_USER}/.nvm"
 . "\$NVM_DIR/nvm.sh"
 cd "${APP_DIR}"
-pm2 start deploy/ecosystem.config.js --env production
+# HOSTNAME=0.0.0.0 を明示的に export してから PM2 起動
+# (Next.js standalone server.js は env HOSTNAME が無いと os.hostname() に fallback し、
+#  eth0 の private IP にバインドして nginx の upstream connect が refused になる)
+export HOSTNAME=0.0.0.0
+export PORT=3000
+export NODE_ENV=production
+pm2 start deploy/ecosystem.config.js --env production --update-env
 pm2 save
 EOF
 
@@ -316,8 +369,5 @@ systemctl enable amazon-cloudwatch-agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -a fetch-config -m ec2 \
   -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-
-echo "[user-data] done $(date -u +%FT%TZ)"
-e:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
 
 echo "[user-data] done $(date -u +%FT%TZ)"
