@@ -73,13 +73,17 @@ let fileEnv = {};
 try {
   if (fs.existsSync(ENV_FILE)) {
     fileEnv = parseDotenv(fs.readFileSync(ENV_FILE, 'utf8'));
+    // 重要: stderr に書く (stdout を汚さない)。
+    // この ecosystem.config.js は `node -e "require(...)..."` で値だけ
+    // 取り出すユースケース (例: psql に DATABASE_URL を渡す運用) があり、
+    // stdout に何か出すと取り出した値の先頭にゴミが混ざる。
     // eslint-disable-next-line no-console
-    console.log(
+    console.error(
       `[ecosystem] loaded ${Object.keys(fileEnv).length} env vars from ${ENV_FILE}`
     );
   } else {
     // eslint-disable-next-line no-console
-    console.warn(`[ecosystem] env file not found: ${ENV_FILE}`);
+    console.error(`[ecosystem] env file not found: ${ENV_FILE}`);
   }
 } catch (e) {
   // eslint-disable-next-line no-console
