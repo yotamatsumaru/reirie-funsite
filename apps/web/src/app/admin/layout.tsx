@@ -9,6 +9,7 @@ import {
   Video,
   Radio,
   Gamepad2,
+  PhoneCall,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { href: '/admin/videos', label: '動画', icon: Video },
   { href: '/admin/live', label: 'ライブ', icon: Radio },
   { href: '/admin/game', label: 'ゲーム', icon: Gamepad2 },
+  { href: '/admin/call', label: '1on1コール', icon: PhoneCall },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
