@@ -105,6 +105,25 @@ enum UserRole {
 }
 
 // =====================================================================
+// Call Event Enums (特典会 1on1)
+// =====================================================================
+
+enum CallEventStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELED
+}
+
+enum CallTicketStatus {
+  WAITING // チケット引換済み・まだイベント開始前 or 待機室未入室
+  IN_WAITING_ROOM // 待機室入室済み・順番待ち
+  IN_MAIN_ROOM // 本ルームでアイドルと通話中
+  DONE // 通話終了
+  NO_SHOW // 呼ばれたが応答無し・運営判断でスキップ
+}
+
+// =====================================================================
 // Game Enums (恋愛 ADV)
 // =====================================================================
 
@@ -121,34 +140,34 @@ enum GameScenarioStatus {
 }
 
 enum GameAssetKind {
-  SPRITE         // 立ち絵
-  EXPRESSION     // 表情差分
-  CG             // イベントCG
-  BACKGROUND     // 背景
-  BGM            // BGM
-  SE             // 効果音
-  VOICE          // ボイス
+  SPRITE // 立ち絵
+  EXPRESSION // 表情差分
+  CG // イベントCG
+  BACKGROUND // 背景
+  BGM // BGM
+  SE // 効果音
+  VOICE // ボイス
 }
 
 enum GameItemKind {
-  GIFT           // プレゼント (親密度ブースト)
-  COSMETIC       // 衣装・装飾
-  CG_PACK        // CG セット
-  VOICE_PACK     // ボイス集
+  GIFT // プレゼント (親密度ブースト)
+  COSMETIC // 衣装・装飾
+  CG_PACK // CG セット
+  VOICE_PACK // ボイス集
 }
 
 enum GameRouteResult {
-  IN_PROGRESS    // 進行中
-  FRIEND_END     // 友情エンド
-  LOVE_END       // 恋愛エンド
-  SPECIAL_END    // 特別エンド
-  BAD_END        // バッドエンド
+  IN_PROGRESS // 進行中
+  FRIEND_END // 友情エンド
+  LOVE_END // 恋愛エンド
+  SPECIAL_END // 特別エンド
+  BAD_END // バッドエンド
 }
 
 enum GamePurchaseKind {
-  SCENARIO       // 章購入
-  ITEM           // アイテム購入
-  PACK           // セット購入
+  SCENARIO // 章購入
+  ITEM // アイテム購入
+  PACK // セット購入
 }
 
 // =====================================================================
@@ -156,41 +175,41 @@ enum GamePurchaseKind {
 // =====================================================================
 
 model User {
-  id             String    @id @default(uuid()) @db.Uuid
-  email          String    @unique @db.Citext
-  emailVerified  DateTime? @map("email_verified")
-  passwordHash   String?   @map("password_hash") // Credentials Provider 用
-  displayName    String?   @map("display_name")
-  fullName       String?   @map("full_name")
-  furigana       String?
-  phone          String?
-  birthDate      DateTime? @map("birth_date") @db.Date
-  postalCode     String?   @map("postal_code")
-  prefecture     String?
-  addressLine1   String?   @map("address_line_1")
-  addressLine2   String?   @map("address_line_2")
-  avatarUrl      String?   @map("avatar_url")
-  role           UserRole  @default(USER)
-  marketingOptIn Boolean   @default(false) @map("marketing_opt_in")
+  id                   String    @id @default(uuid()) @db.Uuid
+  email                String    @unique @db.Citext
+  emailVerified        DateTime? @map("email_verified")
+  passwordHash         String?   @map("password_hash") // Credentials Provider 用
+  displayName          String?   @map("display_name")
+  fullName             String?   @map("full_name")
+  furigana             String?
+  phone                String?
+  birthDate            DateTime? @map("birth_date") @db.Date
+  postalCode           String?   @map("postal_code")
+  prefecture           String?
+  addressLine1         String?   @map("address_line_1")
+  addressLine2         String?   @map("address_line_2")
+  avatarUrl            String?   @map("avatar_url")
+  role                 UserRole  @default(USER)
+  marketingOptIn       Boolean   @default(false) @map("marketing_opt_in")
   // Stripe 関連を user に持たせる(1ユーザー1顧客)
-  stripeCustomerId String? @unique @map("stripe_customer_id")
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
   // メール確認用トークン
-  verificationToken String?   @unique @map("verification_token")
-  passwordResetToken String?  @unique @map("password_reset_token")
+  verificationToken    String?   @unique @map("verification_token")
+  passwordResetToken   String?   @unique @map("password_reset_token")
   passwordResetExpires DateTime? @map("password_reset_expires")
-  deletedAt      DateTime? @map("deleted_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  accounts       Account[]
-  sessions       Session[]
-  subscriptions  Subscription[]
-  orders         Order[]
-  payments       Payment[]
-  ticketLinks    TicketLink[]
-  videoViewLogs  VideoViewLog[]
+  accounts        Account[]
+  sessions        Session[]
+  subscriptions   Subscription[]
+  orders          Order[]
+  payments        Payment[]
+  ticketLinks     TicketLink[]
+  videoViewLogs   VideoViewLog[]
   contentComments ContentComment[]
-  auditLogs      AuditLog[]
+  auditLogs       AuditLog[]
 
   // Game (恋愛 ADV)
   playerProgresses  PlayerProgress[]
@@ -198,6 +217,11 @@ model User {
   playerPurchases   PlayerPurchase[]
   playerSaveSlots   PlayerSaveSlot[]
   bonusGiftGrants   BonusGiftGrant[]
+
+  // Call (特典会 1on1)
+  callEventsAsPerformer CallEvent[]  @relation("CallEventPerformer")
+  callTickets           CallTicket[]
+  callSerialsUsed       CallSerial[] @relation("CallSerialUsedBy")
 
   @@index([email])
   @@map("users")
@@ -380,21 +404,21 @@ model VideoViewLog {
 // =====================================================================
 
 model LiveStream {
-  id              String      @id @default(uuid()) @db.Uuid
-  title           String
-  description     String?     @db.Text
-  thumbnailUrl    String?     @map("thumbnail_url")
-  ivsChannelArn   String      @map("ivs_channel_arn")
-  ivsPlaybackUrl  String      @map("ivs_playback_url")
-  isPrivate       Boolean     @default(true) @map("is_private")
-  accessLevel     AccessLevel @default(MEMBERS) @map("access_level")
-  status          LiveStatus  @default(SCHEDULED)
-  scheduledStartAt DateTime?  @map("scheduled_start_at")
-  startedAt       DateTime?   @map("started_at")
-  endedAt         DateTime?   @map("ended_at")
-  recordingS3Key  String?     @map("recording_s3_key")
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  id               String      @id @default(uuid()) @db.Uuid
+  title            String
+  description      String?     @db.Text
+  thumbnailUrl     String?     @map("thumbnail_url")
+  ivsChannelArn    String      @map("ivs_channel_arn")
+  ivsPlaybackUrl   String      @map("ivs_playback_url")
+  isPrivate        Boolean     @default(true) @map("is_private")
+  accessLevel      AccessLevel @default(MEMBERS) @map("access_level")
+  status           LiveStatus  @default(SCHEDULED)
+  scheduledStartAt DateTime?   @map("scheduled_start_at")
+  startedAt        DateTime?   @map("started_at")
+  endedAt          DateTime?   @map("ended_at")
+  recordingS3Key   String?     @map("recording_s3_key")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
 
   @@index([status, scheduledStartAt])
   @@index([accessLevel])
@@ -563,13 +587,13 @@ model Order {
 }
 
 model OrderItem {
-  id          String  @id @default(uuid()) @db.Uuid
-  orderId     String  @map("order_id") @db.Uuid
-  productId   String  @map("product_id") @db.Uuid
-  variantId   String  @map("variant_id") @db.Uuid
-  productName String  @map("product_name")
-  variantName String  @map("variant_name")
-  unitPrice   Int     @map("unit_price")
+  id          String @id @default(uuid()) @db.Uuid
+  orderId     String @map("order_id") @db.Uuid
+  productId   String @map("product_id") @db.Uuid
+  variantId   String @map("variant_id") @db.Uuid
+  productName String @map("product_name")
+  variantName String @map("variant_name")
+  unitPrice   Int    @map("unit_price")
   quantity    Int
   subtotal    Int
 
@@ -705,35 +729,35 @@ model AuditLog {
 
 /// 恋愛対象キャラクターのマスタ
 model GameCharacter {
-  id           String              @id @default(uuid()) @db.Uuid
-  slug         String              @unique
-  name         String
-  furigana     String?
-  catchcopy    String?             // 一行紹介
-  description  String?             @db.Text
-  age          Int?
-  birthday     String?             // "MM-DD"
-  bloodType    String?             @map("blood_type")
-  height       Int?                // cm
+  id            String              @id @default(uuid()) @db.Uuid
+  slug          String              @unique
+  name          String
+  furigana      String?
+  catchcopy     String? // 一行紹介
+  description   String?             @db.Text
+  age           Int?
+  birthday      String? // "MM-DD"
+  bloodType     String?             @map("blood_type")
+  height        Int? // cm
   // ビジュアル
-  portraitUrl  String?             @map("portrait_url")  // サムネ
-  spriteUrl    String?             @map("sprite_url")    // デフォルト立ち絵
-  themeColor   String?             @map("theme_color")   // #ed1c75 等
+  portraitUrl   String?             @map("portrait_url") // サムネ
+  spriteUrl     String?             @map("sprite_url") // デフォルト立ち絵
+  themeColor    String?             @map("theme_color") // #ed1c75 等
   // システム
-  status       GameCharacterStatus @default(DRAFT)
-  sortOrder    Int                 @default(0) @map("sort_order")
-  isPremiumOnly Boolean            @default(false) @map("is_premium_only")
+  status        GameCharacterStatus @default(DRAFT)
+  sortOrder     Int                 @default(0) @map("sort_order")
+  isPremiumOnly Boolean             @default(false) @map("is_premium_only")
   // 親密度の上限 (0-100 推奨)
-  affinityMax  Int                 @default(100) @map("affinity_max")
-  publishedAt  DateTime?           @map("published_at")
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
+  affinityMax   Int                 @default(100) @map("affinity_max")
+  publishedAt   DateTime?           @map("published_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
 
-  scenarios    GameScenario[]
-  items        GameItem[]
-  assets       GameAsset[]
-  progresses   PlayerProgress[]
-  saveSlots    PlayerSaveSlot[]
+  scenarios  GameScenario[]
+  items      GameItem[]
+  assets     GameAsset[]
+  progresses PlayerProgress[]
+  saveSlots  PlayerSaveSlot[]
 
   @@index([status, sortOrder])
   @@map("game_characters")
@@ -741,29 +765,29 @@ model GameCharacter {
 
 /// シナリオ章 (1 章 = 複数シーン)
 model GameScenario {
-  id              String             @id @default(uuid()) @db.Uuid
-  characterId     String             @map("character_id") @db.Uuid
-  slug            String
-  chapterNumber   Int                @map("chapter_number")
-  title           String
-  summary         String?            @db.Text
+  id                String             @id @default(uuid()) @db.Uuid
+  characterId       String             @map("character_id") @db.Uuid
+  slug              String
+  chapterNumber     Int                @map("chapter_number")
+  title             String
+  summary           String?            @db.Text
   // シナリオ DSL JSON 本体 (scenes / lines / choices / effects)
-  scriptJson      Json               @map("script_json")
+  scriptJson        Json               @map("script_json")
   // 課金
-  priceJpy        Int                @default(0) @map("price_jpy")        // 0 = 無料
-  isFreeTrial     Boolean            @default(false) @map("is_free_trial") // プロローグ等
-  isPremiumIncluded Boolean          @default(false) @map("is_premium_included") // PREMIUM 会員は購入不要
+  priceJpy          Int                @default(0) @map("price_jpy") // 0 = 無料
+  isFreeTrial       Boolean            @default(false) @map("is_free_trial") // プロローグ等
+  isPremiumIncluded Boolean            @default(false) @map("is_premium_included") // PREMIUM 会員は購入不要
   // アクセス
-  status          GameScenarioStatus @default(DRAFT)
-  requiredAffinity Int               @default(0) @map("required_affinity") // 解放に必要な親密度
-  estimatedMinutes Int?              @map("estimated_minutes")
-  publishedAt     DateTime?          @map("published_at")
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  status            GameScenarioStatus @default(DRAFT)
+  requiredAffinity  Int                @default(0) @map("required_affinity") // 解放に必要な親密度
+  estimatedMinutes  Int?               @map("estimated_minutes")
+  publishedAt       DateTime?          @map("published_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
-  character    GameCharacter     @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  inventories  PlayerInventory[]
-  purchases    PlayerPurchase[]
+  character   GameCharacter     @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  inventories PlayerInventory[]
+  purchases   PlayerPurchase[]
 
   @@unique([characterId, chapterNumber])
   @@unique([characterId, slug])
@@ -792,10 +816,10 @@ model GameItem {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  character    GameCharacter?    @relation(fields: [characterId], references: [id], onDelete: SetNull)
-  inventories  PlayerInventory[]
-  purchases    PlayerPurchase[]
-  bonusGrants  BonusGiftGrant[]
+  character   GameCharacter?    @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  inventories PlayerInventory[]
+  purchases   PlayerPurchase[]
+  bonusGrants BonusGiftGrant[]
 
   @@index([kind, isActive])
   @@index([characterId])
@@ -807,10 +831,10 @@ model GameAsset {
   id          String        @id @default(uuid()) @db.Uuid
   characterId String?       @map("character_id") @db.Uuid // null = 共通アセット
   kind        GameAssetKind
-  key         String        // 参照キー (例: "happy", "bg_classroom", "bgm_main")
-  url         String        // S3 / CloudFront URL
-  alt         String?       // 説明
-  metadata    Json?         // duration, dimensions 等
+  key         String // 参照キー (例: "happy", "bg_classroom", "bgm_main")
+  url         String // S3 / CloudFront URL
+  alt         String? // 説明
+  metadata    Json? // duration, dimensions 等
   sortOrder   Int           @default(0) @map("sort_order")
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
@@ -828,21 +852,21 @@ model GameAsset {
 
 /// ユーザーごとのキャラクター単位の進行状況
 model PlayerProgress {
-  id              String          @id @default(uuid()) @db.Uuid
-  userId          String          @map("user_id") @db.Uuid
-  characterId     String          @map("character_id") @db.Uuid
+  id               String          @id @default(uuid()) @db.Uuid
+  userId           String          @map("user_id") @db.Uuid
+  characterId      String          @map("character_id") @db.Uuid
   // パラメータ
-  affinity        Int             @default(0) // 親密度 0-100
-  routeResult     GameRouteResult @default(IN_PROGRESS) @map("route_result")
+  affinity         Int             @default(0) // 親密度 0-100
+  routeResult      GameRouteResult @default(IN_PROGRESS) @map("route_result")
   // 統計
-  totalPlayMinutes Int            @default(0) @map("total_play_minutes")
+  totalPlayMinutes Int             @default(0) @map("total_play_minutes")
   // フラグ (シナリオで参照する true/false 状態)
-  flagsJson       Json            @default("{}") @map("flags_json")
+  flagsJson        Json            @default("{}") @map("flags_json")
   // 最後にプレイした章
-  lastScenarioId  String?         @map("last_scenario_id") @db.Uuid
-  lastSceneKey    String?         @map("last_scene_key")
-  startedAt       DateTime        @default(now()) @map("started_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+  lastScenarioId   String?         @map("last_scenario_id") @db.Uuid
+  lastSceneKey     String?         @map("last_scene_key")
+  startedAt        DateTime        @default(now()) @map("started_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
 
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   character GameCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
@@ -859,7 +883,7 @@ model PlayerInventory {
   // どちらか一方が入る
   scenarioId  String?  @map("scenario_id") @db.Uuid
   itemId      String?  @map("item_id") @db.Uuid
-  quantity    Int      @default(1)         // アイテムの場合は所持数
+  quantity    Int      @default(1) // アイテムの場合は所持数
   isCompleted Boolean  @default(false) @map("is_completed") // 章クリア済みフラグ
   acquiredAt  DateTime @default(now()) @map("acquired_at")
 
@@ -875,24 +899,24 @@ model PlayerInventory {
 
 /// 課金履歴 (Stripe 連携)
 model PlayerPurchase {
-  id                    String           @id @default(uuid()) @db.Uuid
-  userId                String           @map("user_id") @db.Uuid
-  kind                  GamePurchaseKind
+  id                      String           @id @default(uuid()) @db.Uuid
+  userId                  String           @map("user_id") @db.Uuid
+  kind                    GamePurchaseKind
   // どちらか一方
-  scenarioId            String?          @map("scenario_id") @db.Uuid
-  itemId                String?          @map("item_id") @db.Uuid
-  quantity              Int              @default(1)
+  scenarioId              String?          @map("scenario_id") @db.Uuid
+  itemId                  String?          @map("item_id") @db.Uuid
+  quantity                Int              @default(1)
   // 価格
-  amountJpy             Int              @map("amount_jpy")
+  amountJpy               Int              @map("amount_jpy")
   // Stripe
-  stripePaymentIntentId String?          @unique @map("stripe_payment_intent_id")
-  stripeCheckoutSessionId String?        @unique @map("stripe_checkout_session_id")
-  paymentStatus         PaymentStatus    @default(PENDING) @map("payment_status")
-  paidAt                DateTime?        @map("paid_at")
-  refundedAt            DateTime?        @map("refunded_at")
-  metadata              Json?
-  createdAt             DateTime         @default(now()) @map("created_at")
-  updatedAt             DateTime         @updatedAt @map("updated_at")
+  stripePaymentIntentId   String?          @unique @map("stripe_payment_intent_id")
+  stripeCheckoutSessionId String?          @unique @map("stripe_checkout_session_id")
+  paymentStatus           PaymentStatus    @default(PENDING) @map("payment_status")
+  paidAt                  DateTime?        @map("paid_at")
+  refundedAt              DateTime?        @map("refunded_at")
+  metadata                Json?
+  createdAt               DateTime         @default(now()) @map("created_at")
+  updatedAt               DateTime         @updatedAt @map("updated_at")
 
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   scenario GameScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
@@ -911,7 +935,7 @@ model PlayerSaveSlot {
   slotIndex    Int      @map("slot_index") // 0-9 (プランによって有効範囲が変わる)
   // セーブデータ (現在のシナリオ・シーン・親密度・フラグ)
   snapshotJson Json     @map("snapshot_json")
-  label        String?  // ユーザーが付けるラベル
+  label        String? // ユーザーが付けるラベル
   thumbnailUrl String?  @map("thumbnail_url")
   savedAt      DateTime @default(now()) @map("saved_at")
 
@@ -936,15 +960,94 @@ model BonusGiftGrant {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
   yearMonth String   @map("year_month") // "YYYY-MM" 形式
-  plan      PlanType                    // 付与時点のプラン
-  count     Int                         // 付与数 (STANDARD=1, PREMIUM=5)
-  itemId    String   @map("item_id") @db.Uuid  // 付与した GameItem (DEFAULT_BONUS_ITEM_SLUG)
+  plan      PlanType // 付与時点のプラン
+  count     Int // 付与数 (STANDARD=1, PREMIUM=5)
+  itemId    String   @map("item_id") @db.Uuid // 付与した GameItem (DEFAULT_BONUS_ITEM_SLUG)
   grantedAt DateTime @default(now()) @map("granted_at")
 
-  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  item GameItem  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item GameItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
 
   @@unique([userId, yearMonth])
   @@index([yearMonth])
   @@map("bonus_gift_grants")
+}
+
+// =====================================================================
+// Call Event (特典会 1on1) — CD シリアル引換 + 待機室 + 本ルーム
+// =====================================================================
+
+/// 1on1 特典会イベント
+///
+/// performer (アイドル) が固定された 1 イベントに対し、CD 封入シリアルコードを
+/// 通じてファンが引換 (CallTicket 作成) し、当日待機室から順に本ルームへ呼ばれる。
+/// 1 ファン = 1 イベント = 1 チケット (Ticket の @@unique で保証)。
+model CallEvent {
+  id            String          @id @default(uuid()) @db.Uuid
+  title         String // "○○リリイベ 1on1"
+  description   String?         @db.Text // 概要・タイムテーブル等
+  noticeText    String?         @map("notice_text") @db.Text // 待機室で表示する注意事項
+  performerId   String          @map("performer_id") @db.Uuid // アイドルの userId
+  startsAt      DateTime        @map("starts_at") // 開催開始日時
+  endsAt        DateTime?       @map("ends_at") // 終了予定 (任意)
+  perFanSeconds Int             @default(60) @map("per_fan_seconds") // 1人あたりの持ち時間 (秒)
+  status        CallEventStatus @default(SCHEDULED)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  performer User         @relation("CallEventPerformer", fields: [performerId], references: [id], onDelete: Restrict)
+  serials   CallSerial[]
+  tickets   CallTicket[]
+
+  @@index([performerId])
+  @@index([status])
+  @@index([startsAt])
+  @@map("call_events")
+}
+
+/// CD 封入シリアルコード
+///
+/// イベント開催に先立って管理者が CSV で N 枚発行する。
+/// code は大文字・数字のみで構成 (例: "ABCD-1234-EFGH")。
+/// 1 シリアル = 1 回のみ引換可能 (usedById が一度入ったら以降ロック)。
+model CallSerial {
+  id        String    @id @default(uuid()) @db.Uuid
+  eventId   String    @map("event_id") @db.Uuid
+  code      String    @unique // CD 封入される文字列
+  usedById  String?   @map("used_by_id") @db.Uuid // null = 未使用
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  event  CallEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  usedBy User?     @relation("CallSerialUsedBy", fields: [usedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([usedById])
+  @@map("call_serials")
+}
+
+/// 引換済みチケット
+///
+/// シリアル 1 つ = チケット 1 つ。queuePos は引換順 (1, 2, 3, ...) で
+/// 待機キューの並び順として使われる。1 イベントに 1 ユーザー 1 チケット限定。
+model CallTicket {
+  id               String           @id @default(uuid()) @db.Uuid
+  eventId          String           @map("event_id") @db.Uuid
+  userId           String           @map("user_id") @db.Uuid
+  serialId         String           @unique @map("serial_id") @db.Uuid
+  queuePos         Int              @map("queue_pos") // 引換順 = 待機順
+  status           CallTicketStatus @default(WAITING)
+  enteredWaitingAt DateTime?        @map("entered_waiting_at")
+  enteredMainAt    DateTime?        @map("entered_main_at")
+  endedAt          DateTime?        @map("ended_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  event CallEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId]) // 1イベントに1ユーザー1チケット
+  @@index([eventId, queuePos])
+  @@index([eventId, status])
+  @@map("call_tickets")
 }
