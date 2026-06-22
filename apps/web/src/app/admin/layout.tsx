@@ -31,6 +31,7 @@ const NAV: NavItem[] = [
   { href: '/admin/live', label: 'ライブ', icon: Radio },
   { href: '/admin/game', label: 'ゲーム', icon: Gamepad2 },
   { href: '/admin/call', label: '1on1コール', icon: PhoneCall },
+  { href: '/admin/call/events', label: '特典会イベント', icon: PhoneCall },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
