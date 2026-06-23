@@ -1,28 +1,53 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-brand-50: #fef2f8;
-  --color-brand-100: #fee5f1;
-  --color-brand-200: #ffcce4;
-  --color-brand-300: #ffa3cf;
-  --color-brand-400: #ff6fb1;
-  --color-brand-500: #ff3d92;
-  --color-brand-600: #ed1c75;
-  --color-brand-700: #c8125c;
-  --color-brand-800: #a5124e;
-  --color-brand-900: #871343;
+  /* ===== Rosy Twilight — ReiRieRoom ブランドカラー =====
+   * brand-* を「Soft Amethyst（紫アクセント）」を基調に再定義。
+   * 既存コンポーネントの bg-brand-600 などはそのまま新トーンへ移行する。 */
+  --color-brand-50: #f6effb;
+  --color-brand-100: #ecdcf6;
+  --color-brand-200: #ddc3ee;
+  --color-brand-300: #c79fe0;
+  --color-brand-400: #b083d4;
+  --color-brand-500: #9b6fc4; /* Soft Amethyst */
+  --color-brand-600: #8455b0;
+  --color-brand-700: #6b4093;
+  --color-brand-800: #543075;
+  --color-brand-900: #4a2d5c; /* Plum Violet */
+
+  /* ===== Rosy Twilight パレット（意味のある名前） ===== */
+  --color-twilight-rose: #e8a8c8; /* Dusty Rose   — グラデ上側・主アクセント */
+  --color-twilight-mauve: #d98fb5; /* Mauve Pink   — グラデ中間 */
+  --color-twilight-amethyst: #9b6fc4; /* Soft Amethyst— ボタン/リンク */
+  --color-twilight-plum: #4a2d5c; /* Plum Violet  — 奥行き・文字 */
+  --color-twilight-cream: #fbeef5; /* Cream Pink   — 見出し・明色文字 */
+  --color-twilight-gold: #e6b88a; /* Rose Gold    — 会員ランク・差し色 */
+
   --font-sans:
-    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui, -apple-system, sans-serif;
+    var(--font-zen-maru), 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui,
+    -apple-system, sans-serif;
+  --font-serif: var(--font-cormorant), 'Times New Roman', serif;
+  --font-display: var(--font-shrikhand), var(--font-cormorant), serif;
 }
 
 :root {
   color-scheme: light;
+
+  /* Rosy Twilight グラデーション（CSS から参照） */
+  --gradient-twilight: linear-gradient(
+    160deg,
+    #e8a8c8 0%,
+    #d98fb5 35%,
+    #9b6fc4 70%,
+    #4a2d5c 100%
+  );
+  --gradient-twilight-btn: linear-gradient(135deg, #e8a8c8 0%, #9b6fc4 100%);
 }
 
 html,
 body {
-  background: #fafafa;
-  color: #171717;
+  background: #fbeef5;
+  color: #4a2d5c;
   min-height: 100%;
 }
 
@@ -91,8 +116,107 @@ button {
 
 /* フォーカスリング統一 */
 *:focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--color-twilight-amethyst);
   outline-offset: 2px;
+}
+
+/* ===== Rosy Twilight ユーティリティ ===== */
+
+/* フォントファミリ */
+.font-serif {
+  font-family: var(--font-serif);
+}
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* メイン背景グラデーション */
+.bg-twilight {
+  background: var(--gradient-twilight);
+}
+.bg-twilight-btn {
+  background: var(--gradient-twilight-btn);
+}
+
+/* グラスモーフィズム（フロストガラス カード） */
+.glass {
+  background: rgba(251, 238, 245, 0.1);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(251, 238, 245, 0.18);
+  box-shadow:
+    0 8px 32px rgba(74, 45, 92, 0.25),
+    inset 0 1px 0 rgba(251, 238, 245, 0.15);
+}
+.glass-light {
+  background: rgba(251, 238, 245, 0.72);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid rgba(155, 111, 196, 0.18);
+  box-shadow: 0 8px 28px rgba(74, 45, 92, 0.12);
+}
+
+/* やわらかい発光 */
+.glow-rose {
+  box-shadow:
+    0 0 24px rgba(232, 168, 200, 0.45),
+    0 0 60px rgba(155, 111, 196, 0.25);
+}
+.text-glow {
+  text-shadow: 0 0 18px rgba(251, 238, 245, 0.55);
+}
+
+/* Rose Gold グラデテキスト（会員ランク等） */
+.text-gradient-rose {
+  background: linear-gradient(135deg, #fbeef5 0%, #e8a8c8 50%, #e6b88a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* フォググレイン（ふわっとした霧のオーバーレイ） */
+.fog-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 20% 15%, rgba(251, 238, 245, 0.35) 0%, transparent 60%),
+    radial-gradient(50% 40% at 80% 30%, rgba(232, 168, 200, 0.3) 0%, transparent 60%),
+    radial-gradient(55% 45% at 50% 90%, rgba(74, 45, 92, 0.35) 0%, transparent 65%);
+  mix-blend-mode: screen;
+}
+
+/* きらめき(sparkle)・浮遊アニメーション */
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes fog-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3%, -2%, 0) scale(1.08); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+.animate-sparkle {
+  animation: sparkle-twinkle 3s ease-in-out infinite;
+}
+.animate-float-soft {
+  animation: float-soft 6s ease-in-out infinite;
+}
+.animate-fog-drift {
+  animation: fog-drift 18s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sparkle,
+  .animate-float-soft,
+  .animate-fog-drift {
+    animation: none;
+  }
 }
 
 /* セーフエリア (iPhone X 以降のノッチ対応) */
