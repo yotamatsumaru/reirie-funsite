@@ -28,6 +28,27 @@ export function WaitingRoom({ eventId, ticketId, queuePos, noticeText }: Props) 
   const [snap, setSnap] = useState<CallQueueSnapshot | null>(null);
   const [connStatus, setConnStatus] = useState<'connecting' | 'open' | 'closed'>('connecting');
 
+  // 初回マウント時に WAITING → IN_WAITING_ROOM に進める (idempotent)
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await fetch(`/api/call/events/${eventId}/enter-waiting`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ticketId }),
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[waiting-room] enter-waiting failed', err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, ticketId]);
+
   useEffect(() => {
     const url = `/api/call/events/${eventId}/queue/events`;
     const es = new EventSource(url);

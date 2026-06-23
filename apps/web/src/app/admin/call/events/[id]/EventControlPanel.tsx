@@ -55,7 +55,11 @@ export function EventControlPanel({
       }
       const j = await res.json();
       if (!j.next) {
-        setMessage('待機中のファンはもう居ません。');
+        setMessage(
+          j.endedNow
+            ? '待機中のファンはもう居ません。イベントを自動的に終了 (ENDED) しました。'
+            : '待機中のファンはもう居ません。',
+        );
       } else {
         const name =
           j.next.user?.displayName ?? j.next.user?.email ?? `#${j.next.queuePos}`;

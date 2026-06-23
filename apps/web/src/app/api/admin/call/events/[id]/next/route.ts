@@ -70,8 +70,19 @@ export const POST = handle(async (req, ctx: Ctx) => {
     });
 
     if (!next) {
-      // 全員終了 → イベント自体を ENDED に倒すかは管理画面側で判断
-      return { closed, next: null };
+      // 次に呼ぶ人が居ない。
+      // 「現行を閉じた直後で誰も残っていない」もしくは「もう全員終わっている」状態。
+      // この場合は自動的にイベント自体を ENDED にする (スタッフが何度も「終了」を押さなくて良いように)。
+      // 既に ENDED/CANCELED ならスキップ。
+      let endedNow = false;
+      if (event.status !== 'ENDED' && event.status !== 'CANCELED') {
+        await tx.callEvent.update({
+          where: { id: eventId },
+          data: { status: 'ENDED' },
+        });
+        endedNow = true;
+      }
+      return { closed, next: null, endedNow };
     }
 
     const updated = await tx.callTicket.update({
@@ -87,7 +98,7 @@ export const POST = handle(async (req, ctx: Ctx) => {
       await tx.callEvent.update({ where: { id: eventId }, data: { status: 'LIVE' } });
     }
 
-    return { closed, next: updated };
+    return { closed, next: updated, endedNow: false };
   });
 
   return NextResponse.json(result);
