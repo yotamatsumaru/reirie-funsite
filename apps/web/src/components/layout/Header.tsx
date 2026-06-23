@@ -34,7 +34,7 @@ export function Header() {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-white/15 bg-twilight-plum/80 backdrop-blur-xl supports-[backdrop-filter]:bg-twilight-plum/65">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-4">
         {/* モバイル: ハンバーガー */}
         <button
@@ -42,7 +42,7 @@ export function Header() {
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? 'メニューを閉じる' : 'メニューを開く'}
           aria-expanded={open}
-          className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100 md:hidden"
+          className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-md text-twilight-cream hover:bg-white/10 md:hidden"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -70,43 +70,46 @@ export function Header() {
           </svg>
         </button>
 
-        <Link href="/" className="text-base font-bold text-brand-600 md:text-lg">
-          IDOL FAN
+        <Link
+          href="/"
+          className="font-serif text-xl font-semibold tracking-wide text-twilight-cream text-glow md:text-2xl"
+        >
+          ReiRieRoom
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm font-medium text-slate-700 md:flex">
-          <Link href="/contents" className="hover:text-brand-600">
+        <nav className="hidden items-center gap-6 text-sm font-medium text-twilight-cream/85 md:flex">
+          <Link href="/contents" className="transition hover:text-twilight-rose">
             コンテンツ
           </Link>
-          <Link href="/products" className="hover:text-brand-600">
+          <Link href="/products" className="transition hover:text-twilight-rose">
             グッズ
           </Link>
-          <Link href="/game" className="hover:text-brand-600">
+          <Link href="/game" className="transition hover:text-twilight-rose">
             ゲーム
           </Link>
-          <Link href="/notices" className="hover:text-brand-600">
+          <Link href="/notices" className="transition hover:text-twilight-rose">
             お知らせ
           </Link>
-          <Link href="/plans" className="hover:text-brand-600">
+          <Link href="/plans" className="transition hover:text-twilight-rose">
             プラン
           </Link>
-          <Link href="/cart" className="relative hover:text-brand-600">
+          <Link href="/cart" className="relative transition hover:text-twilight-rose">
             カート
             {cartCount > 0 && (
-              <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white">
+              <span className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-twilight-btn px-1 text-[10px] font-semibold text-white">
                 {cartCount}
               </span>
             )}
           </Link>
           {isAdmin && (
-            <Link href="/admin" className="text-slate-500 hover:text-brand-600">
+            <Link href="/admin" className="text-twilight-cream/60 transition hover:text-twilight-rose">
               管理
             </Link>
           )}
           {isSuper && (
             <Link
               href="/super-admin"
-              className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+              className="rounded-full bg-twilight-gold/20 px-2 py-0.5 text-xs font-semibold text-twilight-gold hover:bg-twilight-gold/30"
             >
               SUPER
             </Link>
@@ -118,7 +121,7 @@ export function Header() {
           <Link
             href="/cart"
             aria-label={`カート (${cartCount}点)`}
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-700 hover:bg-slate-100 md:hidden"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-twilight-cream hover:bg-white/10 md:hidden"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -136,7 +139,7 @@ export function Header() {
               <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
             </svg>
             {cartCount > 0 && (
-              <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold text-white">
+              <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-twilight-btn px-1 text-[10px] font-semibold text-white">
                 {cartCount}
               </span>
             )}
@@ -146,7 +149,7 @@ export function Header() {
             <>
               <Link
                 href="/me"
-                className="hidden max-w-[160px] truncate text-slate-700 hover:text-brand-600 md:inline"
+                className="hidden max-w-[160px] truncate text-twilight-cream/85 hover:text-twilight-rose md:inline"
               >
                 {session.user.email}
               </Link>
@@ -158,7 +161,7 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="hidden text-slate-500 hover:text-rose-600 md:inline"
+                className="hidden text-twilight-cream/60 hover:text-twilight-rose md:inline"
               >
                 ログアウト
               </button>
@@ -167,13 +170,13 @@ export function Header() {
             <>
               <Link
                 href="/signin"
-                className="hidden text-slate-700 hover:text-brand-600 md:inline"
+                className="hidden text-twilight-cream/85 hover:text-twilight-rose md:inline"
               >
                 ログイン
               </Link>
               <Link
                 href="/signup"
-                className="hidden rounded-md bg-brand-600 px-3 py-1.5 text-white hover:bg-brand-700 md:inline-block"
+                className="hidden rounded-full bg-twilight-btn px-4 py-1.5 font-semibold text-white shadow-sm transition hover:opacity-90 md:inline-block"
               >
                 登録
               </Link>
@@ -191,13 +194,13 @@ export function Header() {
       >
         {/* 背景オーバーレイ */}
         <div
-          className="absolute inset-0 bg-slate-900/40"
+          className="absolute inset-0 bg-twilight-plum/50 backdrop-blur-sm"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
         {/* メニュー本体 */}
         <nav
-          className={`relative flex h-[calc(100vh-3.5rem)] w-full max-w-xs flex-col gap-1 overflow-y-auto bg-white p-4 text-base shadow-xl transition-transform ${
+          className={`relative flex h-[calc(100vh-3.5rem)] w-full max-w-xs flex-col gap-1 overflow-y-auto bg-twilight-plum/95 p-4 text-base text-twilight-cream shadow-xl backdrop-blur-xl transition-transform ${
             open ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -213,16 +216,16 @@ export function Header() {
           {isAdmin && <MobileLink href="/admin">管理ダッシュボード</MobileLink>}
           {isSuper && <MobileLink href="/super-admin">スーパー管理者</MobileLink>}
 
-          <hr className="my-2 border-slate-200" />
+          <hr className="my-2 border-white/15" />
 
           {session?.user ? (
             <>
               <MobileLink href="/me">マイページ</MobileLink>
-              <p className="px-3 text-xs text-slate-500">{session.user.email}</p>
+              <p className="px-3 text-xs text-twilight-cream/60">{session.user.email}</p>
               <button
                 type="button"
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="mt-2 rounded-md px-3 py-3 text-left text-rose-600 hover:bg-rose-50"
+                className="mt-2 rounded-md px-3 py-3 text-left text-twilight-rose hover:bg-white/10"
               >
                 ログアウト
               </button>
@@ -232,7 +235,7 @@ export function Header() {
               <MobileLink href="/signin">ログイン</MobileLink>
               <Link
                 href="/signup"
-                className="mt-2 block rounded-md bg-brand-600 px-3 py-3 text-center font-semibold text-white hover:bg-brand-700"
+                className="mt-2 block rounded-full bg-twilight-btn px-3 py-3 text-center font-semibold text-white shadow-sm hover:opacity-90"
               >
                 新規会員登録
               </Link>
@@ -248,7 +251,7 @@ function MobileLink({ href, children }: { href: string; children: React.ReactNod
   return (
     <Link
       href={href}
-      className="rounded-md px-3 py-3 font-medium text-slate-700 hover:bg-slate-100"
+      className="rounded-md px-3 py-3 font-medium text-twilight-cream/85 hover:bg-white/10"
     >
       {children}
     </Link>
