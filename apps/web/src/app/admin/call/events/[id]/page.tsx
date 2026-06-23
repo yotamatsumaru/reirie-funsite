@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { EventControlPanel } from './EventControlPanel';
+import { TicketRow } from './TicketRow';
 
 export const metadata: Metadata = { title: '特典会イベント詳細' };
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,7 @@ export default async function AdminCallEventDetailPage({ params }: Props) {
 
       <EventControlPanel
         eventId={event.id}
+        eventStatus={event.status}
         unusedSerialCount={unusedSerialCount}
         totalSerialCount={event._count.serials}
       />
@@ -87,25 +89,24 @@ export default async function AdminCallEventDetailPage({ params }: Props) {
                     <th className="px-4 py-2 font-medium">#</th>
                     <th className="px-4 py-2 font-medium">ファン</th>
                     <th className="px-4 py-2 font-medium">状態</th>
-                    <th className="px-4 py-2 font-medium">入室時刻</th>
+                    <th className="px-4 py-2 font-medium">経過 / 入室</th>
+                    <th className="px-4 py-2 font-medium text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {tickets.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 font-mono text-slate-700">{t.queuePos}</td>
-                      <td className="px-4 py-2 text-slate-700">
-                        {t.user.displayName ?? t.user.email}
-                      </td>
-                      <td className="px-4 py-2">
-                        <TicketStatusBadge status={t.status} />
-                      </td>
-                      <td className="px-4 py-2 text-slate-500">
-                        {t.enteredMainAt
-                          ? new Date(t.enteredMainAt).toLocaleTimeString('ja-JP')
-                          : '—'}
-                      </td>
-                    </tr>
+                    <TicketRow
+                      key={t.id}
+                      eventId={event.id}
+                      ticketId={t.id}
+                      queuePos={t.queuePos}
+                      userLabel={t.user.displayName ?? t.user.email}
+                      status={t.status}
+                      enteredMainAt={
+                        t.enteredMainAt ? t.enteredMainAt.toISOString() : null
+                      }
+                      perFanSeconds={event.perFanSeconds}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -114,22 +115,5 @@ export default async function AdminCallEventDetailPage({ params }: Props) {
         </CardBody>
       </Card>
     </div>
-  );
-}
-
-function TicketStatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    WAITING: 'bg-slate-100 text-slate-700',
-    IN_WAITING_ROOM: 'bg-sky-100 text-sky-700',
-    IN_MAIN_ROOM: 'bg-emerald-100 text-emerald-700',
-    DONE: 'bg-slate-100 text-slate-500',
-    NO_SHOW: 'bg-rose-100 text-rose-700',
-  };
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${map[status] ?? 'bg-slate-100 text-slate-700'}`}
-    >
-      {status}
-    </span>
   );
 }

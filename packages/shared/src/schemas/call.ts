@@ -77,6 +77,12 @@ export const SkipCallTicketSchema = z.object({
 });
 export type SkipCallTicketInput = z.infer<typeof SkipCallTicketSchema>;
 
+// キュー操作 (管理者): NO_SHOW チケットを WAITING に戻す (救済)
+export const RestoreCallTicketSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type RestoreCallTicketInput = z.infer<typeof RestoreCallTicketSchema>;
+
 // 待機室入室 (ファン)
 // 入室時にチケット状態を WAITING → IN_WAITING_ROOM に進める。
 export const EnterCallWaitingRoomSchema = z.object({

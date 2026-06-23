@@ -15,23 +15,29 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 
+type EventStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELED';
+
 interface Props {
   eventId: string;
+  eventStatus: EventStatus;
   unusedSerialCount: number;
   totalSerialCount: number;
 }
 
 export function EventControlPanel({
   eventId,
+  eventStatus,
   unusedSerialCount,
   totalSerialCount,
 }: Props) {
   const router = useRouter();
   const [issuing, setIssuing] = useState(false);
   const [advancing, setAdvancing] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [issueCount, setIssueCount] = useState('10');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isClosed = eventStatus === 'ENDED' || eventStatus === 'CANCELED';
 
   async function onNext() {
     setError(null);
@@ -60,6 +66,32 @@ export function EventControlPanel({
       setError(err instanceof Error ? err.message : '不明なエラー');
     } finally {
       setAdvancing(false);
+    }
+  }
+
+  async function onEndEvent() {
+    if (!confirm('このイベントを終了 (ENDED) しますか? もう「次のファンを呼ぶ」は使えなくなります。')) {
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    setEnding(true);
+    try {
+      const res = await fetch(`/api/admin/call/events/${eventId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'ENDED' }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error?.message ?? 'イベント終了に失敗しました');
+      }
+      setMessage('イベントを終了しました。');
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '不明なエラー');
+    } finally {
+      setEnding(false);
     }
   }
 
@@ -98,9 +130,30 @@ export function EventControlPanel({
             「次のファンを呼ぶ」を押すと、現在の本ルームの人を終了 (DONE) し、
             キューの先頭の人を本ルームへ進めます。
           </p>
-          <Button onClick={onNext} loading={advancing} size="lg">
-            次のファンを呼ぶ →
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={onNext}
+              loading={advancing}
+              size="lg"
+              disabled={isClosed}
+            >
+              次のファンを呼ぶ →
+            </Button>
+            <Button
+              onClick={onEndEvent}
+              loading={ending}
+              size="lg"
+              variant="danger"
+              disabled={isClosed}
+            >
+              イベントを終了する
+            </Button>
+          </div>
+          {isClosed ? (
+            <p className="text-xs text-slate-500">
+              ※ このイベントは {eventStatus} のため操作できません。
+            </p>
+          ) : null}
         </CardBody>
       </Card>
 
@@ -123,7 +176,12 @@ export function EventControlPanel({
                 onChange={(e) => setIssueCount(e.target.value)}
               />
             </div>
-            <Button onClick={onIssueSerials} loading={issuing} variant="secondary">
+            <Button
+              onClick={onIssueSerials}
+              loading={issuing}
+              variant="secondary"
+              disabled={isClosed}
+            >
               発行する
             </Button>
             <a
