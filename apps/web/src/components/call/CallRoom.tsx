@@ -48,10 +48,29 @@ type Status =
   | 'ended'
   | 'error';
 
-const STUN_SERVERS: RTCIceServer[] = [
+// fallback: ICE サーバーが API から取れない場合に使う最小構成 (STUN のみ)
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
+
+/**
+ * /api/call/ice-servers から TURN を含む iceServers 設定を取得する。
+ * 失敗時は STUN のみのフォールバックを返す。
+ */
+async function fetchIceServers(): Promise<RTCIceServer[]> {
+  try {
+    const res = await fetch('/api/call/ice-servers', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const json = (await res.json()) as { iceServers?: RTCIceServer[] };
+    if (Array.isArray(json.iceServers) && json.iceServers.length > 0) {
+      return json.iceServers;
+    }
+  } catch (err) {
+    console.warn('[call] fetchIceServers failed, falling back to STUN only', err);
+  }
+  return FALLBACK_ICE_SERVERS;
+}
 
 export type CallRoomProps = {
   roomId: string;
@@ -72,6 +91,7 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const iceServersRef = useRef<RTCIceServer[] | null>(null);
   const myIdRef = useRef<string | null>(null);
   const peerIdRef = useRef<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -107,7 +127,8 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   // RTCPeerConnection を初期化
   // ---------------------------------------------------------------
   const createPeerConnection = useCallback((): RTCPeerConnection => {
-    const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+    const iceServers = iceServersRef.current ?? FALLBACK_ICE_SERVERS;
+    const pc = new RTCPeerConnection({ iceServers });
 
     // 自分のトラックを送信
     const stream = localStreamRef.current;
@@ -209,6 +230,9 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
     }
 
     updateStatus('connecting');
+
+    // ICE servers (STUN + 必要なら TURN) を取得してから PC を作る
+    iceServersRef.current = await fetchIceServers();
     pcRef.current = createPeerConnection();
 
     // SSE 接続

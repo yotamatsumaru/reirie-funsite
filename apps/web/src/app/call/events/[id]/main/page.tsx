@@ -69,7 +69,25 @@ export default async function CallEventMainPage({ params }: PageProps) {
         </p>
       </header>
       <CallRoom roomId={roomId} role="fan" peerLabel={peerLabel} />
-      <p className="mt-4 text-center text-xs text-slate-500">
+      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        <p className="font-medium text-slate-700">トラブル時の操作</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          <li>
+            映像・音声が出ない場合は、画面を再読み込みしてもう一度「通話を開始」を押してください。
+          </li>
+          <li>
+            それでも繋がらない場合は{' '}
+            <Link
+              href={`/call/events/${eventId}/waiting`}
+              className="text-brand-700 underline hover:no-underline"
+            >
+              待機室に戻る
+            </Link>{' '}
+            → スタッフにお声がけください。
+          </li>
+        </ul>
+      </div>
+      <p className="mt-3 text-center text-xs text-slate-500">
         ※ 通話終了後はこの画面を閉じてもかまいません。
       </p>
     </div>
