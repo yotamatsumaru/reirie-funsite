@@ -38,10 +38,13 @@ export const CheckoutSchema = z.object({
 export type CheckoutInput = z.infer<typeof CheckoutSchema>;
 
 export const CreateProductSchema = z.object({
+  // slug はサーバー側で商品名から自動生成するため任意。
+  // 渡された場合のみ形式チェックを行う（後方互換）。
   slug: z
     .string()
     .min(1)
-    .regex(/^[a-z0-9-]+$/),
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   name: z.string().min(1).max(200),
   description: z.string().optional(),
   basePrice: z.number().int().min(0),

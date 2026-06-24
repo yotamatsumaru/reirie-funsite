@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 export type CategoryOption = { id: string; name: string };
 
 export type ProductFormValues = {
-  slug: string;
+  slug: string; // edit 時の表示専用
   name: string;
   description: string;
   basePrice: number;
@@ -25,14 +25,6 @@ export type ProductFormValues = {
   isMembersOnly: boolean;
   isPremiumExclusive: boolean;
 };
-
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 export function ProductForm({
   mode,
@@ -50,8 +42,6 @@ export function ProductForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [slug, setSlug] = useState(initial?.slug ?? '');
-  const [slugTouched, setSlugTouched] = useState(mode === 'edit');
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [basePrice, setBasePrice] = useState<string>(
@@ -66,11 +56,6 @@ export function ProductForm({
     initial?.isPremiumExclusive ?? false,
   );
 
-  function handleNameChange(v: string) {
-    setName(v);
-    if (!slugTouched) setSlug(slugify(v));
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -80,10 +65,6 @@ export function ProductForm({
       setError('商品名を入力してください。');
       return;
     }
-    if (!/^[a-z0-9-]+$/.test(slug)) {
-      setError('slug は英小文字・数字・ハイフンのみで入力してください（例: t-shirt-2026）。');
-      return;
-    }
     const basePriceNum = Number(basePrice);
     if (!Number.isInteger(basePriceNum) || basePriceNum < 0) {
       setError('基本価格は 0 以上の整数で入力してください。');
@@ -91,7 +72,7 @@ export function ProductForm({
     }
 
     const payload: Record<string, unknown> = {
-      slug,
+      // slug はサーバー側で商品名から自動生成（送信しない）
       name: name.trim(),
       description: description.trim() || undefined,
       basePrice: basePriceNum,
@@ -141,21 +122,24 @@ export function ProductForm({
           <Input
             label="商品名"
             value={name}
-            onChange={(e) => handleNameChange(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             placeholder="例: 推しTシャツVer.2026"
             required
           />
-          <Input
-            label="slug (URL に使われる識別子)"
-            value={slug}
-            onChange={(e) => {
-              setSlugTouched(true);
-              setSlug(e.target.value);
-            }}
-            placeholder="oshi-tshirt-2026"
-            hint="英小文字・数字・ハイフンのみ。商品名から自動生成されます。"
-            required
-          />
+          {mode === 'edit' && initial?.slug ? (
+            <div className="space-y-1">
+              <span className="block text-sm font-medium text-slate-700">
+                slug (URL識別子・自動生成・変更不可)
+              </span>
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-500">
+                {initial.slug}
+              </p>
+            </div>
+          ) : (
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              URLに使われる識別子（slug）は、作成時に商品名から自動で生成されます。後からの変更はできません。
+            </p>
+          )}
           <Textarea
             label="商品説明（任意）"
             value={description}

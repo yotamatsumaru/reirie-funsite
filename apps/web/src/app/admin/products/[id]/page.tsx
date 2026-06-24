@@ -8,6 +8,7 @@ import { prisma } from '@idol/db';
 import { requireCapabilityPage } from '@/auth';
 import { ProductForm } from '../product-form';
 import { VariantManager, type VariantItem } from '../variant-manager';
+import { ImageManager, type ProductImageItem } from '../image-manager';
 
 export const metadata: Metadata = { title: '商品編集' };
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,7 @@ export default async function EditProductPage({
       where: { id },
       include: {
         category: true,
+        images: { orderBy: { sortOrder: 'asc' } },
         variants: { orderBy: { createdAt: 'asc' }, include: { inventory: true } },
       },
     }),
@@ -35,6 +37,13 @@ export default async function EditProductPage({
   ]);
 
   if (!product) notFound();
+
+  const productImages: ProductImageItem[] = product.images.map((img) => ({
+    id: img.id,
+    url: img.url,
+    alt: img.alt,
+    sortOrder: img.sortOrder,
+  }));
 
   const variants: VariantItem[] = product.variants.map((v) => ({
     id: v.id,
@@ -81,6 +90,8 @@ export default async function EditProductPage({
           isPremiumExclusive: product.isPremiumExclusive,
         }}
       />
+
+      <ImageManager productId={product.id} images={productImages} />
 
       <VariantManager productId={product.id} variants={variants} />
     </div>

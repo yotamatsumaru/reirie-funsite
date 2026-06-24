@@ -60,12 +60,40 @@ export const GET = handle(async (req: Request) => {
   return NextResponse.json({ items, page: query.page, limit: query.limit, total });
 });
 
+/** 商品名から slug の基礎部分を生成（日本語等で空になる場合は 'item'） */
+function slugBase(name: string): string {
+  const base = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || 'item';
+}
+
+/** 一意な slug を生成（衝突したら短いランダムサフィックスを付与） */
+async function generateUniqueSlug(name: string): Promise<string> {
+  const base = slugBase(name).slice(0, 60);
+  // まずは base そのままを試す
+  if (!(await prisma.product.findUnique({ where: { slug: base } }))) {
+    return base;
+  }
+  for (let i = 0; i < 8; i++) {
+    const suffix = Math.random().toString(36).slice(2, 7);
+    const candidate = `${base}-${suffix}`;
+    if (!(await prisma.product.findUnique({ where: { slug: candidate } }))) {
+      return candidate;
+    }
+  }
+  // 最終手段: タイムスタンプ
+  return `${base}-${Date.now().toString(36)}`;
+}
+
 export const POST = handle(async (req: Request) => {
   const session = await requireCapability('MERCH');
   const body = CreateProductSchema.parse(await req.json());
 
-  const exists = await prisma.product.findUnique({ where: { slug: body.slug } });
-  if (exists) throw errors.conflict('同じ slug の商品が既に存在します');
+  // slug はサーバー側で自動生成（リクエストの slug は無視して常に名前から生成）
+  const slug = await generateUniqueSlug(body.name);
 
   if (body.categoryId) {
     const cat = await prisma.productCategory.findUnique({ where: { id: body.categoryId } });
@@ -74,7 +102,7 @@ export const POST = handle(async (req: Request) => {
 
   const created = await prisma.product.create({
     data: {
-      slug: body.slug,
+      slug,
       name: body.name,
       description: body.description,
       basePrice: body.basePrice,

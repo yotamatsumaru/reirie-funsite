@@ -12,7 +12,8 @@ import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
-const UpdateProductSchema = CreateProductSchema.partial();
+// slug は自動生成・変更不可のため、更新スキーマからは除外する
+const UpdateProductSchema = CreateProductSchema.omit({ slug: true }).partial();
 
 export const GET = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -43,10 +44,6 @@ export const PATCH = handle(
     const exists = await prisma.product.findUnique({ where: { id } });
     if (!exists) throw errors.notFound('商品が見つかりません');
 
-    if (body.slug && body.slug !== exists.slug) {
-      const dup = await prisma.product.findUnique({ where: { slug: body.slug } });
-      if (dup) throw errors.conflict('同じ slug が既に存在します');
-    }
     if (body.categoryId) {
       const cat = await prisma.productCategory.findUnique({ where: { id: body.categoryId } });
       if (!cat) throw errors.badRequest('カテゴリが見つかりません');
@@ -55,7 +52,6 @@ export const PATCH = handle(
     const updated = await prisma.product.update({
       where: { id },
       data: {
-        ...(body.slug ? { slug: body.slug } : {}),
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.basePrice !== undefined ? { basePrice: body.basePrice } : {}),

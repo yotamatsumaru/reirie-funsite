@@ -17,6 +17,19 @@ export const CreateProductVariantSchema = z.object({
 });
 export type CreateProductVariantInput = z.infer<typeof CreateProductVariantSchema>;
 
+// ---- Product Image ----
+export const AddProductImageSchema = z.object({
+  url: z.url(),
+  alt: z.string().max(160).optional(),
+});
+export type AddProductImageInput = z.infer<typeof AddProductImageSchema>;
+
+/** 画像の表示順を並べ替える（id を希望の順番で渡す） */
+export const ReorderProductImagesSchema = z.object({
+  order: z.array(z.uuid()).min(1),
+});
+export type ReorderProductImagesInput = z.infer<typeof ReorderProductImagesSchema>;
+
 // ---- Category ----
 export const CreateCategorySchema = z.object({
   slug: z

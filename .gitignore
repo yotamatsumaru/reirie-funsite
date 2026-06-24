@@ -59,3 +59,7 @@ core.*
 # GitHub Actions workflows are managed via docs/github-workflows/
 # (GitHub App lacks workflows permission, see docs/github-workflows/README.md)
 .github/workflows/
+
+# Locally uploaded product images (dev fallback) — keep dir, ignore files
+apps/web/public/uploads/products/*
+!apps/web/public/uploads/products/.gitkeep
