@@ -104,6 +104,13 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum AdminInvitationStatus {
+  PENDING // 招待送信済み・未受諾
+  ACCEPTED // 受諾され管理者になった
+  REVOKED // スーパー管理者が取消
+  EXPIRED // 有効期限切れ
+}
+
 // =====================================================================
 // Call Event Enums (特典会 1on1)
 // =====================================================================
@@ -210,6 +217,10 @@ model User {
   videoViewLogs   VideoViewLog[]
   contentComments ContentComment[]
   auditLogs       AuditLog[]
+
+  // Admin Invitation (管理者メール招待)
+  adminInvitationsSent     AdminInvitation[] @relation("AdminInvitationInvitedBy")
+  adminInvitationsAccepted AdminInvitation[] @relation("AdminInvitationAcceptedBy")
 
   // Game (恋愛 ADV)
   playerProgresses  PlayerProgress[]
@@ -721,6 +732,38 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+// =====================================================================
+// Admin Invitation (管理者メール招待)
+//  - スーパー管理者がメールアドレス宛に管理者権限を招待する
+//  - 新規（アカウント未作成）・既存ユーザー両対応
+//  - 受諾時に対象ロール(ADMIN / SUPER_ADMIN)へ昇格 / 新規アカウント作成
+// =====================================================================
+model AdminInvitation {
+  id            String                @id @default(uuid()) @db.Uuid
+  email         String                @db.Citext
+  role          UserRole              @default(ADMIN) // 付与予定ロール (ADMIN | SUPER_ADMIN)
+  token         String                @unique // 受諾URL用トークン (URLセーフ)
+  status        AdminInvitationStatus @default(PENDING)
+  // 招待発行者 (SUPER_ADMIN)
+  invitedById   String?               @map("invited_by_id") @db.Uuid
+  // 受諾したユーザー
+  acceptedById  String?               @map("accepted_by_id") @db.Uuid
+  acceptedAt    DateTime?             @map("accepted_at")
+  revokedAt     DateTime?             @map("revoked_at")
+  expiresAt     DateTime              @map("expires_at")
+  // 招待時のメモ (任意)
+  note          String?
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  invitedBy  User? @relation("AdminInvitationInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  acceptedBy User? @relation("AdminInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([status, expiresAt])
+  @@map("admin_invitations")
 }
 
 // =====================================================================
