@@ -28,3 +28,32 @@ export async function presignAssetUpload(key: string, contentType: string): Prom
   });
   return getSignedUrl(s3(), cmd, { expiresIn: 3600 });
 }
+
+/** アセットバケットが設定済みかどうか */
+export function isAssetStorageConfigured(): boolean {
+  return Boolean(env.s3.assetBucket);
+}
+
+/**
+ * バイト列をアセットバケットに直接アップロードし、公開URLを返す。
+ * CloudFront ドメインが設定されていればそのURL、なければ S3 のリージョンURLを返す。
+ */
+export async function putAsset(
+  key: string,
+  body: Uint8Array | Buffer,
+  contentType: string,
+): Promise<string> {
+  await s3().send(
+    new PutObjectCommand({
+      Bucket: env.s3.assetBucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    }),
+  );
+  if (env.cloudfront.assetDomain) {
+    return `https://${env.cloudfront.assetDomain}/${key}`;
+  }
+  return `https://${env.s3.assetBucket}.s3.${env.aws.region}.amazonaws.com/${key}`;
+}

@@ -12,6 +12,7 @@
     "prisma:reset": "prisma migrate reset --force",
     "seed": "tsx prisma/seed.ts",
     "seed:game": "tsx prisma/seed-game.ts",
+    "seed:products": "tsx prisma/seed-products.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo 'no lint'",
