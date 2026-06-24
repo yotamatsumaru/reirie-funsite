@@ -75,9 +75,10 @@ export default async function MemberCardPage() {
   const points = user?.points ?? 0;
   const joinedAt = user?.createdAt ?? new Date();
 
-  // 連続ログイン日数の表示値: 今日受取済みなら今日の streak、未受取なら(前日+1)見込み
+  // 連続ログイン日数: 今日受取済みなら今日の streak、
+  // 未受取なら「受け取れば到達する見込み」= 前日の streak + 1。
   const loginClaimedToday = Boolean(todayGrant);
-  const displayStreak = todayGrant?.streak ?? (loginGrant?.streak ?? 0);
+  const displayStreak = todayGrant?.streak ?? (loginGrant?.streak ?? 0) + 1;
 
   // QR コードに会員番号を符号化 (受付などでの本人確認用)
   const qrPayload = `REIRIE-MEMBER:${memberNumber}`;

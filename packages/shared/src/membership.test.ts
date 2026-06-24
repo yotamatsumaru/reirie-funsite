@@ -6,6 +6,7 @@ import {
   jstDateKey,
   previousJstDateKey,
   computeLoginBonusAmount,
+  buildLoginBonusCalendar,
   DEFAULT_POINT_RATES,
   PointRateSettingsSchema,
   SocialShareInputSchema,
@@ -74,6 +75,53 @@ describe('DEFAULT_POINT_RATES', () => {
   });
   it('スキーマでパース可能', () => {
     expect(PointRateSettingsSchema.safeParse(DEFAULT_POINT_RATES).success).toBe(true);
+  });
+});
+
+describe('buildLoginBonusCalendar', () => {
+  const rates = DEFAULT_POINT_RATES; // threshold 7, base 10, bonus 50
+
+  it('7 日分を返す', () => {
+    expect(buildLoginBonusCalendar(1, false, rates)).toHaveLength(7);
+  });
+
+  it('7日目が節目で base+bonus、それ以外は base', () => {
+    const days = buildLoginBonusCalendar(1, false, rates);
+    expect(days[0]!.amount).toBe(10);
+    expect(days[6]!.amount).toBe(60); // 10 + 50
+    expect(days[6]!.isMilestone).toBe(true);
+    expect(days[0]!.isMilestone).toBe(false);
+  });
+
+  it('未受取: 現在位置が today、前は claimed、後は upcoming', () => {
+    // streak=4 (受け取れば4日目) / 今日未受取
+    const days = buildLoginBonusCalendar(4, false, rates);
+    expect(days[0]!.state).toBe('claimed');
+    expect(days[2]!.state).toBe('claimed');
+    expect(days[3]!.state).toBe('today'); // 4日目
+    expect(days[4]!.state).toBe('upcoming');
+  });
+
+  it('受取済み: 現在位置までが claimed、後は upcoming (today無し)', () => {
+    const days = buildLoginBonusCalendar(4, true, rates);
+    expect(days[3]!.state).toBe('claimed'); // 4日目まで受取済み
+    expect(days.some((d) => d.state === 'today')).toBe(false);
+    expect(days[4]!.state).toBe('upcoming');
+  });
+
+  it('streak=7 はサイクル末尾(7日目)を指す', () => {
+    const days = buildLoginBonusCalendar(7, false, rates);
+    expect(days[6]!.state).toBe('today');
+  });
+
+  it('streak=8 は次サイクルの1日目に戻る', () => {
+    const days = buildLoginBonusCalendar(8, false, rates);
+    expect(days[0]!.state).toBe('today');
+  });
+
+  it('streak=0 でも1日目を today にする', () => {
+    const days = buildLoginBonusCalendar(0, false, rates);
+    expect(days[0]!.state).toBe('today');
   });
 });
 

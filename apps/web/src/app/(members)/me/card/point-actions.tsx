@@ -11,8 +11,10 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { buildLoginBonusCalendar } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { LoginBonusCalendar } from './login-bonus-calendar';
 
 type ShareState = { platform: 'X' | 'INSTAGRAM'; claimedToday: boolean };
 
@@ -144,9 +146,9 @@ export function PointActions({
         </p>
       )}
 
-      {/* ログインボーナス */}
-      <div className="rounded-lg border border-slate-200 p-4">
-        <div className="flex items-center justify-between">
+      {/* ログインボーナス (7日サイクルのビジュアルカレンダー) */}
+      <div className="rounded-xl border border-slate-200 p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-sm font-semibold text-slate-800">毎日のログインボーナス</p>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -154,14 +156,30 @@ export function PointActions({
               {rates.loginStreakBonus}pt
             </p>
             {loginStreak > 0 && (
-              <p className="mt-1 text-xs text-brand-600">現在 連続 {loginStreak} 日</p>
+              <p className="mt-1 text-xs font-semibold text-brand-600">
+                🔥 現在 連続 {loginStreak} 日
+              </p>
             )}
           </div>
+          {loginClaimedToday && <Badge tone="success">本日受取済み</Badge>}
+        </div>
+
+        <LoginBonusCalendar
+          days={buildLoginBonusCalendar(loginStreak, loginClaimedToday, rates)}
+        />
+
+        <div className="mt-3 flex justify-center">
           {loginClaimedToday ? (
-            <Badge tone="success">本日受取済み</Badge>
+            <p className="text-center text-xs text-slate-500">
+              また明日ログインしてボーナスを受け取りましょう！
+            </p>
           ) : (
-            <Button size="sm" loading={busy === 'login'} onClick={claimLogin}>
-              受け取る (+{rates.loginBonusBase}pt〜)
+            <Button
+              loading={busy === 'login'}
+              onClick={claimLogin}
+              className="w-full sm:w-auto sm:min-w-[240px]"
+            >
+              本日のログインボーナスを受け取る
             </Button>
           )}
         </div>

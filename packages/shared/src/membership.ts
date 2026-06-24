@@ -111,6 +111,68 @@ export function computeLoginBonusAmount(
 }
 
 // ---------------------------------------------------------------------
+// ログインボーナス・カレンダー (7日サイクルの視覚表示用)
+// ---------------------------------------------------------------------
+
+export type LoginBonusDayState = 'claimed' | 'today' | 'upcoming';
+
+export type LoginBonusDay = {
+  /** サイクル内の日番号 (1..threshold) */
+  day: number;
+  /** その日に付与されるポイント */
+  amount: number;
+  /** 連続ボーナスが上乗せされる節目の日か (threshold 日目) */
+  isMilestone: boolean;
+  /** 表示状態 */
+  state: LoginBonusDayState;
+};
+
+/**
+ * ログインボーナスの「7日(=loginStreakThreshold日)サイクル」表示データを構築する。
+ *
+ * - サイクル長は rates.loginStreakThreshold (既定 7)。
+ * - 現在のサイクル内の位置を streak から算出 (1..threshold)。
+ *   例) streak=1 → 1日目、streak=7 → 7日目(節目)、streak=8 → 次サイクルの1日目。
+ * - claimedToday=true のとき、その位置の日は「受取済み(claimed)」となり、
+ *   それより前の日も claimed として表示する。
+ * - claimedToday=false のとき、現在位置 (= 今日受け取れる日) を today とし、
+ *   それより前を claimed、後を upcoming とする。
+ *
+ * @param streak       連続ログイン日数。今日受取済みなら今日を含む値、
+ *                     未受取なら「受け取れば到達する見込みの値」を渡す。
+ * @param claimedToday 今日のログインボーナスを受取済みか
+ * @param rates        ポイントレート設定
+ */
+export function buildLoginBonusCalendar(
+  streak: number,
+  claimedToday: boolean,
+  rates: PointRateSettings,
+): LoginBonusDay[] {
+  const cycle = Math.max(1, rates.loginStreakThreshold);
+
+  // サイクル内の現在位置 (1..cycle)。streak=0 のときは 1 とみなす。
+  const effectiveStreak = Math.max(1, streak);
+  let pos = effectiveStreak % cycle;
+  if (pos === 0) pos = cycle; // ちょうど節目はサイクル末尾
+
+  return Array.from({ length: cycle }, (_, i) => {
+    const day = i + 1;
+    const isMilestone = day === cycle && rates.loginStreakBonus > 0;
+    const amount = rates.loginBonusBase + (isMilestone ? rates.loginStreakBonus : 0);
+
+    let state: LoginBonusDayState;
+    if (claimedToday) {
+      state = day <= pos ? 'claimed' : 'upcoming';
+    } else {
+      if (day < pos) state = 'claimed';
+      else if (day === pos) state = 'today';
+      else state = 'upcoming';
+    }
+    return { day, amount, isMilestone, state };
+  });
+}
+
+// ---------------------------------------------------------------------
 // API 入力スキーマ
 // ---------------------------------------------------------------------
 
