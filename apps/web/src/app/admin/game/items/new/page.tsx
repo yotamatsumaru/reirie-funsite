@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import { prisma } from '@idol/db';
 import { ItemForm } from '../item-form';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'アイテム新規作成' };
 export const dynamic = 'force-dynamic';
 
 export default async function NewItemPage() {
+  await requireCapabilityPage('GAME');
   const characters = await prisma.gameCharacter.findMany({
     orderBy: { sortOrder: 'asc' },
     select: { id: true, name: true },

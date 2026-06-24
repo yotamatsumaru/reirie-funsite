@@ -3,13 +3,13 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('GAME');
   const url = new URL(req.url);
   const characterId = url.searchParams.get('characterId') ?? undefined;
   const page = Math.max(1, Number(url.searchParams.get('page') ?? '1'));

@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { CreateProductSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -16,7 +16,7 @@ const UpdateProductSchema = CreateProductSchema.partial();
 
 export const GET = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    await requireAdmin();
+    await requireCapability('MERCH');
     const { id } = await ctx.params;
     const product = await prisma.product.findUnique({
       where: { id },
@@ -36,7 +36,7 @@ export const GET = handle(
 
 export const PATCH = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('MERCH');
     const { id } = await ctx.params;
     const body = UpdateProductSchema.parse(await req.json());
 
@@ -82,7 +82,7 @@ export const PATCH = handle(
 
 export const DELETE = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('MERCH');
     const { id } = await ctx.params;
     const exists = await prisma.product.findUnique({ where: { id } });
     if (!exists) throw errors.notFound('商品が見つかりません');

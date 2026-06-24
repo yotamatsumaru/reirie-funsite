@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { ItemForm } from '../item-form';
+import { requireCapabilityPage } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,7 @@ export default async function EditItemPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireCapabilityPage('GAME');
   const { id } = await params;
   const [item, characters] = await Promise.all([
     prisma.gameItem.findUnique({ where: { id } }),

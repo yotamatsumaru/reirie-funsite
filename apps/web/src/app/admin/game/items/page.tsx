@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'アイテム管理' };
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export default async function AdminItemsPage() {
+  await requireCapabilityPage('GAME');
   const items = await prisma.gameItem.findMany({
     orderBy: [{ kind: 'asc' }, { sortOrder: 'asc' }],
     include: { character: { select: { name: true } } },

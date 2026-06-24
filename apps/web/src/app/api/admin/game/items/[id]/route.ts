@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AdminGameItemInputSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 
 export const PATCH = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('GAME');
     const { id } = await ctx.params;
     const body = AdminGameItemInputSchema.partial().parse(await req.json());
     const existing = await prisma.gameItem.findUnique({ where: { id } });
@@ -26,7 +26,7 @@ export const PATCH = handle(
 
 export const DELETE = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('GAME');
     const { id } = await ctx.params;
     const existing = await prisma.gameItem.findUnique({
       where: { id },

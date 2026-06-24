@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -22,7 +22,7 @@ const AssetInputSchema = z.object({
 });
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('GAME');
   const url = new URL(req.url);
   const characterId = url.searchParams.get('characterId');
   const kind = url.searchParams.get('kind');
@@ -37,7 +37,7 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('GAME');
   const body = AssetInputSchema.parse(await req.json());
   // 重複チェック (characterId + kind + key)
   const dup = await prisma.gameAsset.findFirst({

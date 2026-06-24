@@ -7,14 +7,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { CreateVideoSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('CONTENT');
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get('page') ?? 1));
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 30)));
@@ -38,7 +38,7 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('CONTENT');
   const body = CreateVideoSchema.parse(await req.json());
 
   const created = await prisma.video.create({

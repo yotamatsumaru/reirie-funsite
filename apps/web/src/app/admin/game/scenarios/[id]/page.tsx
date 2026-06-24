@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { ScenarioForm } from '../scenario-form';
+import { requireCapabilityPage } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,7 @@ export default async function EditScenarioPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireCapabilityPage('GAME');
   const { id } = await params;
   const [scenario, characters] = await Promise.all([
     prisma.gameScenario.findUnique({

@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'ライブ配信管理' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLivePage() {
+  await requireCapabilityPage('CONTENT');
   const lives = await prisma.liveStream.findMany({
     orderBy: { scheduledStartAt: 'desc' },
     take: 50,

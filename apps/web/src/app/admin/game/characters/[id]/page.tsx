@@ -7,6 +7,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { CharacterForm } from '../character-form';
+import { requireCapabilityPage } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ export default async function EditCharacterPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireCapabilityPage('GAME');
   const { id } = await params;
   const character = await prisma.gameCharacter.findUnique({
     where: { id },

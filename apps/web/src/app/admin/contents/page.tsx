@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'コンテンツ管理' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminContentsPage() {
+  await requireCapabilityPage('CONTENT');
   const items = await prisma.content.findMany({
     orderBy: { updatedAt: 'desc' },
     take: 50,

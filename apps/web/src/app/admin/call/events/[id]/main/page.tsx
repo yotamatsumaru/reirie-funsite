@@ -12,6 +12,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { CallRoom } from '@/components/call/CallRoom';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '特典会 本ルーム (演者)' };
 export const dynamic = 'force-dynamic';
@@ -21,6 +22,7 @@ interface Props {
 }
 
 export default async function AdminCallEventMainPage({ params }: Props) {
+  await requireCapabilityPage('CALL');
   const { id } = await params;
   const event = await prisma.callEvent.findUnique({
     where: { id },

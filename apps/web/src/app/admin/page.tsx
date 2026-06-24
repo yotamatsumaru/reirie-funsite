@@ -1,5 +1,13 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { prisma } from '@idol/db';
+import { auth } from '@/auth';
+import {
+  hasCapability,
+  ADMIN_CAPABILITY_LABELS,
+  ADMIN_CAPABILITY_DESCRIPTIONS,
+  type AdminCapabilityLiteral,
+} from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
@@ -10,13 +18,35 @@ import {
   CreditCard,
   PackageSearch,
   AlertTriangle,
+  FileText,
+  ShoppingBag,
+  Gamepad2,
+  PhoneCall,
   type LucideIcon,
 } from 'lucide-react';
 
 export const metadata: Metadata = { title: '管理ダッシュボード' };
 export const dynamic = 'force-dynamic';
 
+const CAPABILITY_LINKS: Record<
+  AdminCapabilityLiteral,
+  { href: string; icon: LucideIcon }
+> = {
+  CONTENT: { href: '/admin/contents', icon: FileText },
+  MERCH: { href: '/admin/products', icon: ShoppingBag },
+  GAME: { href: '/admin/game', icon: Gamepad2 },
+  CALL: { href: '/admin/call', icon: PhoneCall },
+};
+
 export default async function AdminDashboardPage() {
+  const session = await auth();
+  const principal = {
+    role: session?.user?.role,
+    capabilities: session?.user?.capabilities,
+  };
+  const myCapabilities = (Object.keys(CAPABILITY_LINKS) as AdminCapabilityLiteral[]).filter((c) =>
+    hasCapability(principal, c),
+  );
   const [userTotal, byPlan, todayPaid, monthPaid, ordersByStatus, lowStock] = await Promise.all([
     prisma.user.count({ where: { deletedAt: null } }),
     prisma.subscription.groupBy({
@@ -56,6 +86,37 @@ export default async function AdminDashboardPage() {
         <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">ダッシュボード</h1>
         <p className="mt-1.5 text-sm text-slate-500">運営状況のサマリ・在庫アラート。</p>
       </header>
+
+      {/* 担当領域のクイックリンク（保有権限のみ） */}
+      {myCapabilities.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">担当している管理領域</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {myCapabilities.map((cap) => {
+              const { href, icon: Icon } = CAPABILITY_LINKS[cap];
+              return (
+                <Link
+                  key={cap}
+                  href={href}
+                  className="group flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <span className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
+                    <Icon className="h-5 w-5" aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-slate-900 group-hover:text-brand-700">
+                      {ADMIN_CAPABILITY_LABELS[cap]}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      {ADMIN_CAPABILITY_DESCRIPTIONS[cap]}
+                    </span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat icon={Users} label="総会員数" value={String(userTotal)} accent="brand" />

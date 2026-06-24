@@ -4,6 +4,7 @@
 import type { Metadata } from 'next';
 import { prisma } from '@idol/db';
 import { ScenarioForm } from '../scenario-form';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'シナリオ章 新規作成' };
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,7 @@ export default async function NewScenarioPage({
 }: {
   searchParams: Promise<{ characterId?: string }>;
 }) {
+  await requireCapabilityPage('GAME');
   const { characterId } = await searchParams;
   const characters = await prisma.gameCharacter.findMany({
     orderBy: { sortOrder: 'asc' },

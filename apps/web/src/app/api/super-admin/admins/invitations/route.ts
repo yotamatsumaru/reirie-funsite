@@ -17,6 +17,7 @@ import { env } from '@/lib/env';
 import {
   CreateAdminInvitationSchema,
   USER_ROLE_LABELS,
+  normalizeAdminCapabilities,
   type AdminInvitationStatusLiteral,
 } from '@idol/shared';
 import { generateInvitationToken, invitationExpiresAt } from '@/lib/admin-invitation';
@@ -73,6 +74,9 @@ export const POST = handle(async (req: Request) => {
     throw errors.unprocessable('入力値が不正です', parsed.error.flatten());
   }
   const { email, role, note } = parsed.data;
+  // SUPER_ADMIN は全権限のため capabilities は保存しない
+  const capabilities =
+    role === 'ADMIN' ? normalizeAdminCapabilities(parsed.data.capabilities) : [];
 
   // 既存ユーザーの状態確認
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -102,18 +106,19 @@ export const POST = handle(async (req: Request) => {
     data: {
       email,
       role,
+      capabilities,
       token,
       note: note ?? null,
       invitedById: session.user.id,
       expiresAt,
-    },
+    } as never,
   });
 
   await logAudit({
     userId: session.user.id,
     action: 'admin.invitation.create',
     resource: `adminInvitation:${invitation.id}`,
-    metadata: { email, role, isExistingUser: !!existing },
+    metadata: { email, role, capabilities, isExistingUser: !!existing },
   });
 
   const acceptUrl = `${env.appBaseUrl}/admin-invite/${token}`;

@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { UpdateLiveStreamSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -14,7 +14,7 @@ export const runtime = 'nodejs';
 
 export const GET = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    await requireAdmin();
+    await requireCapability('CONTENT');
     const { id } = await ctx.params;
     const live = await prisma.liveStream.findUnique({ where: { id } });
     if (!live) throw errors.notFound('ライブ配信が見つかりません');
@@ -24,7 +24,7 @@ export const GET = handle(
 
 export const PATCH = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('CONTENT');
     const { id } = await ctx.params;
     const body = UpdateLiveStreamSchema.parse(await req.json());
 
@@ -69,7 +69,7 @@ export const PATCH = handle(
 
 export const DELETE = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('CONTENT');
     const { id } = await ctx.params;
     const exists = await prisma.liveStream.findUnique({ where: { id } });
     if (!exists) throw errors.notFound('ライブ配信が見つかりません');

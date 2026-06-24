@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ShipOrderSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email';
@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 
 export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('MERCH');
     const { id } = await ctx.params;
     const body = ShipOrderSchema.parse(await req.json());
 

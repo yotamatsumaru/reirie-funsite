@@ -42,6 +42,77 @@ export function isSuperAdmin(role: UserRoleLiteral | undefined | null): boolean 
   return role === 'SUPER_ADMIN';
 }
 
+/**
+ * 管理権限 (Admin Capability)
+ *  - ADMIN ロールに対して、領域ごとに付与する細分化された権限。
+ *  - SUPER_ADMIN は常にすべての権限を持つ (個別付与不要)。
+ *  - User.adminCapabilities (string[]) に保持する。
+ *
+ *  CONTENT: コンテンツ / 動画 / ライブ配信の管理
+ *  MERCH:   グッズ(商品) / 在庫 / 注文の管理
+ *  GAME:    恋愛ゲーム(キャラ/シナリオ/アイテム/プレイヤー)の管理
+ *  CALL:    1on1コール / 特典会イベントの管理
+ */
+export const ADMIN_CAPABILITIES = ['CONTENT', 'MERCH', 'GAME', 'CALL'] as const;
+export type AdminCapabilityLiteral = (typeof ADMIN_CAPABILITIES)[number];
+
+export const ADMIN_CAPABILITY_LABELS: Record<AdminCapabilityLiteral, string> = {
+  CONTENT: 'コンテンツ',
+  MERCH: 'グッズ・EC',
+  GAME: 'ゲーム',
+  CALL: '1on1コール',
+};
+
+export const ADMIN_CAPABILITY_DESCRIPTIONS: Record<AdminCapabilityLiteral, string> = {
+  CONTENT: 'ブログ・ギャラリー・動画・ライブ配信の管理',
+  MERCH: '商品(グッズ)・在庫・注文の管理',
+  GAME: '恋愛ゲームのキャラ・シナリオ・アイテム・プレイヤーの管理',
+  CALL: '1on1コール・特典会イベントの管理',
+};
+
+/** 文字列配列を AdminCapabilityLiteral[] に正規化（未知の値は除外） */
+export function normalizeAdminCapabilities(
+  values: readonly string[] | undefined | null,
+): AdminCapabilityLiteral[] {
+  if (!values) return [];
+  const set = new Set<AdminCapabilityLiteral>();
+  for (const v of values) {
+    if ((ADMIN_CAPABILITIES as readonly string[]).includes(v)) {
+      set.add(v as AdminCapabilityLiteral);
+    }
+  }
+  // 定義順に整列
+  return ADMIN_CAPABILITIES.filter((c) => set.has(c));
+}
+
+/**
+ * ユーザーが指定の管理権限を持つか判定する。
+ *  - SUPER_ADMIN は常に true
+ *  - ADMIN は adminCapabilities に含まれていれば true
+ *  - それ以外 (USER) は false
+ */
+export function hasCapability(
+  params: {
+    role: UserRoleLiteral | undefined | null;
+    capabilities?: readonly string[] | null;
+  },
+  required: AdminCapabilityLiteral,
+): boolean {
+  if (params.role === 'SUPER_ADMIN') return true;
+  if (params.role !== 'ADMIN') return false;
+  return (params.capabilities ?? []).includes(required);
+}
+
+/** ユーザーが「いずれかの管理領域」にアクセスできるか (管理画面の入口判定) */
+export function hasAnyCapability(params: {
+  role: UserRoleLiteral | undefined | null;
+  capabilities?: readonly string[] | null;
+}): boolean {
+  if (params.role === 'SUPER_ADMIN') return true;
+  if (params.role !== 'ADMIN') return false;
+  return (params.capabilities ?? []).length > 0;
+}
+
 export const BILLING_INTERVALS = ['MONTH', 'YEAR'] as const;
 export type BillingIntervalLiteral = (typeof BILLING_INTERVALS)[number];
 

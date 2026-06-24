@@ -4,11 +4,13 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '商品管理' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminProductsPage() {
+  await requireCapabilityPage('MERCH');
   const products = await prisma.product.findMany({
     orderBy: { updatedAt: 'desc' },
     take: 50,

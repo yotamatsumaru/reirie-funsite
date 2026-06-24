@@ -13,7 +13,10 @@ import { prisma } from '@idol/db';
 import { verifyPassword } from './lib/password';
 import {
   canAccess,
+  hasCapability,
+  normalizeAdminCapabilities,
   type AccessLevelLiteral,
+  type AdminCapabilityLiteral,
   type PlanTypeLiteral,
   type UserRoleLiteral,
 } from '@idol/shared';
@@ -26,12 +29,14 @@ declare module 'next-auth' {
       email: string;
       role: UserRoleLiteral;
       plan: PlanTypeLiteral;
+      capabilities: AdminCapabilityLiteral[];
     } & DefaultSession['user'];
   }
   interface User {
     id?: string;
     role?: UserRoleLiteral;
     plan?: PlanTypeLiteral;
+    capabilities?: AdminCapabilityLiteral[];
   }
 }
 
@@ -44,6 +49,7 @@ interface AppJWT {
   userId: string;
   role: UserRoleLiteral;
   plan: PlanTypeLiteral;
+  capabilities: AdminCapabilityLiteral[];
   planRefreshedAt?: number;
 }
 
@@ -83,6 +89,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               name: 'スーパー管理者',
               role: 'SUPER_ADMIN' as UserRoleLiteral,
               plan: 'PREMIUM' as PlanTypeLiteral,
+              capabilities: ['CONTENT', 'MERCH', 'GAME', 'CALL'] as AdminCapabilityLiteral[],
             };
           }
           if (email === 'admin@example.com') {
@@ -92,6 +99,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               name: 'デモ管理者',
               role: 'ADMIN' as UserRoleLiteral,
               plan: 'PREMIUM' as PlanTypeLiteral,
+              capabilities: ['CONTENT', 'MERCH', 'GAME', 'CALL'] as AdminCapabilityLiteral[],
             };
           }
           if (email === 'demo@example.com') {
@@ -136,6 +144,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.displayName ?? null,
           role: user.role,
           plan,
+          capabilities: normalizeAdminCapabilities(user.adminCapabilities),
         };
       },
     }),
@@ -147,6 +156,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         t.userId = user.id as string;
         t.role = (user.role ?? 'USER') as UserRoleLiteral;
         t.plan = (user.plan ?? 'FREE') as PlanTypeLiteral;
+        t.capabilities = normalizeAdminCapabilities(user.capabilities);
         t.planRefreshedAt = Date.now();
       }
       // デモモードでは DB アクセスせずトークン値をそのまま使う
@@ -170,6 +180,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (u) {
           t.role = u.role as UserRoleLiteral;
           t.plan = (u.subscriptions[0]?.planType as PlanTypeLiteral) ?? 'FREE';
+          t.capabilities = normalizeAdminCapabilities(u.adminCapabilities);
           t.planRefreshedAt = Date.now();
         }
       }
@@ -181,6 +192,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = t.userId;
         session.user.role = t.role;
         session.user.plan = t.plan;
+        session.user.capabilities = normalizeAdminCapabilities(t.capabilities);
       }
       return session;
     },
@@ -205,6 +217,49 @@ export async function requireAdmin() {
   if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') {
     const { errors } = await import('./lib/errors');
     throw errors.forbidden('管理者権限が必要です');
+  }
+  return session;
+}
+
+/**
+ * 領域別の管理権限 (Admin Capability) を必須にする (API用)。
+ *  - SUPER_ADMIN は常に許可
+ *  - ADMIN は対象 capability を保持していれば許可
+ *  - それ以外は 403
+ */
+export async function requireCapability(required: AdminCapabilityLiteral) {
+  const session = await requireSession();
+  const ok = hasCapability(
+    { role: session.user.role, capabilities: session.user.capabilities },
+    required,
+  );
+  if (!ok) {
+    const { errors } = await import('./lib/errors');
+    const { ADMIN_CAPABILITY_LABELS } = await import('@idol/shared');
+    throw errors.forbidden(`「${ADMIN_CAPABILITY_LABELS[required]}」の管理権限が必要です`);
+  }
+  return session;
+}
+
+/**
+ * Server Component (ページ) 用の管理権限ガード。
+ *  - 未ログイン → /signin
+ *  - 権限なし → /admin (ダッシュボード)。ダッシュボードにも入れない場合は /
+ */
+export async function requireCapabilityPage(required: AdminCapabilityLiteral) {
+  const session = await auth();
+  const { redirect } = await import('next/navigation');
+  if (!session?.user?.id) {
+    redirect('/signin?callbackUrl=/admin');
+    throw new Error('unreachable');
+  }
+  const principal = {
+    role: session.user.role,
+    capabilities: session.user.capabilities,
+  };
+  if (!hasCapability(principal, required)) {
+    redirect('/admin');
+    throw new Error('unreachable');
   }
   return session;
 }

@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
+import { hasCapability, hasAnyCapability, type AdminCapabilityLiteral } from '@idol/shared';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,18 +21,20 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** 表示に必要な管理権限。null はダッシュボード等（全管理者に表示） */
+  capability: AdminCapabilityLiteral | null;
 };
 
 const NAV: NavItem[] = [
-  { href: '/admin', label: 'ダッシュボード', icon: LayoutDashboard },
-  { href: '/admin/contents', label: 'コンテンツ', icon: FileText },
-  { href: '/admin/products', label: '商品', icon: ShoppingBag },
-  { href: '/admin/orders', label: '注文', icon: Receipt },
-  { href: '/admin/videos', label: '動画', icon: Video },
-  { href: '/admin/live', label: 'ライブ', icon: Radio },
-  { href: '/admin/game', label: 'ゲーム', icon: Gamepad2 },
-  { href: '/admin/call', label: '1on1コール', icon: PhoneCall },
-  { href: '/admin/call/events', label: '特典会イベント', icon: PhoneCall },
+  { href: '/admin', label: 'ダッシュボード', icon: LayoutDashboard, capability: null },
+  { href: '/admin/contents', label: 'コンテンツ', icon: FileText, capability: 'CONTENT' },
+  { href: '/admin/videos', label: '動画', icon: Video, capability: 'CONTENT' },
+  { href: '/admin/live', label: 'ライブ', icon: Radio, capability: 'CONTENT' },
+  { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },
+  { href: '/admin/orders', label: '注文', icon: Receipt, capability: 'MERCH' },
+  { href: '/admin/game', label: 'ゲーム', icon: Gamepad2, capability: 'GAME' },
+  { href: '/admin/call', label: '1on1コール', icon: PhoneCall, capability: 'CALL' },
+  { href: '/admin/call/events', label: '特典会イベント', icon: PhoneCall, capability: 'CALL' },
 ];
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
@@ -40,12 +43,24 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   // ADMIN または SUPER_ADMIN
   if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') redirect('/');
 
+  const principal = {
+    role: session.user.role,
+    capabilities: session.user.capabilities,
+  };
+  // 管理領域を1つも持たない ADMIN は管理画面に入れない
+  if (!hasAnyCapability(principal)) redirect('/');
+
+  // 保有権限のメニューだけ表示（ダッシュボードは常に表示）
+  const nav = NAV.filter(
+    (item) => item.capability === null || hasCapability(principal, item.capability),
+  );
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
       <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8 lg:flex lg:gap-8">
         {/* モバイル: 横スクロールタブナビ */}
         <nav className="-mx-3 mb-4 flex gap-1.5 overflow-x-auto px-3 pb-2 text-sm lg:hidden">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const Icon = item.icon;
             return (
               <Link
@@ -67,7 +82,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               Admin
             </p>
             <ul className="space-y-0.5">
-              {NAV.map((item) => {
+              {nav.map((item) => {
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>

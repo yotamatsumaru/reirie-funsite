@@ -17,7 +17,11 @@ import { auth } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { hashPassword } from '@/lib/password';
-import { AcceptAdminInvitationSchema, USER_ROLE_LABELS } from '@idol/shared';
+import {
+  AcceptAdminInvitationSchema,
+  USER_ROLE_LABELS,
+  normalizeAdminCapabilities,
+} from '@idol/shared';
 import { isInvitationAcceptable } from '@/lib/admin-invitation';
 
 export const runtime = 'nodejs';
@@ -72,6 +76,13 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email: invitation.email } });
+  // 招待に紐づく管理権限 (SUPER_ADMIN は全権限のため空配列)
+  const invitedCapabilities =
+    invitation.role === 'ADMIN'
+      ? normalizeAdminCapabilities(
+          (invitation as unknown as { capabilities?: string[] }).capabilities,
+        )
+      : [];
 
   // ---- 既存ユーザー ----
   if (existingUser) {
@@ -90,7 +101,7 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
     const [updated] = await prisma.$transaction([
       prisma.user.update({
         where: { id: existingUser.id },
-        data: { role: invitation.role },
+        data: { role: invitation.role, adminCapabilities: invitedCapabilities } as never,
       }),
       prisma.adminInvitation.update({
         where: { id: invitation.id },
@@ -131,9 +142,10 @@ export const POST = handle(async (req: Request, ctx: Ctx) => {
         passwordHash: hashPassword(password),
         displayName,
         role: invitation.role,
+        adminCapabilities: invitedCapabilities,
         // 招待経由のため、メール到達は招待時点で確認済みとみなす
         emailVerified: new Date(),
-      },
+      } as never,
     });
     await tx.adminInvitation.update({
       where: { id: invitation.id },

@@ -5,14 +5,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AdminListOrdersQuerySchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle } from '@/lib/errors';
 import type { Prisma } from '@idol/db';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('MERCH');
   const url = new URL(req.url);
   const query = AdminListOrdersQuerySchema.parse({
     status: url.searchParams.get('status') ?? undefined,

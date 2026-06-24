@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'プレイヤー進捗' };
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,7 @@ const ROUTE_LABEL: Record<string, string> = {
 };
 
 export default async function AdminPlayersPage() {
+  await requireCapabilityPage('GAME');
   const items = await prisma.playerProgress.findMany({
     orderBy: { updatedAt: 'desc' },
     take: 100,

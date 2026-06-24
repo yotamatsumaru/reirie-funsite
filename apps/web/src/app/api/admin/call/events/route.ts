@@ -7,14 +7,14 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { CreateCallEventSchema } from '@idol/shared';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const events = await prisma.callEvent.findMany({
     orderBy: { startsAt: 'desc' },
     include: {
@@ -26,7 +26,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const body = await req.json();
   const input = CreateCallEventSchema.parse(body);
 

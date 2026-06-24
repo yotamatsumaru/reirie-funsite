@@ -10,11 +10,13 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { CreateEventForm } from './CreateEventForm';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '特典会イベント一覧' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminCallEventsPage() {
+  await requireCapabilityPage('CALL');
   const [events, performers] = await Promise.all([
     prisma.callEvent.findMany({
       orderBy: { startsAt: 'desc' },
