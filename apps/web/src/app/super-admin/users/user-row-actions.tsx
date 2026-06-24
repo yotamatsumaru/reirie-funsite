@@ -13,10 +13,13 @@ export function UserRowActions({
   userId,
   currentRole,
   isBanned,
+  showRoleSelect = true,
 }: {
   userId: string;
   currentRole: UserRoleLiteral;
   isBanned: boolean;
+  /** ロール変更セレクトを表示するか。ファンユーザー管理画面では false（昇格は管理者画面に集約）。 */
+  showRoleSelect?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -72,16 +75,18 @@ export function UserRowActions({
 
   return (
     <div className="flex items-center justify-end gap-2">
-      <select
-        defaultValue={currentRole}
-        onChange={handleRoleChange}
-        disabled={pending || isBanned}
-        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-50"
-      >
-        <option value="USER">USER</option>
-        <option value="ADMIN">ADMIN</option>
-        <option value="SUPER_ADMIN">SUPER_ADMIN</option>
-      </select>
+      {showRoleSelect && (
+        <select
+          defaultValue={currentRole}
+          onChange={handleRoleChange}
+          disabled={pending || isBanned}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-50"
+        >
+          <option value="USER">USER</option>
+          <option value="ADMIN">ADMIN</option>
+          <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+        </select>
+      )}
 
       {isBanned ? (
         <button

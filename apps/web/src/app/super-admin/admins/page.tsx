@@ -1,6 +1,7 @@
 /**
  * /super-admin/admins — ADMIN / SUPER_ADMIN ロール所有者の一覧と付与・剥奪
  */
+import Link from 'next/link';
 import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -32,11 +33,19 @@ export default async function SuperAdminAdminsPage() {
 
   return (
     <main>
-      <header className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">管理者管理</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          ADMIN / SUPER_ADMIN ロールの付与・剥奪を行います。
-        </p>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">管理者管理</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            ADMIN / SUPER_ADMIN ロールの付与・剥奪を行います。ファン会員はこの画面には表示されません。
+          </p>
+        </div>
+        <Link
+          href="/super-admin/users"
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          ← ファンユーザーの管理へ
+        </Link>
       </header>
 
       {/* 警告 */}
@@ -78,10 +87,14 @@ export default async function SuperAdminAdminsPage() {
         </CardBody>
       </Card>
 
-      {/* 招待フォーム */}
+      {/* 付与フォーム（既存ユーザーの即時昇格） */}
       <Card>
         <CardHeader>
-          <h2 className="text-sm font-semibold text-slate-800">管理者を追加</h2>
+          <h2 className="text-sm font-semibold text-slate-800">既存ユーザーを管理者に昇格</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            すでにアカウントを持つユーザーのメールアドレスを指定して、その場で権限を付与します。
+            （アカウント未作成の人へのメール招待は今後追加予定）
+          </p>
         </CardHeader>
         <CardBody>
           <GrantAdminForm />
