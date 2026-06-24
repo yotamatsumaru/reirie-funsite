@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   ArrowLeftRight,
   ShieldAlert,
+  Coins,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -38,6 +39,7 @@ const NAV: NavItem[] = [
   { href: '/super-admin/subscriptions', label: 'サブスク', icon: CreditCard },
   { href: '/super-admin/orders', label: '注文・売上', icon: Receipt },
   { href: '/super-admin/game', label: 'ゲーム経済', icon: Gamepad2 },
+  { href: '/super-admin/points', label: 'ポイント設定', icon: Coins },
   { href: '/super-admin/announcements', label: 'お知らせ', icon: Megaphone },
   { href: '/super-admin/settings', label: 'システム設定', icon: Settings },
   { href: '/super-admin/audit', label: '監査ログ', icon: ScrollText },
