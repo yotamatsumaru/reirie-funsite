@@ -18,6 +18,8 @@ import {
   UserPlus,
   Shield,
   Crown,
+  CreditCard,
+  Repeat,
   Menu,
   X,
   type LucideIcon,
@@ -59,6 +61,15 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+// ===== 会員メニュー（ログイン時のみ表示） =====
+const MEMBER_GROUP: NavGroup = {
+  title: '会員',
+  items: [
+    { href: '/me/card', label: '会員カード', icon: CreditCard },
+    { href: '/me/points', label: 'ポイント交換', icon: Repeat },
+  ],
+};
 
 export function Sidebar() {
   const { data: session, status } = useSession();
@@ -220,6 +231,26 @@ function SidebarContent({
             </ul>
           </div>
         ))}
+
+        {/* 会員メニュー（ログイン時のみ） */}
+        {session?.user && (
+          <div>
+            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-twilight-cream/40">
+              {MEMBER_GROUP.title}
+            </p>
+            <ul className="space-y-1">
+              {MEMBER_GROUP.items.map((item) => (
+                <li key={item.href}>
+                  <NavLink
+                    item={item}
+                    active={pathname.startsWith(item.href)}
+                    cartCount={cartCount}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* 管理メニュー */}
         {(isAdmin || isSuper) && (
