@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { USER_ROLE_LABELS, type UserRoleLiteral } from '@idol/shared';
 import { AdminRowActions } from './admin-row-actions';
 import { GrantAdminForm } from './grant-admin-form';
+import { InviteAdminForm } from './invite-admin-form';
+import { InvitationList, type InvitationItem } from './invitation-list';
 
 export const metadata: Metadata = { title: '管理者管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -30,6 +32,36 @@ export default async function SuperAdminAdminsPage() {
   );
   const supers = admins.filter((u) => u.role === 'SUPER_ADMIN');
   const regularAdmins = admins.filter((u) => u.role === 'ADMIN');
+
+  // 期限切れの PENDING を EXPIRED に揃えてから取得
+  await prisma.adminInvitation.updateMany({
+    where: { status: 'PENDING', expiresAt: { lt: new Date() } },
+    data: { status: 'EXPIRED' },
+  });
+  const invitationRows = await prisma.adminInvitation.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      invitedBy: { select: { email: true, displayName: true } },
+      acceptedBy: { select: { email: true, displayName: true } },
+    },
+  });
+  const invitations: InvitationItem[] = invitationRows.map((inv) => ({
+    id: inv.id,
+    email: inv.email,
+    role: inv.role as InvitationItem['role'],
+    status: inv.status as InvitationItem['status'],
+    note: inv.note,
+    expiresAt: inv.expiresAt.toISOString(),
+    acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+    createdAt: inv.createdAt.toISOString(),
+    invitedBy: inv.invitedBy
+      ? { email: inv.invitedBy.email, displayName: inv.invitedBy.displayName }
+      : null,
+    acceptedBy: inv.acceptedBy
+      ? { email: inv.acceptedBy.email, displayName: inv.acceptedBy.displayName }
+      : null,
+  }));
+  const pendingCount = invitations.filter((i) => i.status === 'PENDING').length;
 
   return (
     <main>
@@ -88,16 +120,42 @@ export default async function SuperAdminAdminsPage() {
       </Card>
 
       {/* 付与フォーム（既存ユーザーの即時昇格） */}
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
-          <h2 className="text-sm font-semibold text-slate-800">既存ユーザーを管理者に昇格</h2>
+          <h2 className="text-sm font-semibold text-slate-800">既存ユーザーを管理者に昇格（即時）</h2>
           <p className="mt-1 text-xs text-slate-500">
             すでにアカウントを持つユーザーのメールアドレスを指定して、その場で権限を付与します。
-            （アカウント未作成の人へのメール招待は今後追加予定）
+            メール承認のステップはありません。
           </p>
         </CardHeader>
         <CardBody>
           <GrantAdminForm />
+        </CardBody>
+      </Card>
+
+      {/* メール招待フォーム（新規・既存両対応） */}
+      <Card className="mb-6">
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">メールで管理者を招待</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            アカウント未作成の人・既存ユーザーのどちらにも送信できます。
+            招待された本人がメール内のリンクから承認すると、管理者権限が付与されます。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <InviteAdminForm />
+        </CardBody>
+      </Card>
+
+      {/* 招待一覧 */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">
+            招待一覧{pendingCount > 0 ? `（招待中 ${pendingCount} 件）` : ''}
+          </h2>
+        </CardHeader>
+        <CardBody className="p-0">
+          <InvitationList invitations={invitations} />
         </CardBody>
       </Card>
     </main>
