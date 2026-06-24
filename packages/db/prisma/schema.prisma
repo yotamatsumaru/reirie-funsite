@@ -494,6 +494,13 @@ model ProductImage {
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
 
+  // 画像バイト列の DB 保存 (S3 未設定時のフォールバック).
+  // EC2 standalone + PM2 cluster ではローカルディスク保存が配信先とズレ、
+  // 再ビルドで消えるため、DB を単一の真実として保持し /api/media 経由で配信する。
+  // S3 が設定済みの場合はここは null のまま (url が外部CDN/S3を指す)。
+  data        Bytes?  @map("data")
+  contentType String? @map("content_type")
+
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, sortOrder])

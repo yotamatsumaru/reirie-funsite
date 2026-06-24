@@ -33,22 +33,18 @@ export function ImageManager({
   const [progress, setProgress] = useState<string | null>(null);
 
   async function uploadOne(file: File): Promise<void> {
+    // アップロードと画像レコード作成を 1 リクエストに統合 (multipart)。
+    // 保存先 (S3 or DB) はサーバー側で環境に応じて自動選択される。
     const fd = new FormData();
     fd.append('file', file);
-    const up = await fetch('/api/admin/uploads/image', { method: 'POST', body: fd });
-    if (!up.ok) {
-      const j = (await up.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(j.error?.message ?? `アップロード失敗 (HTTP ${up.status})`);
-    }
-    const { url } = (await up.json()) as { url: string };
-    const add = await fetch(`/api/admin/products/${productId}/images`, {
+    fd.append('alt', file.name.replace(/\.[^.]+$/, ''));
+    const res = await fetch(`/api/admin/products/${productId}/images`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, alt: file.name.replace(/\.[^.]+$/, '') }),
+      body: fd,
     });
-    if (!add.ok) {
-      const j = (await add.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(j.error?.message ?? `画像の登録に失敗 (HTTP ${add.status})`);
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      throw new Error(j.error?.message ?? `アップロード失敗 (HTTP ${res.status})`);
     }
   }
 
