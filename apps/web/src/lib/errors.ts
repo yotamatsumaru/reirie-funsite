@@ -49,6 +49,14 @@ export function errorResponse(err: unknown): NextResponse {
       { status: 422 },
     );
   }
+  // ポイント整合性エラー (PointIntegrityError) はクライアントに原因を返す。
+  // 循環 import を避けるため name で判定する。
+  if (err instanceof Error && err.name === 'PointIntegrityError') {
+    return NextResponse.json(
+      { error: { code: 'POINT_INTEGRITY', message: err.message } },
+      { status: 422 },
+    );
+  }
   // eslint-disable-next-line no-console
   console.error('[api] unexpected error', err);
   return NextResponse.json(
