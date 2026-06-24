@@ -6,8 +6,14 @@ import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { USER_ROLE_LABELS, type UserRoleLiteral } from '@idol/shared';
+import {
+  USER_ROLE_LABELS,
+  type UserRoleLiteral,
+  normalizeAdminCapabilities,
+  type AdminCapabilityLiteral,
+} from '@idol/shared';
 import { AdminRowActions } from './admin-row-actions';
+import { AdminCapabilityEditor } from './admin-capability-editor';
 import { GrantAdminForm } from './grant-admin-form';
 import { InviteAdminForm } from './invite-admin-form';
 import { InvitationList, type InvitationItem } from './invitation-list';
@@ -21,6 +27,7 @@ type UserRow = {
   displayName: string | null;
   fullName: string | null;
   role: UserRoleLiteral;
+  adminCapabilities: string[] | null;
   deletedAt: Date | null;
   createdAt: Date;
 };
@@ -174,27 +181,42 @@ function AdminTable({ users }: { users: UserRow[] }) {
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
           <tr>
             <th className="px-4 py-3">ユーザー</th>
+            <th className="px-4 py-3">管理権限</th>
             <th className="px-4 py-3">登録日</th>
             <th className="px-4 py-3 text-right">操作</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {users.map((u) => (
-            <tr key={u.id} className="hover:bg-slate-50">
-              <td className="px-4 py-3">
-                <p className="font-medium text-slate-900">
-                  {u.displayName ?? '（未設定）'}
-                </p>
-                <p className="text-xs text-slate-500">{u.email}</p>
-              </td>
-              <td className="px-4 py-3 text-xs text-slate-600">
-                {new Date(u.createdAt).toLocaleDateString('ja-JP')}
-              </td>
-              <td className="px-4 py-3 text-right">
-                <AdminRowActions userId={u.id} currentRole={u.role} />
-              </td>
-            </tr>
-          ))}
+          {users.map((u) => {
+            const caps: AdminCapabilityLiteral[] = normalizeAdminCapabilities(
+              u.adminCapabilities,
+            );
+            return (
+              <tr key={u.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 align-top">
+                  <p className="font-medium text-slate-900">
+                    {u.displayName ?? '（未設定）'}
+                  </p>
+                  <p className="text-xs text-slate-500">{u.email}</p>
+                </td>
+                <td className="px-4 py-3 align-top">
+                  {u.role === 'SUPER_ADMIN' ? (
+                    <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                      全権限（スーパー管理者）
+                    </span>
+                  ) : (
+                    <AdminCapabilityEditor userId={u.id} initialCapabilities={caps} />
+                  )}
+                </td>
+                <td className="px-4 py-3 align-top text-xs text-slate-600">
+                  {new Date(u.createdAt).toLocaleDateString('ja-JP')}
+                </td>
+                <td className="px-4 py-3 text-right align-top">
+                  <AdminRowActions userId={u.id} currentRole={u.role} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

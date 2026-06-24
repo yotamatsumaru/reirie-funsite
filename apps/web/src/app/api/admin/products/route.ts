@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { CreateProductSchema, ListProductsQuerySchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import type { Prisma } from '@idol/db';
@@ -13,7 +13,7 @@ import type { Prisma } from '@idol/db';
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('MERCH');
   const url = new URL(req.url);
   const query = ListProductsQuerySchema.parse({
     category: url.searchParams.get('category') ?? undefined,
@@ -61,7 +61,7 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('MERCH');
   const body = CreateProductSchema.parse(await req.json());
 
   const exists = await prisma.product.findUnique({ where: { slug: body.slug } });

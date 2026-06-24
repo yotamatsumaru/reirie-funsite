@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { z } from 'zod';
 import { CreateLiveStreamSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -20,7 +20,7 @@ const CreateLiveAdminSchema = CreateLiveStreamSchema.extend({
 });
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('CONTENT');
   const url = new URL(req.url);
   const status = url.searchParams.get('status');
   const where = status
@@ -35,7 +35,7 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('CONTENT');
   const body = CreateLiveAdminSchema.parse(await req.json());
 
   const created = await prisma.liveStream.create({

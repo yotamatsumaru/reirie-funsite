@@ -9,7 +9,7 @@
  */
 import { NextResponse } from 'next/server';
 import { Prisma, prisma } from '@idol/db';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { IssueCallSerialsSchema } from '@idol/shared';
 import { generateSerialCodeDisplay, toCanonicalSerialCode } from '@/lib/call-serial';
@@ -24,7 +24,7 @@ interface Ctx {
 const MAX_RETRY_PER_CODE = 5;
 
 export const POST = handle(async (req, ctx: Ctx) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const { id: eventId } = await ctx.params;
   const body = await req.json();
   const input = IssueCallSerialsSchema.parse(body);
@@ -82,7 +82,7 @@ export const POST = handle(async (req, ctx: Ctx) => {
 });
 
 export const GET = handle(async (_req, ctx: Ctx) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const { id: eventId } = await ctx.params;
 
   const event = await prisma.callEvent.findUnique({

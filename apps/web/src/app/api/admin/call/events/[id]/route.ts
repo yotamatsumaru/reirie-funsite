@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { UpdateCallEventSchema } from '@idol/shared';
 
@@ -17,7 +17,7 @@ interface Ctx {
 }
 
 export const GET = handle(async (_req, ctx: Ctx) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const { id } = await ctx.params;
   const event = await prisma.callEvent.findUnique({
     where: { id },
@@ -46,7 +46,7 @@ export const GET = handle(async (_req, ctx: Ctx) => {
 });
 
 export const PATCH = handle(async (req, ctx: Ctx) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const { id } = await ctx.params;
   const body = await req.json();
   const input = UpdateCallEventSchema.parse(body);
@@ -71,7 +71,7 @@ export const PATCH = handle(async (req, ctx: Ctx) => {
 });
 
 export const DELETE = handle(async (_req, ctx: Ctx) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const { id } = await ctx.params;
   const existing = await prisma.callEvent.findUnique({
     where: { id },

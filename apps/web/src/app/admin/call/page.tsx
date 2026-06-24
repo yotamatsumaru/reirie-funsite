@@ -12,11 +12,13 @@ import { redirect } from 'next/navigation';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { CallRoom } from '@/components/call/CallRoom';
 import { ShareUrl } from '@/components/call/ShareUrl';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '1on1 コール (演者)' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminCallPage() {
+  await requireCapabilityPage('CALL');
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/admin/call');
 

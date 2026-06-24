@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { UpdateInventorySchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -13,7 +13,7 @@ export const runtime = 'nodejs';
 
 export const GET = handle(
   async (_req: Request, ctx: { params: Promise<{ variantId: string }> }) => {
-    await requireAdmin();
+    await requireCapability('MERCH');
     const { variantId } = await ctx.params;
     const inv = await prisma.inventory.findUnique({
       where: { variantId },
@@ -33,7 +33,7 @@ export const GET = handle(
 
 export const PUT = handle(
   async (req: Request, ctx: { params: Promise<{ variantId: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('MERCH');
     const { variantId } = await ctx.params;
     const body = UpdateInventorySchema.parse(await req.json());
 

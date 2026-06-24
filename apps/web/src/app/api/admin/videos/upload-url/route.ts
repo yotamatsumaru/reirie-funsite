@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { PresignVideoUploadSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle } from '@/lib/errors';
 import { presignVideoUpload } from '@/lib/s3';
 import { logAudit } from '@/lib/audit';
@@ -21,7 +21,7 @@ function safeFilename(name: string): string {
 }
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('CONTENT');
   const body = PresignVideoUploadSchema.parse(await req.json());
 
   const id = crypto.randomUUID();

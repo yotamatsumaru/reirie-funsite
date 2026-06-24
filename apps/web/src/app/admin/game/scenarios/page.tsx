@@ -6,11 +6,13 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: 'シナリオ管理' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminScenariosPage() {
+  await requireCapabilityPage('GAME');
   const items = await prisma.gameScenario.findMany({
     orderBy: [{ characterId: 'asc' }, { chapterNumber: 'asc' }],
     include: {

@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { z } from 'zod';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
@@ -21,7 +21,7 @@ const PublishBodySchema = z.object({
 
 export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireAdmin();
+    const session = await requireCapability('CONTENT');
     const { id } = await ctx.params;
     const body = PublishBodySchema.parse(
       await req.json().catch(() => ({})),

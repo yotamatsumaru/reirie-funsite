@@ -5,14 +5,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AdminGameItemInputSchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireAdmin();
+  await requireCapability('GAME');
   const items = await prisma.gameItem.findMany({
     orderBy: [{ kind: 'asc' }, { sortOrder: 'asc' }],
     include: { character: { select: { id: true, name: true, slug: true } } },
@@ -21,7 +21,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('GAME');
   const body = AdminGameItemInputSchema.parse(await req.json());
   const dup = await prisma.gameItem.findUnique({ where: { slug: body.slug } });
   if (dup) throw errors.conflict('同じ slug のアイテムが既に存在します');

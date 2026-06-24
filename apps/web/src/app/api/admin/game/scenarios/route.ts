@@ -5,14 +5,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AdminGameScenarioInputSchema, validateScenarioScript } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  await requireAdmin();
+  await requireCapability('GAME');
   const url = new URL(req.url);
   const characterId = url.searchParams.get('characterId');
   const items = await prisma.gameScenario.findMany({
@@ -27,7 +27,7 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('GAME');
   const body = AdminGameScenarioInputSchema.parse(await req.json());
 
   const character = await prisma.gameCharacter.findUnique({ where: { id: body.characterId } });

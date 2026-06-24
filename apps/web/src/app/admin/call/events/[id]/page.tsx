@@ -11,6 +11,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { EventControlPanel } from './EventControlPanel';
 import { TicketRow } from './TicketRow';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '特典会イベント詳細' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export default async function AdminCallEventDetailPage({ params }: Props) {
+  await requireCapabilityPage('CALL');
   const { id } = await params;
   const event = await prisma.callEvent.findUnique({
     where: { id },

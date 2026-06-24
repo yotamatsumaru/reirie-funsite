@@ -17,7 +17,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { CallNextFanSchema } from '@idol/shared';
 
@@ -28,7 +28,7 @@ interface Ctx {
 }
 
 export const POST = handle(async (req, ctx: Ctx) => {
-  await requireAdmin();
+  await requireCapability('CALL');
   const { id: eventId } = await ctx.params;
 
   const body = await req.json().catch(() => ({}));

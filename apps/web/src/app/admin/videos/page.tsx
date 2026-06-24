@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '動画管理' };
 export const dynamic = 'force-dynamic';
 
 export default async function AdminVideosPage() {
+  await requireCapabilityPage('CONTENT');
   const videos = await prisma.video.findMany({
     orderBy: { createdAt: 'desc' },
     take: 50,

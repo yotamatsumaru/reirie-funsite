@@ -10,12 +10,14 @@ import { prisma } from '@idol/db';
 import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { AdminCapabilitySchema, normalizeAdminCapabilities } from '@idol/shared';
 
 export const runtime = 'nodejs';
 
 const Schema = z.object({
   email: z.email(),
   role: z.enum(['ADMIN', 'SUPER_ADMIN']),
+  capabilities: z.array(AdminCapabilitySchema).optional(),
 });
 
 export const POST = handle(async (req: Request) => {
@@ -27,6 +29,9 @@ export const POST = handle(async (req: Request) => {
     throw errors.unprocessable('入力値が不正です', parsed.error.flatten());
   }
   const { email, role } = parsed.data;
+  // SUPER_ADMIN は全権限のため capabilities は無視
+  const capabilities =
+    role === 'ADMIN' ? normalizeAdminCapabilities(parsed.data.capabilities ?? []) : [];
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
@@ -41,14 +46,14 @@ export const POST = handle(async (req: Request) => {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { role },
+    data: { role, adminCapabilities: capabilities } as never,
   });
 
   await logAudit({
     userId: session.user.id,
     action: 'admin.grant',
     resource: `user:${user.id}`,
-    metadata: { email, from: user.role, to: role },
+    metadata: { email, from: user.role, to: role, capabilities },
   });
 
   return NextResponse.json({ ok: true, user: { id: user.id, email, role } });

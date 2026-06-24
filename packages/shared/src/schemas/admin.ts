@@ -107,13 +107,25 @@ export const ADMIN_INVITATION_STATUS_LABELS: Record<AdminInvitationStatusLiteral
 /** 招待の有効期限（日数） */
 export const ADMIN_INVITATION_EXPIRY_DAYS = 7;
 
+/** 管理権限 (Admin Capability) */
+export const AdminCapabilitySchema = z.enum(['CONTENT', 'MERCH', 'GAME', 'CALL']);
+export type AdminCapabilityInput = z.infer<typeof AdminCapabilitySchema>;
+
 /** スーパー管理者が管理者を招待する */
 export const CreateAdminInvitationSchema = z.object({
   email: z.email(),
   role: InvitableRoleSchema.default('ADMIN'),
+  // 付与する管理権限 (ADMIN のときのみ意味を持つ。SUPER_ADMIN は全権限)
+  capabilities: z.array(AdminCapabilitySchema).default([]),
   note: z.string().max(500).optional(),
 });
 export type CreateAdminInvitationInput = z.infer<typeof CreateAdminInvitationSchema>;
+
+/** 管理者の権限を更新する (SUPER_ADMIN 限定) */
+export const UpdateAdminCapabilitiesSchema = z.object({
+  capabilities: z.array(AdminCapabilitySchema),
+});
+export type UpdateAdminCapabilitiesInput = z.infer<typeof UpdateAdminCapabilitiesSchema>;
 
 /**
  * 招待受諾。

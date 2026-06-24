@@ -5,14 +5,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { CreateCategorySchema } from '@idol/shared';
-import { requireAdmin } from '@/auth';
+import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireAdmin();
+  await requireCapability('MERCH');
   const items = await prisma.productCategory.findMany({
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     include: {
@@ -23,7 +23,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireAdmin();
+  const session = await requireCapability('MERCH');
   const body = CreateCategorySchema.parse(await req.json());
 
   const exists = await prisma.productCategory.findUnique({ where: { slug: body.slug } });
