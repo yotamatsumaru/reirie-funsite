@@ -1,17 +1,21 @@
 /**
- * /super-admin/users — 全ユーザー一覧 + 検索 + ロール変更 / BAN
+ * /super-admin/users — ファンユーザー (role=USER) の一覧 + 検索 + BAN / ロール変更
+ *
+ * 管理者 (ADMIN / SUPER_ADMIN) はこの画面には表示しません。
+ * 管理者の一覧・付与・剥奪は /super-admin/admins で行います。
  */
+import Link from 'next/link';
 import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { USER_ROLE_LABELS, type UserRoleLiteral } from '@idol/shared';
+import { type UserRoleLiteral } from '@idol/shared';
 import { UserRowActions } from './user-row-actions';
 
-export const metadata: Metadata = { title: 'ユーザー管理 | Super Admin' };
+export const metadata: Metadata = { title: 'ファンユーザー管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
-type SearchParams = { q?: string; role?: string };
+type SearchParams = { q?: string };
 
 type UserRow = {
   id: string;
@@ -32,26 +36,37 @@ export default async function SuperAdminUsersPage({
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() ?? '';
-  const role = sp.role ?? '';
 
-  const allUsers = (await prisma.user.findMany({})) as unknown as UserRow[];
-  const filtered = allUsers.filter((u) => {
+  // ファンユーザー (role=USER) のみを対象にする。管理者はこの画面に表示しない。
+  const fanUsers = (await prisma.user.findMany({
+    where: { role: 'USER' },
+    orderBy: { createdAt: 'desc' },
+  })) as unknown as UserRow[];
+
+  const filtered = fanUsers.filter((u) => {
     if (q) {
       const needle = q.toLowerCase();
       const hay = [u.email, u.displayName, u.fullName].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(needle)) return false;
     }
-    if (role && u.role !== role) return false;
     return true;
   });
 
   return (
     <main>
-      <header className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ユーザー管理</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          全 {allUsers.length} 名 / 検索結果 {filtered.length} 件
-        </p>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ファンユーザー管理</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            ファン会員 (一般ユーザー) {fanUsers.length} 名 / 検索結果 {filtered.length} 件
+          </p>
+        </div>
+        <Link
+          href="/super-admin/admins"
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          管理者の管理へ →
+        </Link>
       </header>
 
       {/* 検索フォーム */}
@@ -68,19 +83,6 @@ export default async function SuperAdminUsersPage({
                 placeholder="例: fan01@example.com"
                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">ロール</label>
-              <select
-                name="role"
-                defaultValue={role}
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">すべて</option>
-                <option value="USER">USER</option>
-                <option value="ADMIN">ADMIN</option>
-                <option value="SUPER_ADMIN">SUPER_ADMIN</option>
-              </select>
             </div>
             <button
               type="submit"
@@ -100,7 +102,6 @@ export default async function SuperAdminUsersPage({
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <tr>
                   <th className="px-4 py-3">ユーザー</th>
-                  <th className="px-4 py-3">ロール</th>
                   <th className="px-4 py-3">状態</th>
                   <th className="px-4 py-3">登録日</th>
                   <th className="px-4 py-3 text-right">操作</th>
@@ -109,8 +110,8 @@ export default async function SuperAdminUsersPage({
               <tbody className="divide-y divide-slate-100">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
-                      該当するユーザーが見つかりません。
+                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
+                      該当するファンユーザーが見つかりません。
                     </td>
                   </tr>
                 )}
@@ -124,9 +125,6 @@ export default async function SuperAdminUsersPage({
                       {u.fullName && (
                         <p className="text-xs text-slate-400">{u.fullName}</p>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <RoleBadge role={u.role} />
                     </td>
                     <td className="px-4 py-3">
                       {u.deletedAt ? (
@@ -143,6 +141,7 @@ export default async function SuperAdminUsersPage({
                         userId={u.id}
                         currentRole={u.role}
                         isBanned={!!u.deletedAt}
+                        showRoleSelect={false}
                       />
                     </td>
                   </tr>
@@ -154,12 +153,6 @@ export default async function SuperAdminUsersPage({
       </Card>
     </main>
   );
-}
-
-function RoleBadge({ role }: { role: UserRoleLiteral }) {
-  if (role === 'SUPER_ADMIN') return <Badge tone="danger">{USER_ROLE_LABELS[role]}</Badge>;
-  if (role === 'ADMIN') return <Badge tone="brand">{USER_ROLE_LABELS[role]}</Badge>;
-  return <Badge tone="gray">{USER_ROLE_LABELS[role]}</Badge>;
 }
 
 function formatDate(d: Date): string {
