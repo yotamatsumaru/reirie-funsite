@@ -111,6 +111,22 @@ enum AdminInvitationStatus {
   EXPIRED // 有効期限切れ
 }
 
+// ポイント取引の理由 (会員ポイント機能)
+enum PointReason {
+  LOGIN_BONUS // 毎日のログインボーナス
+  LOGIN_STREAK // 連続ログインボーナス
+  SOCIAL_SHARE // SNS シェア (X / Instagram)
+  ADMIN_ADJUST // 管理者による手動調整
+  SIGNUP_BONUS // 新規登録ボーナス
+  OTHER
+}
+
+// SNS シェア対象プラットフォーム
+enum SocialPlatform {
+  X // X (旧 Twitter)
+  INSTAGRAM
+}
+
 // =====================================================================
 // Call Event Enums (特典会 1on1)
 // =====================================================================
@@ -201,6 +217,11 @@ model User {
   // SUPER_ADMIN は常に全権限を持つため参照しない。
   adminCapabilities    String[]  @default([]) @map("admin_capabilities")
   marketingOptIn       Boolean   @default(false) @map("marketing_opt_in")
+  // 会員番号 (RR-000123 形式)。登録順の連番を MemberCounter で採番する。
+  // 既存ユーザーへは backfill スクリプトで付与するため nullable。
+  memberNumber         String?   @unique @map("member_number")
+  // 保有ポイント残高 (PointTransaction の合計と一致させる)
+  points               Int       @default(0)
   // Stripe 関連を user に持たせる(1ユーザー1顧客)
   stripeCustomerId     String?   @unique @map("stripe_customer_id")
   // メール確認用トークン
@@ -236,6 +257,11 @@ model User {
   callEventsAsPerformer CallEvent[]  @relation("CallEventPerformer")
   callTickets           CallTicket[]
   callSerialsUsed       CallSerial[] @relation("CallSerialUsedBy")
+
+  // Membership / Points (会員カード & ポイント)
+  pointTransactions PointTransaction[]
+  loginBonusGrants  LoginBonusGrant[]
+  socialShareGrants SocialShareGrant[]
 
   @@index([email])
   @@map("users")
@@ -1105,4 +1131,81 @@ model CallTicket {
   @@index([eventId, queuePos])
   @@index([eventId, status])
   @@map("call_tickets")
+}
+
+// =====================================================================
+// Membership Card & Points (会員カード & ポイント)
+// =====================================================================
+
+/// 会員番号採番カウンター (RR-000123 形式)。
+/// 単一行 (id=1) を $transaction 内で更新し、連番を払い出す。
+/// PM2 cluster でも DB の行ロックで一意性が保証される。
+model MemberCounter {
+  id   Int @id @default(1)
+  next Int @default(1) // 次に払い出す番号
+
+  @@map("member_counter")
+}
+
+/// ポイント取引履歴 (増減の単一の真実)。
+/// User.points は本テーブルの合計と一致するよう、付与/消費は必ず
+/// $transaction で「履歴作成 + 残高更新」を同時に行う。
+model PointTransaction {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  amount    Int // 正=付与, 負=消費
+  balance   Int // 取引後の残高 (監査用スナップショット)
+  reason    PointReason
+  note      String? // 任意メモ (管理者調整の理由など)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("point_transactions")
+}
+
+/// 毎日のログインボーナス受領記録。
+/// userId + date (JST の YYYY-MM-DD) のユニーク制約で 1 日 1 回に限定。
+model LoginBonusGrant {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      String // JST 基準の "YYYY-MM-DD"
+  streak    Int      @default(1) // 連続ログイン日数 (この付与時点)
+  amount    Int // 付与ポイント (基本 + 連続ボーナス)
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("login_bonus_grants")
+}
+
+/// SNS シェアによるポイント付与記録。
+/// userId + date + platform のユニーク制約で「1 プラットフォーム 1 日 1 回」に限定。
+model SocialShareGrant {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  date      String // JST 基準の "YYYY-MM-DD"
+  platform  SocialPlatform
+  amount    Int // 付与ポイント
+  grantedAt DateTime       @default(now()) @map("granted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, platform])
+  @@index([userId, date])
+  @@map("social_share_grants")
+}
+
+/// 永続アプリ設定 (key-value)。
+/// ポイント付与レートなど、管理者が変更し本番でも永続させたい数値を保持。
+/// value は JSON 文字列で保存し、アプリ側でパースする。
+model AppSetting {
+  key       String   @id
+  value     String // JSON 文字列
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
 }
