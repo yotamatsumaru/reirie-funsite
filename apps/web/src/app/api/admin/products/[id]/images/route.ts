@@ -9,6 +9,11 @@ import { AddProductImageSchema, ReorderProductImagesSchema } from '@idol/shared'
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import {
+  ALLOWED_IMAGE_TYPES,
+  MAX_IMAGE_BYTES,
+  createProductImageFromBytes,
+} from '@/lib/product-image';
 
 export const runtime = 'nodejs';
 
@@ -28,7 +33,6 @@ export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
     const session = await requireCapability('MERCH');
     const { id } = await ctx.params;
-    const body = AddProductImageSchema.parse(await req.json());
 
     const product = await prisma.product.findUnique({ where: { id } });
     if (!product) throw errors.notFound('商品が見つかりません');
@@ -40,6 +44,52 @@ export const POST = handle(
     });
     const nextOrder = (last?.sortOrder ?? -1) + 1;
 
+    const contentTypeHeader = req.headers.get('content-type') ?? '';
+
+    // ---- (A) multipart/form-data: ファイルを直接アップロード ----
+    if (contentTypeHeader.includes('multipart/form-data')) {
+      const form = await req.formData().catch(() => null);
+      if (!form) throw errors.badRequest('multipart/form-data の解析に失敗しました');
+
+      const file = form.get('file');
+      if (!(file instanceof File)) throw errors.badRequest('画像ファイル (file) が必要です');
+
+      const ext = ALLOWED_IMAGE_TYPES[file.type];
+      if (!ext) {
+        throw errors.badRequest('対応していない画像形式です (JPEG/PNG/WebP/GIF/AVIF)');
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        throw errors.badRequest('画像サイズは 8MB 以内にしてください');
+      }
+
+      const altRaw = form.get('alt');
+      const alt = typeof altRaw === 'string' && altRaw.trim() !== '' ? altRaw.trim() : null;
+      const bytes = Buffer.from(await file.arrayBuffer());
+
+      const stored = await createProductImageFromBytes({
+        productId: id,
+        bytes,
+        contentType: file.type,
+        ext,
+        alt,
+        sortOrder: nextOrder,
+      });
+
+      await logAudit({
+        userId: session.user.id,
+        action: 'admin.product.image_added',
+        resource: `product:${id}`,
+        metadata: { imageId: stored.id, storage: stored.storage, size: file.size },
+      });
+
+      return NextResponse.json(
+        { id: stored.id, url: stored.url, sortOrder: nextOrder },
+        { status: 201 },
+      );
+    }
+
+    // ---- (B) application/json: URL を直接登録 (外部URL / seed 互換) ----
+    const body = AddProductImageSchema.parse(await req.json());
     const created = await prisma.productImage.create({
       data: {
         productId: id,
@@ -53,7 +103,7 @@ export const POST = handle(
       userId: session.user.id,
       action: 'admin.product.image_added',
       resource: `product:${id}`,
-      metadata: { imageId: created.id },
+      metadata: { imageId: created.id, storage: 'url' },
     });
 
     return NextResponse.json(created, { status: 201 });
