@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Cormorant_Garamond, Zen_Maru_Gothic, Shrikhand } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/layout/Providers';
-import { Header } from '@/components/layout/Header';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { Footer } from '@/components/layout/Footer';
 
 // ===== Rosy Twilight タイポグラフィ =====
@@ -49,11 +49,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="ja"
       className={`${zenMaru.variable} ${cormorant.variable} ${shrikhand.variable}`}
     >
-      <body className="min-h-screen flex flex-col">
+      <body className="min-h-screen">
         <Providers>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
+          <Sidebar />
+          {/* PC ではサイドバー幅 (w-64 = 16rem) 分だけ右にオフセット */}
+          <div className="flex min-h-screen flex-col md:pl-64">
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
         </Providers>
       </body>
     </html>

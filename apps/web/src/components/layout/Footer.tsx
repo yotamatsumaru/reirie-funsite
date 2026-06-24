@@ -1,7 +1,7 @@
 export function Footer() {
   return (
-    <footer className="mt-12 border-t border-white/15 bg-twilight-plum text-twilight-cream/70 sm:mt-16">
-      <div className="mx-auto max-w-6xl px-4 py-8 text-sm sm:py-10 safe-bottom">
+    <footer className="mt-12 border-t border-twilight-amethyst/15 bg-twilight-plum text-twilight-cream/70 sm:mt-16">
+      <div className="mx-auto max-w-5xl px-4 py-8 text-sm sm:px-8 sm:py-10 safe-bottom">
         <div className="flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
           <div>
             <p className="font-serif text-lg tracking-wide text-twilight-cream">ReiRieRoom</p>
