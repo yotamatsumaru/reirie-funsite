@@ -152,16 +152,6 @@ function DayCard({ day }: { day: LoginBonusDay }) {
         ) : (
           <p className="text-[9px] font-semibold text-slate-500">Day {day.day}</p>
         )}
-        {/* バーコード風 */}
-        <div className="mt-0.5 flex h-2 items-stretch justify-center gap-[1px] opacity-60">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <span
-              key={i}
-              className="w-[1.5px] bg-slate-800"
-              style={{ height: i % 2 === 0 ? '100%' : '70%' }}
-            />
-          ))}
-        </div>
       </div>
     </div>
   );
