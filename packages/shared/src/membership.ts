@@ -173,6 +173,41 @@ export function buildLoginBonusCalendar(
 }
 
 // ---------------------------------------------------------------------
+// ポイント整合性 (台帳 vs 残高) の判定ロジック
+// ---------------------------------------------------------------------
+
+/**
+ * 1 取引で動かせるポイントの絶対値上限 (防御的上限)。
+ * サーバ側 (apps/web/src/lib/points.ts) でも同じ値を用いて、
+ * バグや不正なレート設定による異常な大量付与をブロックする。
+ */
+export const MAX_POINTS_PER_TX = 1_000_000;
+
+/**
+ * ポイント取引の amount が安全な範囲か検証する。
+ *  - 整数であること
+ *  - 0 でないこと
+ *  - |amount| <= MAX_POINTS_PER_TX
+ */
+export function isValidPointAmount(amount: number): boolean {
+  return (
+    Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= MAX_POINTS_PER_TX
+  );
+}
+
+/**
+ * 保有残高と台帳合計が整合しているか判定する。
+ *  - storedBalance === ledgerSum (台帳と一致)
+ *  - かつ storedBalance >= 0 (残高はマイナスにならない)
+ */
+export function isPointBalanceConsistent(
+  storedBalance: number,
+  ledgerSum: number,
+): boolean {
+  return storedBalance === ledgerSum && storedBalance >= 0;
+}
+
+// ---------------------------------------------------------------------
 // API 入力スキーマ
 // ---------------------------------------------------------------------
 

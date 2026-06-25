@@ -11,6 +11,9 @@ import {
   PointRateSettingsSchema,
   SocialShareInputSchema,
   AdminAdjustPointsSchema,
+  isValidPointAmount,
+  isPointBalanceConsistent,
+  MAX_POINTS_PER_TX,
 } from './membership';
 
 describe('formatMemberNumber', () => {
@@ -151,5 +154,44 @@ describe('AdminAdjustPointsSchema', () => {
         amount: 0,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('isValidPointAmount', () => {
+  it('通常の正の整数を許可', () => {
+    expect(isValidPointAmount(10)).toBe(true);
+    expect(isValidPointAmount(1)).toBe(true);
+  });
+  it('負の整数も許可 (消費/管理者調整)', () => {
+    expect(isValidPointAmount(-50)).toBe(true);
+  });
+  it('0 は拒否', () => {
+    expect(isValidPointAmount(0)).toBe(false);
+  });
+  it('小数は拒否', () => {
+    expect(isValidPointAmount(10.5)).toBe(false);
+  });
+  it('NaN / Infinity は拒否', () => {
+    expect(isValidPointAmount(NaN)).toBe(false);
+    expect(isValidPointAmount(Infinity)).toBe(false);
+  });
+  it('上限ちょうどは許可、超過は拒否', () => {
+    expect(isValidPointAmount(MAX_POINTS_PER_TX)).toBe(true);
+    expect(isValidPointAmount(-MAX_POINTS_PER_TX)).toBe(true);
+    expect(isValidPointAmount(MAX_POINTS_PER_TX + 1)).toBe(false);
+  });
+});
+
+describe('isPointBalanceConsistent', () => {
+  it('残高と台帳合計が一致し 0 以上なら整合', () => {
+    expect(isPointBalanceConsistent(100, 100)).toBe(true);
+    expect(isPointBalanceConsistent(0, 0)).toBe(true);
+  });
+  it('残高と台帳合計が不一致なら不整合', () => {
+    expect(isPointBalanceConsistent(100, 90)).toBe(false);
+    expect(isPointBalanceConsistent(90, 100)).toBe(false);
+  });
+  it('残高がマイナスなら (一致していても) 不整合扱い', () => {
+    expect(isPointBalanceConsistent(-10, -10)).toBe(false);
   });
 });

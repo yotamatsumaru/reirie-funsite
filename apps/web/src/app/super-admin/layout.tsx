@@ -21,6 +21,8 @@ import {
   ArrowLeftRight,
   ShieldAlert,
   Coins,
+  Wallet,
+  ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -40,6 +42,8 @@ const NAV: NavItem[] = [
   { href: '/super-admin/orders', label: '注文・売上', icon: Receipt },
   { href: '/super-admin/game', label: 'ゲーム経済', icon: Gamepad2 },
   { href: '/super-admin/points', label: 'ポイント設定', icon: Coins },
+  { href: '/super-admin/points/users', label: 'ポイント状況', icon: Wallet },
+  { href: '/super-admin/points/transactions', label: 'ポイント取引ログ', icon: ListChecks },
   { href: '/super-admin/announcements', label: 'お知らせ', icon: Megaphone },
   { href: '/super-admin/settings', label: 'システム設定', icon: Settings },
   { href: '/super-admin/audit', label: '監査ログ', icon: ScrollText },
