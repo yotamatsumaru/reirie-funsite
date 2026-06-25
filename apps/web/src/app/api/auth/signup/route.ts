@@ -5,7 +5,7 @@ import { SignUpSchema } from '@idol/shared';
 import { hashPassword } from '@/lib/password';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import { sendEmail } from '@/lib/email';
+import { sendWelcomeEmail } from '@/lib/email';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -37,15 +37,33 @@ export const POST = handle(async (req: Request) => {
 
   await logAudit({ userId: user.id, action: 'user.signup' });
 
+  // ウェルカム & メール認証メールを送信する。
+  // メール送信は外部 (SES) 依存のため、失敗してもアカウント作成自体は成功とする。
+  // (ユーザーは後からログインしてメール再送できる導線を用意する想定)
   const verifyUrl = `${env.appBaseUrl}/verify-email?token=${verificationToken}`;
-  await sendEmail({
-    to: user.email,
-    subject: '【ファンクラブ】メールアドレスの確認',
-    text: `ご登録ありがとうございます。\n以下のURLからメール認証を完了してください。\n${verifyUrl}\n\nこのURLは24時間有効です。`,
-  });
+  let emailSent = true;
+  try {
+    await sendWelcomeEmail({
+      to: user.email,
+      displayName: user.displayName ?? '',
+      verifyUrl,
+    });
+  } catch (err) {
+    emailSent = false;
+    // eslint-disable-next-line no-console
+    console.error('[signup] welcome email failed', err);
+    await logAudit({
+      userId: user.id,
+      action: 'user.signup_email_failed',
+      metadata: { reason: err instanceof Error ? err.message : 'unknown' },
+    });
+  }
 
   return NextResponse.json({
-    message: '確認メールを送信しました。メール内のリンクからメール認証を完了してください。',
+    message: emailSent
+      ? '確認メールを送信しました。メール内のリンクからメール認証を完了してください。'
+      : 'アカウントを作成しました。確認メールの送信に失敗したため、ログイン後に再送してください。',
     userId: user.id,
+    emailSent,
   });
 });

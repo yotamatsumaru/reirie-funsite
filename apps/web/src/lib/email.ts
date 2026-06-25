@@ -36,6 +36,83 @@ export async function sendEmail(params: {
   );
 }
 
+/** HTML をエスケープ (メール本文に値を差し込む際の安全対策) */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * 新規登録時のウェルカム & メール認証メールを送信する。
+ *  - displayName: 宛名 (ニックネーム)
+ *  - verifyUrl: メール認証用の絶対URL
+ *  - siteName: サイト名 (件名・本文に使用)
+ *
+ * テキスト版と HTML 版の両方を送信し、認証ボタンを目立たせる。
+ */
+export async function sendWelcomeEmail(params: {
+  to: string;
+  displayName: string;
+  verifyUrl: string;
+  siteName?: string;
+}): Promise<void> {
+  const siteName = params.siteName ?? 'ReiRieRoom';
+  const name = params.displayName?.trim() || 'お客';
+
+  const text =
+    `${name} さん\n\n` +
+    `${siteName} へのご登録ありがとうございます！\n\n` +
+    `ご利用を開始するには、以下のURLからメールアドレスの確認を完了してください。\n` +
+    `${params.verifyUrl}\n\n` +
+    `※ このリンクは安全のため、心当たりがない場合は破棄してください。\n\n` +
+    `――――――――――\n${siteName} 運営事務局`;
+
+  const safeName = escapeHtml(name);
+  const safeUrl = escapeHtml(params.verifyUrl);
+  const safeSite = escapeHtml(siteName);
+
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f1f7;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#2d2235;">
+  <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+    <div style="background:linear-gradient(135deg,#4a2d5c,#7c5295);border-radius:16px 16px 0 0;padding:28px 24px;text-align:center;">
+      <h1 style="margin:0;color:#fdf8ff;font-size:20px;letter-spacing:.05em;">${safeSite}</h1>
+      <p style="margin:6px 0 0;color:#e9d8f5;font-size:12px;">ご登録ありがとうございます</p>
+    </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:28px 24px;box-shadow:0 4px 20px rgba(74,45,92,.08);">
+      <p style="margin:0 0 16px;font-size:15px;">${safeName} さん、ようこそ！</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#5a4d66;">
+        ご利用を開始するには、下のボタンからメールアドレスの確認を完了してください。
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${safeUrl}"
+           style="display:inline-block;background:#7c5295;color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:999px;">
+          メールアドレスを確認する
+        </a>
+      </div>
+      <p style="margin:0 0 8px;font-size:12px;color:#8a7d96;">ボタンが押せない場合は、以下のURLをブラウザに貼り付けてください。</p>
+      <p style="margin:0 0 20px;font-size:12px;word-break:break-all;"><a href="${safeUrl}" style="color:#7c5295;">${safeUrl}</a></p>
+      <hr style="border:none;border-top:1px solid #efeaf4;margin:20px 0;">
+      <p style="margin:0;font-size:11px;color:#a99fb3;line-height:1.6;">
+        心当たりがない場合は、このメールを破棄してください。<br>
+        ${safeSite} 運営事務局
+      </p>
+    </div>
+  </div>
+</body></html>`;
+
+  await sendEmail({
+    to: params.to,
+    subject: `【${siteName}】ご登録ありがとうございます（メール確認のお願い）`,
+    text,
+    html,
+  });
+}
+
 /**
  * 管理者招待メールを送信する。
  *  - acceptUrl: 受諾ページへの絶対URL

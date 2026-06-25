@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { PREFECTURES } from '@idol/shared';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { toast } from '@/stores/ui-store';
 
 const INITIAL = {
   displayName: '',
@@ -53,27 +51,19 @@ export function SignUpForm() {
           password: form.password,
         }),
       });
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
         throw new Error(json?.error?.message ?? '登録に失敗しました');
       }
-      const signInRes = await signIn('credentials', {
+      // 登録成功 → 確認画面へ遷移し「確認メールを送信した」ことを明示する。
+      // (メール認証を案内するため、ここでは自動ログインしない)
+      const qs = new URLSearchParams({
         email: form.email,
-        password: form.password,
-        redirect: false,
-        callbackUrl: '/me',
+        emailSent: json?.emailSent === false ? '0' : '1',
       });
-      if (!signInRes || signInRes.error) {
-        toast.success('登録完了。ログイン画面でログインしてください');
-        router.push('/signin');
-        return;
-      }
-      toast.success('登録が完了しました');
-      router.push('/me');
-      router.refresh();
+      router.push(`/signup/complete?${qs.toString()}`);
     } catch (e) {
       setError((e as Error).message);
-    } finally {
       setLoading(false);
     }
   };
