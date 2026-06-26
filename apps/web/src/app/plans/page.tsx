@@ -31,7 +31,7 @@ export default async function PlansPage() {
         <p className="mt-3 text-sm text-slate-600 sm:text-base">
           応援のかたちに合わせて 3 つのプランをご用意しました。
           <br className="hidden sm:block" />
-          すべて月単位で解約可能、年額プランは 2 ヶ月分お得です。
+          PREMIUM は会報誌を年2回お届け＆ポイント付与率が一番お得です。
         </p>
       </header>
 
@@ -62,7 +62,7 @@ export default async function PlansPage() {
                 <th className="bg-brand-50 px-4 py-3 text-center font-semibold text-brand-900">
                   {PLAN_LABELS.PREMIUM}
                   <div className="mt-0.5 text-xs font-normal text-brand-700">
-                    ¥{PLAN_PRICES.PREMIUM.monthly.toLocaleString()}/月
+                    ¥{PLAN_PRICES.PREMIUM.yearly.toLocaleString()}/年
                   </div>
                 </th>
               </tr>
@@ -141,9 +141,11 @@ export default async function PlansPage() {
       <section className="mt-16 rounded-xl border border-slate-200 bg-slate-50 p-6 text-xs leading-relaxed text-slate-600 sm:text-sm">
         <h3 className="mb-2 font-semibold text-slate-800">ご利用にあたって</h3>
         <ul className="space-y-1">
-          <li>• 月額プランは毎月、年額プランは毎年自動更新されます。</li>
+          <li>• STANDARD は月額 (毎月)、PREMIUM は年額 (毎年) で自動更新されます。</li>
           <li>• いつでもマイページから解約できます。解約後は当該課金期間の終了まで利用可能です。</li>
-          <li>• 表示価格は税込みです。決済は Stripe を利用しています。</li>
+          <li>• 表示価格はすべて税込みです。決済は Stripe を利用しています。</li>
+          <li>• PREMIUM は会報誌を年2回お届けします (発送先はマイページの住所が使用されます)。</li>
+          <li>• サイト内ポイント (ログインボーナス・SNS シェア・ミニゲーム報酬) の付与率はプランに応じて優遇されます (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)。</li>
           <li>• プラン変更時は次回更新時から適用されます (即時変更は差額調整あり)。</li>
           <li>• ゲーム内のアイテム・章購入は別途課金となります (景品表示法に基づき確定報酬制を採用)。</li>
         </ul>

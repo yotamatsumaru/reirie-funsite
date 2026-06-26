@@ -9,11 +9,11 @@ import {
   PLAN_LABELS,
   PLAN_PRICES,
   PLAN_HIGHLIGHTS,
+  PLAN_BILLING_INTERVAL,
   RECOMMENDED_PLAN,
   type PlanTypeLiteral,
 } from '@idol/shared';
 
-type Interval = 'MONTH' | 'YEAR';
 type PaidPlan = 'STANDARD' | 'PREMIUM';
 
 interface Props {
@@ -23,7 +23,6 @@ interface Props {
 
 export function PlanSubscribeSection({ currentPlan, isAuthenticated }: Props) {
   const router = useRouter();
-  const [interval, setInterval] = useState<Interval>('MONTH');
   const [pending, startTransition] = useTransition();
   const [submittingPlan, setSubmittingPlan] = useState<PaidPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +33,9 @@ export function PlanSubscribeSection({ currentPlan, isAuthenticated }: Props) {
       router.push(`/signin?next=${encodeURIComponent('/plans')}`);
       return;
     }
+
+    // プランごとに提供する課金サイクルは固定 (STANDARD=月額 / PREMIUM=年額)
+    const interval = PLAN_BILLING_INTERVAL[plan] ?? 'MONTH';
 
     setSubmittingPlan(plan);
     startTransition(async () => {
@@ -70,33 +72,6 @@ export function PlanSubscribeSection({ currentPlan, isAuthenticated }: Props) {
 
   return (
     <section>
-      {/* 月額/年額 切替 */}
-      <div className="mb-8 flex items-center justify-center">
-        <div className="inline-flex rounded-full border border-slate-300 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setInterval('MONTH')}
-            className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
-              interval === 'MONTH' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            月額
-          </button>
-          <button
-            type="button"
-            onClick={() => setInterval('YEAR')}
-            className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
-              interval === 'YEAR' ? 'bg-brand-600 text-white' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            年額
-            <span className="ml-1 rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-              2ヶ月分お得
-            </span>
-          </button>
-        </div>
-      </div>
-
       {error && (
         <div className="mx-auto mb-6 max-w-md rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-700">
           {error}
@@ -109,7 +84,9 @@ export function PlanSubscribeSection({ currentPlan, isAuthenticated }: Props) {
           const isCurrent = currentPlan === p;
           const isRec = p === RECOMMENDED_PLAN;
           const price = PLAN_PRICES[p];
-          const displayPrice = interval === 'YEAR' ? price.yearly : price.monthly;
+          const planInterval = PLAN_BILLING_INTERVAL[p]; // null=無料 / 'MONTH' / 'YEAR'
+          const displayPrice = planInterval === 'YEAR' ? price.yearly : price.monthly;
+          const intervalLabel = planInterval === 'YEAR' ? '年' : '月';
           const submitting = pending && submittingPlan === p;
 
           return (
@@ -129,14 +106,22 @@ export function PlanSubscribeSection({ currentPlan, isAuthenticated }: Props) {
 
               <h3 className="text-lg font-bold text-slate-900">{PLAN_LABELS[p]}</h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-3xl font-extrabold text-slate-900">
-                  ¥{displayPrice.toLocaleString()}
-                </span>
-                <span className="text-sm text-slate-500">/ {interval === 'YEAR' ? '年' : '月'}</span>
+                {p === 'FREE' ? (
+                  <span className="text-3xl font-extrabold text-slate-900">無料</span>
+                ) : (
+                  <>
+                    <span className="text-3xl font-extrabold text-slate-900">
+                      ¥{displayPrice.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-slate-500">/ {intervalLabel}</span>
+                  </>
+                )}
               </div>
-              {interval === 'YEAR' && p !== 'FREE' && (
+              {p !== 'FREE' && (
                 <p className="mt-1 text-xs text-slate-500">
-                  月額換算: ¥{Math.floor(price.yearly / 12).toLocaleString()}
+                  {planInterval === 'YEAR'
+                    ? `月額換算 ¥${Math.floor(price.yearly / 12).toLocaleString()} ・ 税込`
+                    : '税込'}
                 </p>
               )}
 

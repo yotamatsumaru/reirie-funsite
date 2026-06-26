@@ -19,7 +19,9 @@ import {
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
   remainingPlays,
+  applyPlanPointMultiplier,
   type PointRateSettings,
+  type PlanTypeLiteral,
   type SocialPlatformLiteral,
   type AcchiResult,
 } from '@idol/shared';
@@ -50,6 +52,27 @@ export class PointIntegrityError extends Error {
 /** Prisma が一意制約違反 (P2002) を投げたか判定 */
 function isUniqueViolation(e: unknown): boolean {
   return e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+}
+
+/**
+ * トランザクション内でユーザーの現在プランを取得する。
+ *  - プランは「有効なサブスクリプション (ACTIVE / TRIALING / PAST_DUE)」の
+ *    planType から判定する (auth.ts のセッション解決と同じロジック)。
+ *  - 該当が無ければ 'FREE' (倍率 ×1.0)。
+ */
+async function getUserPlanTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+): Promise<PlanTypeLiteral> {
+  const sub = await tx.subscription.findFirst({
+    where: {
+      userId,
+      status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { planType: true },
+  });
+  return (sub?.planType as PlanTypeLiteral | undefined) ?? 'FREE';
 }
 
 /**
@@ -193,7 +216,10 @@ export async function grantLoginBonus(
         select: { streak: true },
       });
       const computedStreak = (yGrant?.streak ?? 0) + 1;
-      const computedAmount = computeLoginBonusAmount(computedStreak, rates);
+      const baseAmount = computeLoginBonusAmount(computedStreak, rates);
+      // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+      const plan = await getUserPlanTx(tx, userId);
+      const computedAmount = applyPlanPointMultiplier(baseAmount, plan);
 
       // ユニーク制約 (userId+date) で二重付与を防止
       await tx.loginBonusGrant.create({
@@ -202,7 +228,8 @@ export async function grantLoginBonus(
       const bal = await applyPoints(tx, {
         userId,
         amount: computedAmount,
-        reason: computedAmount > rates.loginBonusBase ? 'LOGIN_STREAK' : 'LOGIN_BONUS',
+        // 連続ボーナス節目かどうかは「倍率適用前」のベース額で判定する
+        reason: baseAmount > rates.loginBonusBase ? 'LOGIN_STREAK' : 'LOGIN_BONUS',
       });
       return { amount: computedAmount, streak: computedStreak, balance: bal };
     });
@@ -244,7 +271,6 @@ export async function grantSocialShare(
   now: Date = new Date(),
 ): Promise<SocialShareResult> {
   const today = jstDateKey(now);
-  const amount = rates.socialSharePoints;
 
   const existing = await prisma.socialShareGrant.findUnique({
     where: { userId_date_platform: { userId, date: today, platform } },
@@ -258,7 +284,11 @@ export async function grantSocialShare(
   }
 
   try {
-    const balance = await prisma.$transaction(async (tx) => {
+    const { amount, balance } = await prisma.$transaction(async (tx) => {
+      // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+      const plan = await getUserPlanTx(tx, userId);
+      const amount = applyPlanPointMultiplier(rates.socialSharePoints, plan);
+
       await tx.socialShareGrant.create({
         data: { userId, date: today, platform, amount },
       });
@@ -268,9 +298,10 @@ export async function grantSocialShare(
           where: { id: userId },
           select: { points: true },
         });
-        return u?.points ?? 0;
+        return { amount, balance: u?.points ?? 0 };
       }
-      return applyPoints(tx, { userId, amount, reason: 'SOCIAL_SHARE' });
+      const bal = await applyPoints(tx, { userId, amount, reason: 'SOCIAL_SHARE' });
+      return { amount, balance: bal };
     });
     return { granted: true, amount, balance, alreadyGranted: false };
   } catch (e) {
@@ -492,9 +523,13 @@ export async function recordAcchiPlay(
   now: Date = new Date(),
 ): Promise<AcchiPlayPersistResult> {
   const date = jstDateKey(now);
-  const reward = result === 'WIN' ? ACCHI_WIN_REWARD : 0;
 
   return prisma.$transaction(async (tx) => {
+    // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+    const plan = await getUserPlanTx(tx, userId);
+    const reward =
+      result === 'WIN' ? applyPlanPointMultiplier(ACCHI_WIN_REWARD, plan) : 0;
+
     // トランザクション内で当日プレイ数を数え、上限チェック (競合に強い)
     const playedBefore = await tx.miniGamePlay.count({
       where: { userId, gameType: 'ACCHI_MUITE_HOI', date },

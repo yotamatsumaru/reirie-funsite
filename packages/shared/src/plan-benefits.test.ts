@@ -14,6 +14,10 @@ import {
   PLAN_BENEFITS_TABLE,
   PLAN_HIGHLIGHTS,
   DEFAULT_BONUS_GIFT_SLUG,
+  PLAN_POINT_MULTIPLIER,
+  PLAN_POINT_MULTIPLIER_LABEL,
+  NEWSLETTER_ISSUES_PER_YEAR,
+  applyPlanPointMultiplier,
   canPlayQuality,
   allowedVideoQualities,
   groupedPlanBenefits,
@@ -166,6 +170,66 @@ describe('PLAN_HIGHLIGHTS', () => {
 describe('DEFAULT_BONUS_GIFT_SLUG', () => {
   it('snake-case 形式の slug', () => {
     expect(DEFAULT_BONUS_GIFT_SLUG).toMatch(/^[a-z0-9-]+$/);
+  });
+});
+
+describe('PLAN_POINT_MULTIPLIER', () => {
+  it('FREE=1.0 / STANDARD=1.2 / PREMIUM=2.0', () => {
+    expect(PLAN_POINT_MULTIPLIER.FREE).toBe(1.0);
+    expect(PLAN_POINT_MULTIPLIER.STANDARD).toBe(1.2);
+    expect(PLAN_POINT_MULTIPLIER.PREMIUM).toBe(2.0);
+  });
+
+  it('PREMIUM が最も付与率が良い', () => {
+    expect(PLAN_POINT_MULTIPLIER.PREMIUM).toBeGreaterThan(PLAN_POINT_MULTIPLIER.STANDARD);
+    expect(PLAN_POINT_MULTIPLIER.STANDARD).toBeGreaterThanOrEqual(PLAN_POINT_MULTIPLIER.FREE);
+  });
+
+  it('表示ラベルが定義されている', () => {
+    expect(PLAN_POINT_MULTIPLIER_LABEL.FREE).toBe('×1.0');
+    expect(PLAN_POINT_MULTIPLIER_LABEL.STANDARD).toBe('×1.2');
+    expect(PLAN_POINT_MULTIPLIER_LABEL.PREMIUM).toBe('×2.0');
+  });
+});
+
+describe('applyPlanPointMultiplier', () => {
+  it('FREE はベース額そのまま (整数)', () => {
+    expect(applyPlanPointMultiplier(10, 'FREE')).toBe(10);
+    expect(applyPlanPointMultiplier(30, 'FREE')).toBe(30);
+  });
+
+  it('STANDARD は ×1.2 で四捨五入', () => {
+    expect(applyPlanPointMultiplier(10, 'STANDARD')).toBe(12); // 12
+    expect(applyPlanPointMultiplier(30, 'STANDARD')).toBe(36); // 36
+    expect(applyPlanPointMultiplier(5, 'STANDARD')).toBe(6); // 6.0
+    expect(applyPlanPointMultiplier(7, 'STANDARD')).toBe(8); // 8.4 -> 8
+  });
+
+  it('PREMIUM は ×2.0', () => {
+    expect(applyPlanPointMultiplier(10, 'PREMIUM')).toBe(20);
+    expect(applyPlanPointMultiplier(30, 'PREMIUM')).toBe(60);
+  });
+
+  it('0 以下や非数は 0 を返す', () => {
+    expect(applyPlanPointMultiplier(0, 'PREMIUM')).toBe(0);
+    expect(applyPlanPointMultiplier(-5, 'PREMIUM')).toBe(0);
+    expect(applyPlanPointMultiplier(Number.NaN, 'PREMIUM')).toBe(0);
+  });
+
+  it('常に整数を返す', () => {
+    for (const plan of ['FREE', 'STANDARD', 'PREMIUM'] as const) {
+      for (const base of [1, 3, 7, 11, 13, 17, 23]) {
+        expect(Number.isInteger(applyPlanPointMultiplier(base, plan))).toBe(true);
+      }
+    }
+  });
+});
+
+describe('NEWSLETTER_ISSUES_PER_YEAR', () => {
+  it('PREMIUM のみ年2回、他は 0', () => {
+    expect(NEWSLETTER_ISSUES_PER_YEAR.FREE).toBe(0);
+    expect(NEWSLETTER_ISSUES_PER_YEAR.STANDARD).toBe(0);
+    expect(NEWSLETTER_ISSUES_PER_YEAR.PREMIUM).toBe(2);
   });
 });
 
