@@ -44,6 +44,16 @@ type Initial = {
   balance: number;
 };
 
+type SequenceRound = {
+  jankenPlayer: JankenHand;
+  jankenCpu: JankenHand;
+  jankenOutcome: 'WIN' | 'LOSE' | 'DRAW';
+  decided: boolean;
+  pointedDirection: AcchiDirection | null;
+  facedDirection: AcchiDirection | null;
+  attacker: 'PLAYER' | 'CPU' | null;
+};
+
 type PlayResponse = {
   janken: { player: JankenHand; cpu: JankenHand; outcome: 'WIN' | 'LOSE' | 'DRAW' };
   direction: { player: AcchiDirection; cpu: AcchiDirection };
@@ -52,6 +62,7 @@ type PlayResponse = {
   balance: number;
   playedToday: number;
   remaining: number;
+  sequence?: SequenceRound[];
 };
 
 const HAND_EMOJI: Record<JankenHand, string> = {
@@ -195,7 +206,8 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
           </p>
           <p className="mb-4 text-lg font-bold text-slate-800">あっち向いて… ホイ！</p>
           <p className="mb-4 text-xs text-slate-400">
-            (勝っていれば指差した方向に、負けていればその方向を向きます)
+            じゃんけんに勝てばあなたが「指す」番。{CHARACTER_NAME} が同じ方向を向いたら
+            あなたの勝ち！（負けると {CHARACTER_NAME} が指す方向につられたら負け）
           </p>
           <div className="mx-auto grid max-w-[220px] grid-cols-3 grid-rows-3 gap-2">
             <div />
@@ -273,7 +285,9 @@ function ResultCard({
         <CharacterAvatar pose={cpuPose} bob={false} />
       </div>
       <p className="text-xs text-slate-400">
-        {CHARACTER_NAME} は「{DIR_LABEL[outcome.direction.cpu]}」を向いた！
+        {outcome.janken.outcome === 'WIN'
+          ? `あなたが「${DIR_LABEL[outcome.direction.player]}」を指す → ${CHARACTER_NAME} は「${DIR_LABEL[outcome.direction.cpu]}」を向いた！`
+          : `${CHARACTER_NAME} が「${DIR_LABEL[outcome.direction.cpu]}」を指す！`}
       </p>
 
       <p className="mt-3 text-4xl animate-acchi-pop">{theme.emoji}</p>
