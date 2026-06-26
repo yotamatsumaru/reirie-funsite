@@ -11,6 +11,10 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { type UserRoleLiteral } from '@idol/shared';
 import { UserRowActions } from './user-row-actions';
+import { RankBadge } from '@/components/membership/RankBadge';
+import { RankTiersClient } from './rank-tiers-client';
+import { getMemberRankTiers } from '@/lib/app-setting';
+import { getMemberRanksForUsers } from '@/lib/membership-rank';
 
 export const metadata: Metadata = { title: 'ファンユーザー管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -52,6 +56,13 @@ export default async function SuperAdminUsersPage({
     return true;
   });
 
+  // 会員ランク (昇格条件 + 各ユーザーのランク・実績) を集計
+  const rankTiers = await getMemberRankTiers();
+  const ranksByUser = await getMemberRanksForUsers(
+    filtered.map((u) => u.id),
+    rankTiers,
+  );
+
   return (
     <main>
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -68,6 +79,9 @@ export default async function SuperAdminUsersPage({
           管理者の管理へ →
         </Link>
       </header>
+
+      {/* 会員ランク 昇格条件 (非公開・管理者専用) */}
+      <RankTiersClient initial={rankTiers} />
 
       {/* 検索フォーム */}
       <Card className="mb-4">
@@ -102,6 +116,7 @@ export default async function SuperAdminUsersPage({
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <tr>
                   <th className="px-4 py-3">ユーザー</th>
+                  <th className="px-4 py-3">ランク</th>
                   <th className="px-4 py-3">状態</th>
                   <th className="px-4 py-3">登録日</th>
                   <th className="px-4 py-3 text-right">操作</th>
@@ -110,12 +125,14 @@ export default async function SuperAdminUsersPage({
               <tbody className="divide-y divide-slate-100">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-500">
                       該当するファンユーザーが見つかりません。
                     </td>
                   </tr>
                 )}
-                {filtered.map((u) => (
+                {filtered.map((u) => {
+                  const ru = ranksByUser[u.id];
+                  return (
                   <tr key={u.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900">
@@ -124,6 +141,18 @@ export default async function SuperAdminUsersPage({
                       <p className="text-xs text-slate-500">{u.email}</p>
                       {u.fullName && (
                         <p className="text-xs text-slate-400">{u.fullName}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {ru ? (
+                        <div>
+                          <RankBadge rank={ru.rank} size="sm" />
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            ログイン {ru.metrics.loginDays}日 / 買い物 {ru.metrics.purchaseCount}回
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -145,7 +174,8 @@ export default async function SuperAdminUsersPage({
                       />
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

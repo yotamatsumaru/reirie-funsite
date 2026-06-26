@@ -14,6 +14,11 @@ import {
   DEFAULT_ACCHI_WIN_SETTINGS,
   AcchiWinSettingsByPlanSchema,
   type AcchiWinSettingsByPlan,
+  MEMBER_RANK_TIERS_KEY,
+  DEFAULT_MEMBER_RANK_TIERS,
+  MemberRankTiersSchema,
+  normalizeMemberRankTiers,
+  type MemberRankTiers,
 } from '@idol/shared';
 
 /**
@@ -70,6 +75,39 @@ export async function setAcchiWinSettings(
   await prisma.appSetting.upsert({
     where: { key: ACCHI_WIN_SETTINGS_KEY },
     create: { key: ACCHI_WIN_SETTINGS_KEY, value },
+    update: { value },
+  });
+  return validated;
+}
+
+/**
+ * 会員ランクの昇格条件 (しきい値) を取得する。
+ * 未設定 / 破損時は既定値を返す (安全側)。欠落ランクは既定で補完する。
+ */
+export async function getMemberRankTiers(): Promise<MemberRankTiers> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: MEMBER_RANK_TIERS_KEY },
+    });
+    if (!row) return DEFAULT_MEMBER_RANK_TIERS;
+    const parsed = MemberRankTiersSchema.safeParse(JSON.parse(row.value));
+    return parsed.success
+      ? normalizeMemberRankTiers(parsed.data)
+      : DEFAULT_MEMBER_RANK_TIERS;
+  } catch {
+    return DEFAULT_MEMBER_RANK_TIERS;
+  }
+}
+
+/** 会員ランクの昇格条件を保存する (BRONZE は 0/0 に正規化される) */
+export async function setMemberRankTiers(
+  tiers: MemberRankTiers,
+): Promise<MemberRankTiers> {
+  const validated = MemberRankTiersSchema.parse(normalizeMemberRankTiers(tiers));
+  const value = JSON.stringify(validated);
+  await prisma.appSetting.upsert({
+    where: { key: MEMBER_RANK_TIERS_KEY },
+    create: { key: MEMBER_RANK_TIERS_KEY, value },
     update: { value },
   });
   return validated;

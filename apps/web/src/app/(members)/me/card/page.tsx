@@ -12,8 +12,10 @@ import {
 } from '@idol/shared';
 import { auth } from '@/auth';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { RankBadge } from '@/components/membership/RankBadge';
 import { ensureMemberNumber } from '@/lib/points';
 import { getPointRates } from '@/lib/app-setting';
+import { getMemberRank } from '@/lib/membership-rank';
 import { env } from '@/lib/env';
 import { PointActions } from './point-actions';
 
@@ -50,6 +52,8 @@ export default async function MemberCardPage() {
   const memberNumber = await ensureMemberNumber(userId);
 
   const today = jstDateKey();
+  // 会員ランク (ブロンズ〜ダイヤ)。昇格条件は非公開のため、現在ランクのみ取得する。
+  const { rank: memberRank } = await getMemberRank(userId);
   const [user, rates, loginGrant, todayGrant, shareGrants] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -122,6 +126,9 @@ export default async function MemberCardPage() {
               Reirie Fan Club
             </p>
             <p className="mt-1 text-lg font-bold">{theme.rank} MEMBER</p>
+            <div className="mt-2">
+              <RankBadge rank={memberRank} size="sm" />
+            </div>
           </div>
           <div className="shrink-0 rounded-lg bg-white p-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -176,16 +183,35 @@ export default async function MemberCardPage() {
         </CardBody>
       </Card>
 
+      {/* 会員ランク */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">会員ランク</h2>
+        </CardHeader>
+        <CardBody className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-slate-600">
+              現在のランク: <RankBadge rank={memberRank} size="sm" />
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              ランクはログイン日数やお買い物のご利用状況に応じて自動で変わります。
+              <br />
+              さらにご利用いただくと、より上位のランクへアップグレードされます。
+            </p>
+          </div>
+        </CardBody>
+      </Card>
+
       {/* プラン案内 */}
       <Card>
         <CardBody className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-slate-600">
-              現在のランク: <span className="font-semibold">{PLAN_LABELS[plan]}</span>
+              ご利用プラン: <span className="font-semibold">{PLAN_LABELS[plan]}</span>
             </p>
             {plan !== 'PREMIUM' && (
               <p className="mt-1 text-xs text-slate-500">
-                上位プランでカードランクがアップグレードされます
+                上位プランでカードデザインがアップグレードされます
               </p>
             )}
           </div>
