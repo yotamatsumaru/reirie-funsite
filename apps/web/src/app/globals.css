@@ -256,3 +256,43 @@ button {
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+/* ===== あっち向いてホイ キャラクター演出 ===== */
+/* 待機: ふわふわ上下に揺れる */
+@keyframes acchi-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+/* じゃんけん: 「最初はグー」の上下振り */
+@keyframes acchi-swing {
+  0% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-10px) rotate(-4deg); }
+  50% { transform: translateY(0) rotate(0deg); }
+  75% { transform: translateY(-10px) rotate(4deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+/* あっち向いて: 顔がクルッと向く瞬間のポップ */
+@keyframes acchi-turn {
+  0% { transform: scale(0.9) rotate(-6deg); opacity: 0.4; }
+  60% { transform: scale(1.06) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+/* 結果: ぴょこんと跳ねる */
+@keyframes acchi-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-acchi-bob { animation: acchi-bob 2.4s ease-in-out infinite; }
+.animate-acchi-swing { animation: acchi-swing 0.6s ease-in-out; }
+.animate-acchi-turn { animation: acchi-turn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.animate-acchi-pop { animation: acchi-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-acchi-bob,
+  .animate-acchi-swing,
+  .animate-acchi-turn,
+  .animate-acchi-pop {
+    animation: none;
+  }
+}

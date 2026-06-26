@@ -15,6 +15,10 @@
  *  3. 結果表示 → もう一度 / 終了。
  *
  * これにより「サーバーが一括判定」を保ちつつ、UI 上は 2 段階に見せられる。
+ *
+ * 演出: REIRIE キャラクター (CharacterAvatar) が
+ *   待機 → じゃんけんの手 → あっち向いてホイで横顔
+ * とアニメーションで動く。キャラ画像の差し替えは ./character.ts 参照。
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -23,6 +27,13 @@ import {
   type AcchiDirection,
 } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
+import { CharacterAvatar } from './CharacterAvatar';
+import {
+  CHARACTER_NAME,
+  HAND_POSE,
+  DIRECTION_POSE,
+  type CharacterPose,
+} from './character';
 
 type Initial = {
   date: string;
@@ -64,12 +75,6 @@ const DIR_LABEL: Record<AcchiDirection, string> = {
   DOWN: '下',
   LEFT: '左',
   RIGHT: '右',
-};
-const FACE_EMOJI: Record<AcchiDirection, string> = {
-  UP: '🙄',
-  DOWN: '😔',
-  LEFT: '😶',
-  RIGHT: '😶',
 };
 
 type Phase = 'janken' | 'direction' | 'result';
@@ -132,7 +137,8 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
       <div className="mb-6 rounded-2xl bg-gradient-to-br from-twilight-plum via-purple-800 to-twilight-amethyst p-6 text-white shadow-lg">
         <h1 className="text-2xl font-bold">あっち向いてホイ</h1>
         <p className="mt-1 text-sm text-white/80">
-          勝てば <span className="font-bold text-amber-300">{initial.winReward}pt</span> ゲット！
+          {CHARACTER_NAME} と勝負！勝てば{' '}
+          <span className="font-bold text-amber-300">{initial.winReward}pt</span> ゲット！
         </p>
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="rounded-full bg-white/15 px-3 py-1">
@@ -158,8 +164,11 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
       {/* じゃんけんフェーズ */}
       {phase === 'janken' && canPlay ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
-          <p className="mb-1 text-6xl">🤖</p>
-          <p className="mb-4 text-sm text-slate-500">CPU と勝負！まずはじゃんけん</p>
+          {/* キャラクター (待機で揺れる) */}
+          <div className="animate-acchi-swing">
+            <CharacterAvatar pose="idle" bob />
+          </div>
+          <p className="mb-1 text-sm text-slate-500">{CHARACTER_NAME} とじゃんけん勝負！</p>
           <p className="mb-4 text-lg font-bold text-slate-800">最初はグー、じゃんけん…</p>
           <div className="grid grid-cols-3 gap-3">
             {(['ROCK', 'SCISSORS', 'PAPER'] as JankenHand[]).map((h) => (
@@ -179,6 +188,8 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
       {/* 方向選択フェーズ */}
       {phase === 'direction' && hand ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          {/* キャラはあなたの手を出している (演出) */}
+          <CharacterAvatar pose={HAND_POSE[hand]} bob={false} />
           <p className="mb-1 text-sm text-slate-500">
             あなたの手: <span className="text-2xl">{HAND_EMOJI[hand]}</span> {HAND_LABEL[hand]}
           </p>
@@ -252,10 +263,21 @@ function ResultCard({
       ? { bg: 'from-rose-50 to-red-100 border-rose-200', emoji: '😢', label: 'あなたの負け…', color: 'text-rose-900' }
       : { bg: 'from-slate-50 to-slate-100 border-slate-200', emoji: '🤝', label: '勝負つかず！', color: 'text-slate-700' };
 
+  // CPU(=REIRIE) が向いた方向の横顔ポーズ
+  const cpuPose: CharacterPose = DIRECTION_POSE[outcome.direction.cpu];
+
   return (
     <div className={`rounded-2xl border bg-gradient-to-br ${theme.bg} p-6 text-center shadow-sm`}>
-      <p className="text-5xl">{theme.emoji}</p>
-      <p className={`mt-2 text-2xl font-bold ${theme.color}`}>{theme.label}</p>
+      {/* REIRIE が向きを変える演出 (横顔) */}
+      <div key={cpuPose} className="animate-acchi-turn">
+        <CharacterAvatar pose={cpuPose} bob={false} />
+      </div>
+      <p className="text-xs text-slate-400">
+        {CHARACTER_NAME} は「{DIR_LABEL[outcome.direction.cpu]}」を向いた！
+      </p>
+
+      <p className="mt-3 text-4xl animate-acchi-pop">{theme.emoji}</p>
+      <p className={`mt-1 text-2xl font-bold ${theme.color}`}>{theme.label}</p>
 
       {/* 対戦内容 */}
       <div className="mt-5 flex items-center justify-center gap-6 text-sm text-slate-600">
@@ -263,12 +285,14 @@ function ResultCard({
           <p className="mb-1 text-xs text-slate-400">あなた</p>
           <p className="text-3xl">{HAND_EMOJI[outcome.janken.player]}</p>
           <p className="text-2xl">{DIR_EMOJI[outcome.direction.player]}</p>
+          <p className="text-[11px] text-slate-400">{DIR_LABEL[outcome.direction.player]}</p>
         </div>
         <p className="text-lg font-bold text-slate-400">VS</p>
         <div>
-          <p className="mb-1 text-xs text-slate-400">CPU</p>
+          <p className="mb-1 text-xs text-slate-400">{CHARACTER_NAME}</p>
           <p className="text-3xl">{HAND_EMOJI[outcome.janken.cpu]}</p>
-          <p className="text-2xl">{FACE_EMOJI[outcome.direction.cpu]}{DIR_EMOJI[outcome.direction.cpu]}</p>
+          <p className="text-2xl">{DIR_EMOJI[outcome.direction.cpu]}</p>
+          <p className="text-[11px] text-slate-400">{DIR_LABEL[outcome.direction.cpu]}</p>
         </div>
       </div>
 
