@@ -4,10 +4,10 @@
  * このファイルはフロント (プラン紹介ページ等) とバック (アクセス制御 / 送料計算 /
  * セーブスロット制限 / 月次ボーナス等) の両方から参照される single source of truth。
  *
- * 仕様確定: 2026-06-09
- * - FREE     : 月額 ¥0
- * - STANDARD : 月額 ¥980  / 年額 ¥9,800
- * - PREMIUM  : 月額 ¥1,980 / 年額 ¥19,800
+ * 仕様確定: 2026-06-26 (3 プラン体制へ刷新)
+ * - FREE     : 無料 (アカウント作成のみ)
+ * - STANDARD : 月額 ¥666 (税込) / 会報誌なし / ポイント付与率ひかえめ
+ * - PREMIUM  : 年額 ¥7,920 (税込) / 会報誌 年2回送付 / ポイント付与率が一番良い
  */
 import type { PlanTypeLiteral } from './constants';
 
@@ -47,6 +47,59 @@ export const MONTHLY_BONUS_GIFT_COUNT: Record<PlanTypeLiteral, number> = {
   FREE: 0,
   STANDARD: 1,
   PREMIUM: 5,
+};
+
+/**
+ * サイト内ポイント付与率の倍率 (プラン別)。
+ *
+ * ログインボーナス / SNS シェア / ミニゲーム勝利報酬などで獲得できる
+ * ベースポイントに対して、この倍率を掛けて実際の付与量を決める。
+ *
+ * - FREE     : 1.0 倍 (ベース)
+ * - STANDARD : 1.2 倍 (少し優遇)
+ * - PREMIUM  : 2.0 倍 (付与率が一番良い)
+ *
+ * 倍率適用後は必ず整数へ丸める (Math.round)。具体的な丸めは
+ * applyPlanPointMultiplier() を使うこと。
+ */
+export const PLAN_POINT_MULTIPLIER: Record<PlanTypeLiteral, number> = {
+  FREE: 1.0,
+  STANDARD: 1.2,
+  PREMIUM: 2.0,
+};
+
+/**
+ * ベースポイントにプラン倍率を適用し、整数へ丸めて返す。
+ *  - amount が 0 以下のときは 0 を返す (倍率は掛けない)。
+ *  - 丸めは四捨五入 (Math.round)。
+ */
+export function applyPlanPointMultiplier(
+  amount: number,
+  plan: PlanTypeLiteral,
+): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return Math.round(amount * (PLAN_POINT_MULTIPLIER[plan] ?? 1));
+}
+
+/**
+ * 倍率の表示用ラベル (例: "×2.0")。プラン紹介ページで使用。
+ */
+export const PLAN_POINT_MULTIPLIER_LABEL: Record<PlanTypeLiteral, string> = {
+  FREE: '×1.0',
+  STANDARD: '×1.2',
+  PREMIUM: '×2.0',
+};
+
+/**
+ * 会報誌の年間送付回数。
+ * - FREE     : 0 (なし)
+ * - STANDARD : 0 (なし)
+ * - PREMIUM  : 2 (年2回送付)
+ */
+export const NEWSLETTER_ISSUES_PER_YEAR: Record<PlanTypeLiteral, number> = {
+  FREE: 0,
+  STANDARD: 0,
+  PREMIUM: 2,
 };
 
 /**
@@ -177,6 +230,23 @@ const TICK = '✓';
 const DASH = '—';
 
 export const PLAN_BENEFITS_TABLE: PlanBenefitRow[] = [
+  // ===== 会員特典 (目玉) =====
+  {
+    category: '会員特典',
+    label: 'サイト内ポイント付与率',
+    free: '×1.0',
+    standard: '×1.2',
+    premium: '×2.0',
+    highlight: true,
+  },
+  {
+    category: '会員特典',
+    label: '会報誌の送付',
+    free: DASH,
+    standard: DASH,
+    premium: '年2回',
+    highlight: true,
+  },
   // ===== 記事 =====
   { category: '記事・ニュース', label: '公開記事の閲覧', free: TICK, standard: TICK, premium: TICK },
   { category: '記事・ニュース', label: '会員限定記事', free: DASH, standard: TICK, premium: TICK },
@@ -233,15 +303,24 @@ export function groupedPlanBenefits(): { category: string; rows: PlanBenefitRow[
 // ===================================================================
 
 export const PLAN_HIGHLIGHTS: Record<PlanTypeLiteral, string[]> = {
-  FREE: ['基本コンテンツの閲覧', 'プロローグ章の試遊'],
+  FREE: [
+    'アカウント作成のみで利用可能',
+    '基本コンテンツの閲覧',
+    'ポイント付与率 ×1.0',
+    'プロローグ章の試遊',
+  ],
   STANDARD: [
     '会員限定記事 / 動画 (720p)',
+    'ポイント付与率 ×1.2',
     '会員価格で物販購入',
     'スタンダード先行予約',
     'コメント投稿',
     '月次ボーナスギフト 1 個',
+    '※ 会報誌の送付はありません',
   ],
   PREMIUM: [
+    'ポイント付与率 ×2.0 (一番お得)',
+    '会報誌を年2回お届け',
     'プレミアム限定コンテンツすべて',
     '動画 1080p 高画質',
     '送料が常時無料',

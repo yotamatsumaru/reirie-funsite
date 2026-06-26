@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { PLAN_LABELS, PLAN_PRICES } from '@idol/shared';
+import { PLAN_LABELS, PLAN_PRICES, PLAN_BILLING_INTERVAL } from '@idol/shared';
 import { formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
 import { TwilightBackdrop } from '@/components/layout/TwilightBackdrop';
@@ -264,6 +264,9 @@ function PlanCard({
   highlight?: boolean;
 }) {
   const price = PLAN_PRICES[plan];
+  const interval = PLAN_BILLING_INTERVAL[plan]; // null / 'MONTH' / 'YEAR'
+  const isYearly = interval === 'YEAR';
+  const mainPrice = isYearly ? price.yearly : price.monthly;
   return (
     <div
       className={`flex flex-col rounded-3xl border bg-white/80 p-6 backdrop-blur-sm transition sm:p-7 ${
@@ -277,11 +280,13 @@ function PlanCard({
         {highlight && <Badge tone="brand">人気</Badge>}
       </div>
       <p className="text-center font-serif text-4xl font-semibold text-twilight-amethyst">
-        {plan === 'FREE' ? '無料' : `${formatJpy(price.monthly)}`}
-        {plan !== 'FREE' && <span className="text-base font-normal">/月</span>}
+        {plan === 'FREE' ? '無料' : `${formatJpy(mainPrice)}`}
+        {plan !== 'FREE' && (
+          <span className="text-base font-normal">/{isYearly ? '年' : '月'}</span>
+        )}
       </p>
-      {plan !== 'FREE' && (
-        <p className="text-center text-sm text-twilight-plum/60">年額 {formatJpy(price.yearly)}</p>
+      {plan === 'PREMIUM' && (
+        <p className="text-center text-sm text-twilight-plum/60">会報誌 年2回 / ポイント付与率 ×2.0</p>
       )}
       <ul className="mt-6 flex-1 space-y-2.5 text-left text-sm text-twilight-plum/80">
         <li className="flex gap-2">

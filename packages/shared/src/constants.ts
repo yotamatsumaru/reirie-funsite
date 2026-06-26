@@ -122,10 +122,35 @@ export const PLAN_LABELS: Record<PlanTypeLiteral, string> = {
   PREMIUM: 'プレミアム',
 };
 
+/**
+ * プラン価格 (税込・円)。
+ *
+ * 2026-06-26 改定 (3 プラン体制):
+ *  - FREE     : 無料
+ *  - STANDARD : 月額 ¥666 (月額課金のみ)
+ *  - PREMIUM  : 年額 ¥7,920 (年額課金のみ・会報誌 年2回 / ポイント付与率最高)
+ *
+ * monthly / yearly はどちらも保持するが、実際に提供する課金サイクルは
+ * PLAN_BILLING_INTERVAL を参照すること。
+ *  - STANDARD は月額のみ (yearly は月額×12 の参考値)。
+ *  - PREMIUM は年額のみ (monthly は年額÷12 の参考値・端数切り上げ)。
+ */
 export const PLAN_PRICES: Record<PlanTypeLiteral, { monthly: number; yearly: number }> = {
   FREE: { monthly: 0, yearly: 0 },
-  STANDARD: { monthly: 980, yearly: 9800 },
-  PREMIUM: { monthly: 1980, yearly: 19800 },
+  STANDARD: { monthly: 666, yearly: 666 * 12 },
+  PREMIUM: { monthly: Math.ceil(7920 / 12), yearly: 7920 },
+};
+
+/**
+ * 各プランで実際に提供する課金サイクル。
+ *  - FREE     : null (課金なし)
+ *  - STANDARD : 'MONTH' (月額)
+ *  - PREMIUM  : 'YEAR'  (年額)
+ */
+export const PLAN_BILLING_INTERVAL: Record<PlanTypeLiteral, BillingIntervalLiteral | null> = {
+  FREE: null,
+  STANDARD: 'MONTH',
+  PREMIUM: 'YEAR',
 };
 
 export const ORDER_STATUS_LABELS = {
