@@ -23,6 +23,7 @@ import {
   Coins,
   Wallet,
   ListChecks,
+  MessageCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
   { href: '/super-admin/points/users', label: 'ポイント状況', icon: Wallet },
   { href: '/super-admin/points/transactions', label: 'ポイント取引ログ', icon: ListChecks },
   { href: '/super-admin/announcements', label: 'お知らせ', icon: Megaphone },
+  { href: '/super-admin/dm', label: 'DM 管理', icon: MessageCircle },
   { href: '/super-admin/settings', label: 'システム設定', icon: Settings },
   { href: '/super-admin/audit', label: '監査ログ', icon: ScrollText },
   { href: '/super-admin/admins', label: '管理者', icon: ShieldCheck },

@@ -3,6 +3,7 @@ export * from './access-control';
 export * from './plan-benefits';
 export * from './membership';
 export * from './mini-game';
+export * from './dm';
 export * from './schemas/auth';
 export * from './schemas/common';
 export * from './schemas/content';

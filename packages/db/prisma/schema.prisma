@@ -140,6 +140,13 @@ enum SocialPlatform {
   INSTAGRAM
 }
 
+// REIRIE への DM の状態
+enum DirectMessageStatus {
+  SENT // 送信済み (運営未読)
+  READ // 運営が既読
+  REPLIED // 運営が返信済み (将来用)
+}
+
 // =====================================================================
 // Call Event Enums (特典会 1on1)
 // =====================================================================
@@ -225,6 +232,9 @@ model User {
   addressLine1         String?   @map("address_line_1")
   addressLine2         String?   @map("address_line_2")
   avatarUrl            String?   @map("avatar_url")
+  // ファンが REIRIE に呼んでほしい名前 (DM の @ メンションで使用)。
+  // 未設定なら displayName / "あなた" にフォールバックする。
+  preferredName        String?   @map("preferred_name")
   role                 UserRole  @default(USER)
   // ADMIN に付与する領域別の管理権限 (CONTENT / MERCH / GAME / CALL)。
   // SUPER_ADMIN は常に全権限を持つため参照しない。
@@ -278,6 +288,9 @@ model User {
 
   // Mini Game (あっち向いてホイ等)
   miniGamePlays MiniGamePlay[]
+
+  // Direct Message (REIRIE への DM)
+  directMessages DirectMessage[]
 
   @@index([email])
   @@map("users")
@@ -1235,6 +1248,27 @@ model MiniGamePlay {
   @@index([userId, gameType, date])
   @@index([userId, createdAt])
   @@map("mini_game_plays")
+}
+
+/// ファンから REIRIE への DM。
+/// - 一方向 (ファン → REIRIE)。運営は管理画面で閲覧・既読化できる。
+/// - body は送信時点の本文 (@ メンションは送信時に preferredName へ展開済み)。
+/// - NG ワードチェックは送信 API でサーバー側でも実施 (改ざん防止)。
+model DirectMessage {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  // 送信時点のファンの「呼んでほしい名前」のスナップショット (表示・監査用)
+  senderName String?            @map("sender_name")
+  body      String
+  status    DirectMessageStatus @default(SENT)
+  readAt    DateTime?           @map("read_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("direct_messages")
 }
 
 /// 永続アプリ設定 (key-value)。
