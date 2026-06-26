@@ -28,6 +28,24 @@ export const env = {
     trustHost: process.env.AUTH_TRUST_HOST === 'true',
   },
 
+  /**
+   * モバイル / ネイティブ (Unity 等) 向け API トークン設定。
+   * Web の Cookie セッションとは別に、Bearer トークンで同じ API を叩けるようにする。
+   * 署名鍵は AUTH_SECRET を流用 (別管理にしたい場合は API_TOKEN_SECRET を設定)。
+   */
+  apiToken: {
+    secret:
+      optional('API_TOKEN_SECRET') ??
+      optional('AUTH_SECRET') ??
+      'dev-insecure-secret-change-me',
+    issuer: optional('API_TOKEN_ISSUER') ?? 'reirie-funsite',
+    audience: optional('API_TOKEN_AUDIENCE') ?? 'reirie-api',
+    // アクセストークン有効期限 (秒)。既定 1 時間。
+    accessTtlSec: Number(optional('API_TOKEN_ACCESS_TTL_SEC') ?? '3600'),
+    // リフレッシュトークン有効期限 (秒)。既定 30 日。
+    refreshTtlSec: Number(optional('API_TOKEN_REFRESH_TTL_SEC') ?? String(60 * 60 * 24 * 30)),
+  },
+
   database: {
     url: optional('DATABASE_URL'),
   },

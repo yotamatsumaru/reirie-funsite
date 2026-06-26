@@ -32,6 +32,9 @@ const MAINTENANCE_BYPASS_PREFIXES = [
   '/signin',
   '/api/auth',
   '/api/super-admin',
+  // API (v1) は HTML リダイレクトではなく JSON で応答させたいのでバイパス。
+  // 個々のエンドポイント側で必要なら可用性を制御する。
+  '/api/v1',
 ];
 
 export function proxy(req: NextRequest) {
