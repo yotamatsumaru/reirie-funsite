@@ -118,7 +118,20 @@ enum PointReason {
   SOCIAL_SHARE // SNS シェア (X / Instagram)
   ADMIN_ADJUST // 管理者による手動調整
   SIGNUP_BONUS // 新規登録ボーナス
+  GAME_REWARD // ミニゲーム勝利報酬
   OTHER
+}
+
+// ミニゲームの種類
+enum MiniGameType {
+  ACCHI_MUITE_HOI // あっち向いてホイ
+}
+
+// ミニゲームの1プレイ結果
+enum MiniGameResult {
+  WIN // プレイヤー勝利
+  LOSE // プレイヤー敗北
+  DRAW // あいこ
 }
 
 // SNS シェア対象プラットフォーム
@@ -262,6 +275,9 @@ model User {
   pointTransactions PointTransaction[]
   loginBonusGrants  LoginBonusGrant[]
   socialShareGrants SocialShareGrant[]
+
+  // Mini Game (あっち向いてホイ等)
+  miniGamePlays MiniGamePlay[]
 
   @@index([email])
   @@map("users")
@@ -1197,6 +1213,28 @@ model SocialShareGrant {
   @@unique([userId, date, platform])
   @@index([userId, date])
   @@map("social_share_grants")
+}
+
+/// ミニゲームの 1 プレイ記録。
+/// サーバー側で勝敗を確定し、その都度 1 行を作成する (改ざん不可能な権威ある記録)。
+/// 「1 日 N 回まで」の制限は userId + gameType + date(JST) の件数を数えて判定する。
+/// 勝利時のポイント付与は PointTransaction と同一トランザクションで作成する。
+model MiniGamePlay {
+  id          String         @id @default(uuid()) @db.Uuid
+  userId      String         @map("user_id") @db.Uuid
+  gameType    MiniGameType   @map("game_type")
+  date        String // JST 基準の "YYYY-MM-DD" (1 日の回数制限の集計キー)
+  result      MiniGameResult
+  rewardPoint Int            @default(0) @map("reward_point") // 付与ポイント (勝利時のみ > 0)
+  // 監査・検証用の手の記録 (JSON 文字列)。例: {"jankenPlayer":"ROCK","jankenCpu":"SCISSORS",...}
+  detail      String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, gameType, date])
+  @@index([userId, createdAt])
+  @@map("mini_game_plays")
 }
 
 /// 永続アプリ設定 (key-value)。

@@ -16,8 +16,12 @@ import {
   computeLoginBonusAmount,
   isValidPointAmount,
   MAX_POINTS_PER_TX as SHARED_MAX_POINTS_PER_TX,
+  ACCHI_MAX_PLAYS_PER_DAY,
+  ACCHI_WIN_REWARD,
+  remainingPlays,
   type PointRateSettings,
   type SocialPlatformLiteral,
+  type AcchiResult,
 } from '@idol/shared';
 
 type PointReasonLiteral =
@@ -26,6 +30,7 @@ type PointReasonLiteral =
   | 'SOCIAL_SHARE'
   | 'ADMIN_ADJUST'
   | 'SIGNUP_BONUS'
+  | 'GAME_REWARD'
   | 'OTHER';
 
 /**
@@ -431,5 +436,120 @@ export async function reconcileUserPoints(
       return { before, after: updated.points, diff: ledgerSum - before };
     }
     return { before, after: before, diff: 0 };
+  });
+}
+
+// ---------------------------------------------------------------------
+// ミニゲーム (あっち向いてホイ)
+// ---------------------------------------------------------------------
+
+export type AcchiPlayPersistResult = {
+  /** 受理されたか (回数上限に達していれば false) */
+  accepted: boolean;
+  /** ゲーム結果 (受理時のみ意味を持つ) */
+  result: AcchiResult;
+  /** 付与ポイント (勝利時のみ > 0) */
+  reward: number;
+  /** プレイ後の残高 */
+  balance: number;
+  /** プレイ後の本日プレイ回数 */
+  playedToday: number;
+  /** プレイ後の本日残り回数 */
+  remaining: number;
+};
+
+/**
+ * 本日のあっち向いてホイのプレイ回数を取得する (JST 基準)。
+ */
+export async function getAcchiPlayCountToday(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const date = jstDateKey(now);
+  return prisma.miniGamePlay.count({
+    where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
+  });
+}
+
+/**
+ * あっち向いてホイの 1 プレイをサーバー側で確定・記録する。
+ *
+ * セキュリティ上の不変条件:
+ *  - 勝敗 (result) は API ハンドラ側がサーバー生成の乱数で確定したものを受け取る。
+ *    クライアントから結果やポイントを直接受け取らない (改ざん不可)。
+ *  - 「1 日 N 回まで」の上限チェック、プレイ記録の作成、ポイント付与を
+ *    すべて同一トランザクション内で実行し、cluster 並列でも超過付与を防ぐ。
+ *  - 上限到達時は accepted=false を返し、記録も付与も行わない。
+ *  - 付与は result==='WIN' のときのみ。それ以外は 0pt (記録のみ)。
+ *
+ * @param result   サーバーが確定したプレイ結果
+ * @param detail   監査用の手の記録 (JSON 文字列など)。任意。
+ */
+export async function recordAcchiPlay(
+  userId: string,
+  result: AcchiResult,
+  detail?: string,
+  now: Date = new Date(),
+): Promise<AcchiPlayPersistResult> {
+  const date = jstDateKey(now);
+  const reward = result === 'WIN' ? ACCHI_WIN_REWARD : 0;
+
+  return prisma.$transaction(async (tx) => {
+    // トランザクション内で当日プレイ数を数え、上限チェック (競合に強い)
+    const playedBefore = await tx.miniGamePlay.count({
+      where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
+    });
+
+    if (playedBefore >= ACCHI_MAX_PLAYS_PER_DAY) {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { points: true },
+      });
+      return {
+        accepted: false,
+        result,
+        reward: 0,
+        balance: u?.points ?? 0,
+        playedToday: playedBefore,
+        remaining: 0,
+      };
+    }
+
+    await tx.miniGamePlay.create({
+      data: {
+        userId,
+        gameType: 'ACCHI_MUITE_HOI',
+        date,
+        result,
+        rewardPoint: reward,
+        detail: detail ?? null,
+      },
+    });
+
+    let balance: number;
+    if (reward > 0) {
+      balance = await applyPoints(tx, {
+        userId,
+        amount: reward,
+        reason: 'GAME_REWARD',
+        note: 'あっち向いてホイ 勝利報酬',
+      });
+    } else {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { points: true },
+      });
+      balance = u?.points ?? 0;
+    }
+
+    const playedToday = playedBefore + 1;
+    return {
+      accepted: true,
+      result,
+      reward,
+      balance,
+      playedToday,
+      remaining: remainingPlays(playedToday),
+    };
   });
 }

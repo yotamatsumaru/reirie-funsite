@@ -68,6 +68,7 @@ const MEMBER_GROUP: NavGroup = {
   items: [
     { href: '/me/card', label: '会員カード', icon: CreditCard },
     { href: '/me/points', label: 'ポイント交換', icon: Repeat },
+    { href: '/me/games/acchi', label: 'あっち向いてホイ', icon: Gamepad2 },
   ],
 };
 
