@@ -24,6 +24,8 @@ tags:
   - name: Tickets
   - name: Me
   - name: Admin
+  - name: Game
+  - name: API v1 (Mobile/Unity)
 
 components:
   securitySchemes:
@@ -31,6 +33,13 @@ components:
       type: apiKey
       in: cookie
       name: __Secure-next-auth.session-token
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        モバイル / ネイティブ (Unity 等) 向け API アクセストークン。
+        `POST /api/v1/auth/token` で発行し、`Authorization: Bearer <accessToken>` で送る。
 
   schemas:
     Error:
@@ -547,3 +556,165 @@ paths:
       tags: [Admin]
       summary: ライブ配信を作成 (IVS Channel ARN 指定)
       security: [{ sessionCookie: [] }]
+
+  # ===================================================================
+  # API v1 — モバイル / ネイティブ (Unity 等) 向け。Bearer トークン認証。
+  # Web (Cookie) からも同じエンドポイントを呼べる (両対応)。
+  # ===================================================================
+
+  /api/v1/auth/token:
+    post:
+      tags: [API v1 (Mobile/Unity)]
+      summary: email + password で API トークンを発行
+      description: |
+        Unity / モバイルクライアント向けのログイン。成功すると access / refresh
+        トークンを返す。以後 `Authorization: Bearer <accessToken>` で各 API を呼ぶ。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: 発行成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  tokenType: { type: string, enum: [Bearer] }
+                  expiresIn: { type: integer, description: access トークンの有効秒数 }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string }
+                      displayName: { type: string, nullable: true }
+                      role: { type: string }
+                      plan: { type: string }
+        '400': { description: 入力不正, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '401': { description: 認証失敗, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/v1/auth/token/refresh:
+    post:
+      tags: [API v1 (Mobile/Unity)]
+      summary: refresh トークンで access トークンを再発行
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: 再発行成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+                  tokenType: { type: string, enum: [Bearer] }
+                  expiresIn: { type: integer }
+        '400': { description: 入力不正 }
+        '401': { description: トークン無効/期限切れ }
+
+  /api/v1/auth/me:
+    get:
+      tags: [API v1 (Mobile/Unity)]
+      summary: 現在のユーザー情報とポイント残高
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  email: { type: string }
+                  displayName: { type: string, nullable: true }
+                  role: { type: string }
+                  plan: { type: string }
+                  points: { type: integer }
+                  authSource: { type: string, enum: [bearer, cookie] }
+        '401': { description: 未認証 }
+
+  /api/v1/games/acchi:
+    get:
+      tags: [API v1 (Mobile/Unity), Game]
+      summary: あっち向いてホイ — 本日の残りプレイ回数と残高
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, example: '2026-06-26' }
+                  maxPerDay: { type: integer, example: 5 }
+                  winReward: { type: integer, example: 30 }
+                  playedToday: { type: integer }
+                  remaining: { type: integer }
+                  balance: { type: integer }
+        '401': { description: 未認証 }
+    post:
+      tags: [API v1 (Mobile/Unity), Game]
+      summary: あっち向いてホイ — 1 プレイ実行
+      description: |
+        プレイヤーの「じゃんけんの手」と「方向」を送信する。
+        CPU の手・方向・勝敗・ポイント付与はすべてサーバーで確定する
+        (クライアントから結果やポイントは受け取らない)。
+        本日の上限 (5 回) に達している場合は 429 を返す。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hand, direction]
+              properties:
+                hand: { type: string, enum: [ROCK, SCISSORS, PAPER] }
+                direction: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
+      responses:
+        '200':
+          description: プレイ結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  janken:
+                    type: object
+                    properties:
+                      player: { type: string, enum: [ROCK, SCISSORS, PAPER] }
+                      cpu: { type: string, enum: [ROCK, SCISSORS, PAPER] }
+                      outcome: { type: string, enum: [WIN, LOSE, DRAW] }
+                  direction:
+                    type: object
+                    properties:
+                      player: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
+                      cpu: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
+                  result: { type: string, enum: [WIN, LOSE, DRAW] }
+                  reward: { type: integer, description: 付与ポイント (勝利時のみ > 0) }
+                  balance: { type: integer }
+                  playedToday: { type: integer }
+                  remaining: { type: integer }
+        '400': { description: 手/方向が不正 }
+        '401': { description: 未認証 }
+        '429': { description: 本日のプレイ上限に達した }
