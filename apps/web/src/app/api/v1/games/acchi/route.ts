@@ -20,15 +20,33 @@ import {
   isAcchiDirection,
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
+  resolveAcchiSettingForPlan,
+  type PlanTypeLiteral,
 } from '@idol/shared';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { requireApiPrincipal } from '@/lib/api-auth';
 import { getAcchiPlayCountToday, recordAcchiPlay } from '@/lib/points';
-import { resolveAcchiRound } from '@/lib/games/acchi';
+import { resolveAcchiPlay } from '@/lib/games/acchi';
+import { getAcchiWinSettings } from '@/lib/app-setting';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
+
+/**
+ * ユーザーの現在プランを解決する。
+ *  - demoMode はアカウントを PREMIUM 固定で扱う。
+ *  - それ以外は有効サブスクリプションの planType (なければ FREE)。
+ */
+async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
+  if (env.demoMode) return 'PREMIUM';
+  const sub = await prisma.subscription.findFirst({
+    where: { userId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+    orderBy: { createdAt: 'desc' },
+    select: { planType: true },
+  });
+  return (sub?.planType as PlanTypeLiteral | undefined) ?? 'FREE';
+}
 
 export const GET = handle(async (req: Request) => {
   const principal = await requireApiPrincipal(req);
@@ -63,16 +81,25 @@ export const POST = handle(async (req: Request) => {
     throw errors.badRequest('手と方向を正しく指定してください');
   }
 
-  const round = resolveAcchiRound(body.hand, body.direction);
+  // プラン → 設定 (1〜6) → 勝率 を解決し、サーバー側で勝敗を確定する
+  const [plan, winSettings] = await Promise.all([
+    resolveUserPlan(principal.userId),
+    getAcchiWinSettings(),
+  ]);
+  const setting = resolveAcchiSettingForPlan(winSettings, plan);
+
+  const play = resolveAcchiPlay(body.hand, body.direction, setting);
   const detail = JSON.stringify({
-    jankenPlayer: round.jankenPlayer,
-    jankenCpu: round.jankenCpu,
-    jankenOutcome: round.jankenOutcome,
-    playerDirection: round.playerDirection,
-    cpuDirection: round.cpuDirection,
+    jankenPlayer: play.jankenPlayer,
+    jankenCpu: play.jankenCpu,
+    jankenOutcome: play.jankenOutcome,
+    playerDirection: play.playerDirection,
+    cpuDirection: play.cpuDirection,
+    plan,
+    setting,
   });
 
-  const persisted = await recordAcchiPlay(principal.userId, round.result, detail);
+  const persisted = await recordAcchiPlay(principal.userId, play.result, detail);
 
   if (!persisted.accepted) {
     throw errors.rateLimited('本日のプレイ回数の上限に達しました。明日また挑戦してください');
@@ -88,24 +115,27 @@ export const POST = handle(async (req: Request) => {
         amount: persisted.reward,
         result: persisted.result,
         via: principal.source,
+        plan,
+        setting,
       },
     });
   }
 
   return NextResponse.json({
     janken: {
-      player: round.jankenPlayer,
-      cpu: round.jankenCpu,
-      outcome: round.jankenOutcome,
+      player: play.jankenPlayer,
+      cpu: play.jankenCpu,
+      outcome: play.jankenOutcome,
     },
     direction: {
-      player: round.playerDirection,
-      cpu: round.cpuDirection,
+      player: play.playerDirection,
+      cpu: play.cpuDirection,
     },
     result: persisted.result,
     reward: persisted.reward,
     balance: persisted.balance,
     playedToday: persisted.playedToday,
     remaining: persisted.remaining,
+    sequence: play.sequence,
   });
 });

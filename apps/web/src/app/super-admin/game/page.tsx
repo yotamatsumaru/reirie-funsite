@@ -5,6 +5,8 @@ import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { getAcchiWinSettings } from '@/lib/app-setting';
+import { AcchiSettingsClient } from './acchi-settings-client';
 
 export const metadata: Metadata = { title: 'ゲーム経済 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -36,13 +38,15 @@ type Item = { id: string; slug: string; name: string; priceJpy: number };
 type Character = { id: string; name: string; slug: string };
 
 export default async function SuperAdminGamePage() {
-  const [purchases, progress, scenarios, items, characters] = await Promise.all([
-    prisma.playerPurchase.findMany({}),
-    prisma.playerProgress.findMany({}),
-    prisma.gameScenario.findMany({}),
-    prisma.gameItem.findMany({}),
-    prisma.gameCharacter.findMany({}),
-  ]);
+  const [purchases, progress, scenarios, items, characters, acchiSettings] =
+    await Promise.all([
+      prisma.playerPurchase.findMany({}),
+      prisma.playerProgress.findMany({}),
+      prisma.gameScenario.findMany({}),
+      prisma.gameItem.findMany({}),
+      prisma.gameCharacter.findMany({}),
+      getAcchiWinSettings(),
+    ]);
   const purchasesT = purchases as unknown as Purchase[];
   const progressT = progress as unknown as Progress[];
   const scenariosT = scenarios as unknown as Scenario[];
@@ -119,6 +123,9 @@ export default async function SuperAdminGamePage() {
         <Kpi label="購入者数" value={`${uniqueBuyers}名`} sub="ユニーク" accent="rose" />
         <Kpi label="プレイヤー" value={`${activePlayers}名`} sub="進捗あり" accent="amber" />
       </section>
+
+      {/* あっち向いてホイ 勝率設定 */}
+      <AcchiSettingsClient initial={acchiSettings} />
 
       {/* シナリオ別 */}
       <Card className="mt-6">

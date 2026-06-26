@@ -2,6 +2,7 @@ export * from './constants';
 export * from './access-control';
 export * from './plan-benefits';
 export * from './membership';
+export * from './membership-rank';
 export * from './mini-game';
 export * from './dm';
 export * from './schemas/auth';
