@@ -111,7 +111,7 @@ enum AdminInvitationStatus {
   EXPIRED // 有効期限切れ
 }
 
-// ポイント取引の理由 (会員ポイント機能)
+// Fan ポイント取引の理由 (ログイン等で貯まり、ゲーム内で使う無料ポイント)
 enum PointReason {
   LOGIN_BONUS // 毎日のログインボーナス
   LOGIN_STREAK // 連続ログインボーナス
@@ -119,7 +119,50 @@ enum PointReason {
   ADMIN_ADJUST // 管理者による手動調整
   SIGNUP_BONUS // 新規登録ボーナス
   GAME_REWARD // ミニゲーム勝利報酬
+  ITEM_PURCHASE // 恋愛ADVの章/アイテムを Fan ポイントで購入 (消費)
+  EXTRA_PLAY_PURCHASE // ミニゲームの追加プレイ回数を Fan ポイントで購入 (消費)
   OTHER
+}
+
+// 特典ポイント取引の理由 (課金 or 会員特典で貯まり、景品交換に使うポイント)
+enum RewardPointReason {
+  STRIPE_PURCHASE // Stripe でポイントパックを購入
+  SUBSCRIPTION_BONUS // サブスクプランの月次自動付与
+  ADMIN_ADJUST // 管理者による手動調整
+  REDEMPTION // 景品交換 (消費)
+  REFUND // 交換キャンセル等による返還
+  OTHER
+}
+
+// 特典ポイント購入 (Stripe) の状態
+enum RewardPointPurchaseStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+// 景品カタログの状態
+enum RewardCatalogItemStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// 景品カタログの種別
+enum RewardCatalogItemKind {
+  GOODS // 実物グッズ (発送が必要)
+  CALL_PRIORITY // 特典会優先枠
+  DIGITAL // デジタル特典 (発送不要)
+}
+
+// 景品交換 (発送管理) の状態
+enum RewardRedemptionStatus {
+  PENDING // 交換申請受付・処理待ち
+  PROCESSING // 運営が発送準備中
+  SHIPPED // 発送済み
+  COMPLETED // 到着確認 / デジタル特典付与完了
+  CANCELED // キャンセル (ポイント返還)
 }
 
 // ミニゲームの種類
@@ -213,6 +256,12 @@ enum GamePurchaseKind {
   PACK // セット購入
 }
 
+// ゲーム内購入 (PlayerPurchase) の決済手段
+enum GamePurchasePayMethod {
+  STRIPE // クレジットカード決済 (JPY)
+  FAN_POINT // Fan ポイント消費 (即時確定)
+}
+
 // =====================================================================
 // Users / Auth (Auth.js v5)
 // =====================================================================
@@ -243,8 +292,10 @@ model User {
   // 会員番号 (RR-000123 形式)。登録順の連番を MemberCounter で採番する。
   // 既存ユーザーへは backfill スクリプトで付与するため nullable。
   memberNumber         String?   @unique @map("member_number")
-  // 保有ポイント残高 (PointTransaction の合計と一致させる)
+  // 保有 Fan ポイント残高 (無料で貯まり、ゲーム内で使う。PointTransaction の合計と一致させる)
   points               Int       @default(0)
+  // 保有 特典ポイント残高 (課金/会員特典で貯まり、景品交換に使う。RewardPointTransaction の合計と一致させる)
+  rewardPoints         Int       @default(0) @map("reward_points")
   // Stripe 関連を user に持たせる(1ユーザー1顧客)
   stripeCustomerId     String?   @unique @map("stripe_customer_id")
   // メール確認用トークン
@@ -281,13 +332,19 @@ model User {
   callTickets           CallTicket[]
   callSerialsUsed       CallSerial[] @relation("CallSerialUsedBy")
 
-  // Membership / Points (会員カード & ポイント)
+  // Membership / Points (会員カード & Fan ポイント)
   pointTransactions PointTransaction[]
   loginBonusGrants  LoginBonusGrant[]
   socialShareGrants SocialShareGrant[]
 
   // Mini Game (あっち向いてホイ等)
-  miniGamePlays MiniGamePlay[]
+  miniGamePlays      MiniGamePlay[]
+  extraPlayPurchases MiniGameExtraPlayPurchase[]
+
+  // 特典ポイント (課金/会員特典で貯まり、景品交換に使う)
+  rewardPointTransactions RewardPointTransaction[]
+  rewardPointPurchases    RewardPointPurchase[]
+  rewardRedemptions       RewardRedemption[]
 
   // Direct Message (REIRIE への DM)
   directMessages DirectMessage[]
@@ -806,24 +863,24 @@ model AuditLog {
 //  - 受諾時に対象ロール(ADMIN / SUPER_ADMIN)へ昇格 / 新規アカウント作成
 // =====================================================================
 model AdminInvitation {
-  id            String                @id @default(uuid()) @db.Uuid
-  email         String                @db.Citext
-  role          UserRole              @default(ADMIN) // 付与予定ロール (ADMIN | SUPER_ADMIN)
+  id           String                @id @default(uuid()) @db.Uuid
+  email        String                @db.Citext
+  role         UserRole              @default(ADMIN) // 付与予定ロール (ADMIN | SUPER_ADMIN)
   // 受諾時に付与する管理権限 (ADMIN のときのみ意味を持つ)
-  capabilities  String[]              @default([])
-  token         String                @unique // 受諾URL用トークン (URLセーフ)
-  status        AdminInvitationStatus @default(PENDING)
+  capabilities String[]              @default([])
+  token        String                @unique // 受諾URL用トークン (URLセーフ)
+  status       AdminInvitationStatus @default(PENDING)
   // 招待発行者 (SUPER_ADMIN)
-  invitedById   String?               @map("invited_by_id") @db.Uuid
+  invitedById  String?               @map("invited_by_id") @db.Uuid
   // 受諾したユーザー
-  acceptedById  String?               @map("accepted_by_id") @db.Uuid
-  acceptedAt    DateTime?             @map("accepted_at")
-  revokedAt     DateTime?             @map("revoked_at")
-  expiresAt     DateTime              @map("expires_at")
+  acceptedById String?               @map("accepted_by_id") @db.Uuid
+  acceptedAt   DateTime?             @map("accepted_at")
+  revokedAt    DateTime?             @map("revoked_at")
+  expiresAt    DateTime              @map("expires_at")
   // 招待時のメモ (任意)
-  note          String?
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
+  note         String?
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
 
   invitedBy  User? @relation("AdminInvitationInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
   acceptedBy User? @relation("AdminInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
@@ -883,10 +940,12 @@ model GameScenario {
   summary           String?            @db.Text
   // シナリオ DSL JSON 本体 (scenes / lines / choices / effects)
   scriptJson        Json               @map("script_json")
-  // 課金
+  // 課金 (Stripe / JPY)
   priceJpy          Int                @default(0) @map("price_jpy") // 0 = 無料
   isFreeTrial       Boolean            @default(false) @map("is_free_trial") // プロローグ等
   isPremiumIncluded Boolean            @default(false) @map("is_premium_included") // PREMIUM 会員は購入不要
+  // Fan ポイントでの購入 (null/0 = Fan ポイント購入不可、Stripe 課金のみ)
+  fanPointPrice     Int?               @map("fan_point_price")
   // アクセス
   status            GameScenarioStatus @default(DRAFT)
   requiredAffinity  Int                @default(0) @map("required_affinity") // 解放に必要な親密度
@@ -914,9 +973,11 @@ model GameItem {
   name          String
   description   String?      @db.Text
   iconUrl       String?      @map("icon_url")
-  // 課金
+  // 課金 (Stripe / JPY)
   priceJpy      Int          @default(0) @map("price_jpy")
   isPremiumOnly Boolean      @default(false) @map("is_premium_only")
+  // Fan ポイントでの購入 (null/0 = Fan ポイント購入不可、Stripe 課金のみ)
+  fanPointPrice Int?         @map("fan_point_price")
   // ゲーム効果 (プレゼント時の親密度上昇)
   affinityBoost Int          @default(0) @map("affinity_boost")
   // 同時所持の上限 (null = 無制限、1 = 一回購入のみ)
@@ -1009,24 +1070,28 @@ model PlayerInventory {
 
 /// 課金履歴 (Stripe 連携)
 model PlayerPurchase {
-  id                      String           @id @default(uuid()) @db.Uuid
-  userId                  String           @map("user_id") @db.Uuid
+  id                      String                @id @default(uuid()) @db.Uuid
+  userId                  String                @map("user_id") @db.Uuid
   kind                    GamePurchaseKind
   // どちらか一方
-  scenarioId              String?          @map("scenario_id") @db.Uuid
-  itemId                  String?          @map("item_id") @db.Uuid
-  quantity                Int              @default(1)
-  // 価格
-  amountJpy               Int              @map("amount_jpy")
+  scenarioId              String?               @map("scenario_id") @db.Uuid
+  itemId                  String?               @map("item_id") @db.Uuid
+  quantity                Int                   @default(1)
+  // 決済手段 (Stripe 課金 or Fan ポイント消費)
+  payMethod               GamePurchasePayMethod @default(STRIPE) @map("pay_method")
+  // 価格 (Stripe 決済のときのみ意味を持つ。Fan ポイント決済時は 0)
+  amountJpy               Int                   @map("amount_jpy")
+  // Fan ポイント決済のときの消費ポイント数 (Stripe 決済時は null)
+  fanPointAmount          Int?                  @map("fan_point_amount")
   // Stripe
-  stripePaymentIntentId   String?          @unique @map("stripe_payment_intent_id")
-  stripeCheckoutSessionId String?          @unique @map("stripe_checkout_session_id")
-  paymentStatus           PaymentStatus    @default(PENDING) @map("payment_status")
-  paidAt                  DateTime?        @map("paid_at")
-  refundedAt              DateTime?        @map("refunded_at")
+  stripePaymentIntentId   String?               @unique @map("stripe_payment_intent_id")
+  stripeCheckoutSessionId String?               @unique @map("stripe_checkout_session_id")
+  paymentStatus           PaymentStatus         @default(PENDING) @map("payment_status")
+  paidAt                  DateTime?             @map("paid_at")
+  refundedAt              DateTime?             @map("refunded_at")
   metadata                Json?
-  createdAt               DateTime         @default(now()) @map("created_at")
-  updatedAt               DateTime         @updatedAt @map("updated_at")
+  createdAt               DateTime              @default(now()) @map("created_at")
+  updatedAt               DateTime              @updatedAt @map("updated_at")
 
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   scenario GameScenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
@@ -1194,6 +1259,132 @@ model PointTransaction {
   @@map("point_transactions")
 }
 
+// =====================================================================
+// 特典ポイント (Reward Point) — 課金 / 会員特典で貯まり、景品交換に使う
+// =====================================================================
+
+/// 特典ポイント取引履歴 (増減の単一の真実)。
+/// User.rewardPoints は本テーブルの合計と一致するよう、付与/消費は必ず
+/// $transaction で「履歴作成 + 残高更新」を同時に行う。
+model RewardPointTransaction {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  amount    Int // 正=付与, 負=消費
+  balance   Int // 取引後の残高 (監査用スナップショット)
+  reason    RewardPointReason
+  note      String?
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("reward_point_transactions")
+}
+
+/// 特典ポイントの販売パック (管理画面で作成。Stripe Checkout の line item に使う)。
+/// 例: 「500pt ¥500」「3,000pt ¥2,800 (お得)」など。
+model RewardPointPack {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String // 表示名 (例: "特典ポイント 500pt パック")
+  points    Int // 付与される特典ポイント数
+  priceJpy  Int      @map("price_jpy") // 販売価格 (税込想定)
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  purchases RewardPointPurchase[]
+
+  @@index([isActive, sortOrder])
+  @@map("reward_point_packs")
+}
+
+/// 特典ポイントの Stripe 購入履歴。
+/// checkout.session.completed / payment_intent.succeeded で SUCCEEDED に遷移し、
+/// 同一トランザクションで RewardPointTransaction を作成 + User.rewardPoints を加算する。
+model RewardPointPurchase {
+  id                      String                    @id @default(uuid()) @db.Uuid
+  userId                  String                    @map("user_id") @db.Uuid
+  packId                  String                    @map("pack_id") @db.Uuid
+  points                  Int // 購入時点のパックのポイント数 (スナップショット)
+  amountJpy               Int                       @map("amount_jpy") // 購入時点の価格 (スナップショット)
+  status                  RewardPointPurchaseStatus @default(PENDING)
+  stripePaymentIntentId   String?                   @unique @map("stripe_payment_intent_id")
+  stripeCheckoutSessionId String?                   @unique @map("stripe_checkout_session_id")
+  paidAt                  DateTime?                 @map("paid_at")
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
+
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pack RewardPointPack @relation(fields: [packId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("reward_point_purchases")
+}
+
+/// 景品カタログ (特典ポイントで交換できる景品)。
+/// グッズ (発送必要) / 特典会優先枠 / デジタル特典 の 3 種別。
+model RewardCatalogItem {
+  id          String                  @id @default(uuid()) @db.Uuid
+  slug        String                  @unique
+  kind        RewardCatalogItemKind
+  name        String
+  description String?                 @db.Text
+  imageUrl    String?                 @map("image_url")
+  // 交換に必要な特典ポイント数
+  pointCost   Int                     @map("point_cost")
+  // 在庫管理 (null = 無制限。GOODS/CALL_PRIORITY は在庫を切らすことが多いので数値を推奨)
+  stock       Int?
+  status      RewardCatalogItemStatus @default(DRAFT)
+  sortOrder   Int                     @default(0) @map("sort_order")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  redemptions RewardRedemption[]
+
+  @@index([status, sortOrder])
+  @@index([kind])
+  @@map("reward_catalog_items")
+}
+
+/// 景品交換履歴 (発送管理を含む)。
+/// 交換確定時に RewardCatalogItem.stock を原子的にデクリメントし、
+/// 同一トランザクションで RewardPointTransaction (消費) を作成する。
+/// GOODS は発送フロー (PENDING→PROCESSING→SHIPPED→COMPLETED) を辿り、
+/// CALL_PRIORITY / DIGITAL は運営確認後 COMPLETED に遷移する想定。
+model RewardRedemption {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  userId             String                 @map("user_id") @db.Uuid
+  catalogItemId      String                 @map("catalog_item_id") @db.Uuid
+  // 交換時点のスナップショット (カタログ変更後も履歴の意味が変わらないように)
+  itemName           String                 @map("item_name")
+  itemKind           RewardCatalogItemKind  @map("item_kind")
+  pointCost          Int                    @map("point_cost")
+  status             RewardRedemptionStatus @default(PENDING)
+  // 発送先スナップショット (GOODS のみ意味を持つ。申請時点の User 住所をコピー)
+  shippingName       String?                @map("shipping_name")
+  shippingPhone      String?                @map("shipping_phone")
+  shippingPostalCode String?                @map("shipping_postal_code")
+  shippingPrefecture String?                @map("shipping_prefecture")
+  shippingAddress1   String?                @map("shipping_address_1")
+  shippingAddress2   String?                @map("shipping_address_2")
+  trackingNumber     String?                @map("tracking_number")
+  adminNote          String?                @map("admin_note") @db.Text
+  shippedAt          DateTime?              @map("shipped_at")
+  completedAt        DateTime?              @map("completed_at")
+  canceledAt         DateTime?              @map("canceled_at")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  catalogItem RewardCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("reward_redemptions")
+}
+
 /// 毎日のログインボーナス受領記録。
 /// userId + date (JST の YYYY-MM-DD) のユニーク制約で 1 日 1 回に限定。
 model LoginBonusGrant {
@@ -1250,19 +1441,38 @@ model MiniGamePlay {
   @@map("mini_game_plays")
 }
 
+/// ミニゲームの「本日の追加プレイ回数」を Fan ポイントで購入した記録。
+/// userId + gameType + date (JST) ごとに 1 行を upsert し、purchasedCount を加算する。
+/// 1 日の上限 (ACCHI_MAX_PLAYS_PER_DAY) に、この購入分を上乗せして判定する。
+model MiniGameExtraPlayPurchase {
+  id                  String       @id @default(uuid()) @db.Uuid
+  userId              String       @map("user_id") @db.Uuid
+  gameType            MiniGameType @map("game_type")
+  date                String // JST 基準の "YYYY-MM-DD"
+  purchasedCount      Int          @default(0) @map("purchased_count") // 累計購入回数 (この日)
+  totalFanPointsSpent Int          @default(0) @map("total_fan_points_spent") // この日に使った Fan ポイント累計
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameType, date])
+  @@map("mini_game_extra_play_purchases")
+}
+
 /// ファンから REIRIE への DM。
 /// - 一方向 (ファン → REIRIE)。運営は管理画面で閲覧・既読化できる。
 /// - body は送信時点の本文 (@ メンションは送信時に preferredName へ展開済み)。
 /// - NG ワードチェックは送信 API でサーバー側でも実施 (改ざん防止)。
 model DirectMessage {
-  id        String              @id @default(uuid()) @db.Uuid
-  userId    String              @map("user_id") @db.Uuid
+  id         String              @id @default(uuid()) @db.Uuid
+  userId     String              @map("user_id") @db.Uuid
   // 送信時点のファンの「呼んでほしい名前」のスナップショット (表示・監査用)
-  senderName String?            @map("sender_name")
-  body      String
-  status    DirectMessageStatus @default(SENT)
-  readAt    DateTime?           @map("read_at")
-  createdAt DateTime            @default(now()) @map("created_at")
+  senderName String?             @map("sender_name")
+  body       String
+  status     DirectMessageStatus @default(SENT)
+  readAt     DateTime?           @map("read_at")
+  createdAt  DateTime            @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
