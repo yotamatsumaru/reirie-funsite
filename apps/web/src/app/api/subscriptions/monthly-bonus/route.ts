@@ -21,6 +21,7 @@ import { prisma } from '@idol/db';
 import {
   MONTHLY_BONUS_GIFT_COUNT,
   DEFAULT_BONUS_GIFT_SLUG,
+  MONTHLY_REWARD_POINT_BONUS,
   currentYearMonth,
   type PlanTypeLiteral,
 } from '@idol/shared';
@@ -28,6 +29,7 @@ import { auth, requireSession } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
 import { logAudit } from '@/lib/audit';
+import { grantMonthlyRewardPointBonus } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
@@ -37,6 +39,8 @@ interface GrantResult {
   count: number;
   skipped: boolean;
   reason?: string;
+  rewardPoints?: number;
+  rewardPointsSkipped?: boolean;
 }
 
 export const POST = handle(async (req: Request) => {
@@ -130,6 +134,22 @@ export const POST = handle(async (req: Request) => {
       results.push({ userId: sub.userId, plan, count: 0, skipped: true, reason });
       skipped++;
     }
+
+    // ===== 特典ポイント月次自動付与 (景品カタログ交換に使う方) =====
+    // ギフト付与とは独立した二重付与防止 (MonthlyRewardPointGrant) を持つため、
+    // ギフト付与の成否に関わらず個別に試行する。
+    try {
+      const rewardResult = await grantMonthlyRewardPointBonus(sub.userId, plan, yearMonth);
+      const last = results[results.length - 1];
+      if (rewardResult.granted) {
+        last.rewardPoints = rewardResult.amount;
+      } else {
+        last.rewardPointsSkipped = true;
+      }
+    } catch {
+      const last = results[results.length - 1];
+      last.rewardPointsSkipped = true;
+    }
   }
 
   // 監査ログ
@@ -161,15 +181,25 @@ export const GET = handle(async () => {
   const plan = session.user.plan;
   const eligibleCount = MONTHLY_BONUS_GIFT_COUNT[plan];
 
-  const grant = await prisma.bonusGiftGrant.findUnique({
-    where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
-    include: { item: { select: { name: true, iconUrl: true, slug: true } } },
-  });
+  const [grant, rewardGrant] = await Promise.all([
+    prisma.bonusGiftGrant.findUnique({
+      where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
+      include: { item: { select: { name: true, iconUrl: true, slug: true } } },
+    }),
+    prisma.monthlyRewardPointGrant.findUnique({
+      where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
+    }),
+  ]);
 
   return NextResponse.json({
     yearMonth,
     plan,
     eligibleCount,
+    eligibleRewardPoints: MONTHLY_REWARD_POINT_BONUS[plan] ?? 0,
+    rewardPointsGranted: !!rewardGrant,
+    rewardPointsGrant: rewardGrant
+      ? { points: rewardGrant.points, grantedAt: rewardGrant.grantedAt.toISOString() }
+      : null,
     granted: !!grant,
     grant: grant
       ? {
