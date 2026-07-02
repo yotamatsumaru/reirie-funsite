@@ -20,7 +20,7 @@
  *   待機 → じゃんけんの手 → あっち向いてホイで横顔
  * とアニメーションで動く。キャラ画像の差し替えは ./character.ts 参照。
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   type JankenHand,
@@ -34,6 +34,7 @@ import {
   DIRECTION_POSE,
   type CharacterPose,
 } from './character';
+import { useAcchiSound } from './useAcchiSound';
 
 type Initial = {
   date: string;
@@ -92,6 +93,7 @@ type Phase = 'janken' | 'direction' | 'result';
 
 export function AcchiGameClient({ initial }: { initial: Initial }) {
   const router = useRouter();
+  const sound = useAcchiSound();
   const [remaining, setRemaining] = useState(initial.remaining);
   const [balance, setBalance] = useState(initial.balance);
   const [phase, setPhase] = useState<Phase>('janken');
@@ -102,8 +104,32 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
 
   const canPlay = remaining > 0;
 
+  // 結果フェーズに入ったら、勝敗に応じた効果音とボイスを鳴らす。
+  useEffect(() => {
+    if (phase !== 'result' || !outcome) return;
+    if (outcome.result === 'WIN') {
+      sound.play('win');
+      sound.play('voiceWin');
+      if (outcome.reward > 0) {
+        // ポイント獲得音は少し遅らせて重ねる。
+        const t = setTimeout(() => sound.play('point'), 450);
+        return () => clearTimeout(t);
+      }
+    } else if (outcome.result === 'LOSE') {
+      sound.play('lose');
+      sound.play('voiceLose');
+    } else {
+      sound.play('draw');
+      sound.play('voiceDraw');
+    }
+  }, [phase, outcome, sound]);
+
   function selectHand(h: JankenHand) {
     if (!canPlay || loading) return;
+    // じゃんけんの手を選んだタイミング = 最初のユーザー操作。
+    // ここで開始ボイスとタップ音を鳴らす (自動再生ブロック対策も兼ねる)。
+    sound.play('tap');
+    sound.play('voiceStart');
     setHand(h);
     setError(null);
     setPhase('direction');
@@ -111,6 +137,9 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
 
   async function selectDirection(dir: AcchiDirection) {
     if (!hand || loading) return;
+    // 「あっち向いて…ホイ！」の掛け声。
+    sound.play('tap');
+    sound.play('voiceAcchi');
     setLoading(true);
     setError(null);
     try {
@@ -136,6 +165,7 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
   }
 
   function playAgain() {
+    sound.play('tap');
     setHand(null);
     setOutcome(null);
     setError(null);
@@ -146,7 +176,20 @@ export function AcchiGameClient({ initial }: { initial: Initial }) {
     <div>
       {/* ヘッダー */}
       <div className="mb-6 rounded-2xl bg-gradient-to-br from-twilight-plum via-purple-800 to-twilight-amethyst p-6 text-white shadow-lg">
-        <h1 className="text-2xl font-bold">あっち向いてホイ</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-bold">あっち向いてホイ</h1>
+          {/* 音声 ON/OFF 切り替え */}
+          <button
+            type="button"
+            onClick={sound.toggleMute}
+            aria-pressed={sound.muted}
+            aria-label={sound.muted ? '音声をオンにする' : '音声をオフにする'}
+            title={sound.muted ? '音声をオンにする' : '音声をオフにする'}
+            className="shrink-0 rounded-full bg-white/15 px-3 py-1.5 text-lg transition hover:bg-white/25 active:scale-95"
+          >
+            {sound.muted ? '🔇' : '🔊'}
+          </button>
+        </div>
         <p className="mt-1 text-sm text-white/80">
           {CHARACTER_NAME} と勝負！勝てば{' '}
           <span className="font-bold text-amber-300">{initial.winReward}pt</span> ゲット！
