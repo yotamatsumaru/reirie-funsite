@@ -10,6 +10,8 @@ import {
   Radio,
   Gamepad2,
   PhoneCall,
+  Gift,
+  Truck,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -33,6 +35,8 @@ const NAV: NavItem[] = [
   { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },
   { href: '/admin/orders', label: '注文', icon: Receipt, capability: 'MERCH' },
   { href: '/admin/game', label: 'ゲーム', icon: Gamepad2, capability: 'GAME' },
+  { href: '/admin/rewards/catalog', label: '景品カタログ', icon: Gift, capability: 'MERCH' },
+  { href: '/admin/rewards/redemptions', label: '発送管理', icon: Truck, capability: 'MERCH' },
   { href: '/admin/call', label: '1on1コール', icon: PhoneCall, capability: 'CALL' },
   { href: '/admin/call/events', label: '特典会イベント', icon: PhoneCall, capability: 'CALL' },
 ];
