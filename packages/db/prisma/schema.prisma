@@ -342,9 +342,10 @@ model User {
   extraPlayPurchases MiniGameExtraPlayPurchase[]
 
   // 特典ポイント (課金/会員特典で貯まり、景品交換に使う)
-  rewardPointTransactions RewardPointTransaction[]
-  rewardPointPurchases    RewardPointPurchase[]
-  rewardRedemptions       RewardRedemption[]
+  rewardPointTransactions  RewardPointTransaction[]
+  rewardPointPurchases     RewardPointPurchase[]
+  rewardRedemptions        RewardRedemption[]
+  monthlyRewardPointGrants MonthlyRewardPointGrant[]
 
   // Direct Message (REIRIE への DM)
   directMessages DirectMessage[]
@@ -1439,6 +1440,25 @@ model MiniGamePlay {
   @@index([userId, gameType, date])
   @@index([userId, createdAt])
   @@map("mini_game_plays")
+}
+
+/// 月次サブスク特典ポイント自動付与の記録。
+/// userId + yearMonth のユニーク制約で同月の二重付与を防止する。
+/// 実際の付与処理は POST /api/subscriptions/monthly-bonus (Cron / 管理画面から起動) の
+/// 特典ポイント付与部分で使う (BonusGiftGrant とは別テーブル: ギフト現物 と 特典ポイント は別管理)。
+model MonthlyRewardPointGrant {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  yearMonth String   @map("year_month") // "YYYY-MM" 形式
+  plan      PlanType // 付与時点のプラン
+  points    Int // 付与した特典ポイント数
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, yearMonth])
+  @@index([yearMonth])
+  @@map("monthly_reward_point_grants")
 }
 
 /// ミニゲームの「本日の追加プレイ回数」を Fan ポイントで購入した記録。
