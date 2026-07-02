@@ -1,7 +1,8 @@
 /**
  * POST /api/game/webhook
- *   - Stripe Checkout 完了時に PlayerInventory に章/アイテムを付与
- *   - PlayerPurchase を SUCCEEDED に更新
+ *   - Stripe Checkout 完了時に PlayerInventory に章/アイテムを付与 (kind=GAME_PURCHASE)
+ *   - 特典ポイントパック購入確定時に特典ポイントを付与 (kind=REWARD_POINT_PURCHASE)
+ *   - PlayerPurchase / RewardPointPurchase を SUCCEEDED に更新
  *
  * Stripe Dashboard で `checkout.session.completed` イベントを購読する
  */
@@ -9,6 +10,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { getStripe } from '@/lib/stripe';
 import { env } from '@/lib/env';
+import { grantRewardPointsFromStripePurchase } from '@/lib/points';
 import type Stripe from 'stripe';
 
 export const runtime = 'nodejs';
@@ -42,6 +44,17 @@ export async function POST(req: Request): Promise<Response> {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     const meta = session.metadata ?? {};
+
+    if (meta.kind === 'REWARD_POINT_PURCHASE') {
+      const purchaseId = meta.purchaseId;
+      if (!purchaseId) return NextResponse.json({ received: true, error: 'missing metadata' });
+      await grantRewardPointsFromStripePurchase(purchaseId, {
+        stripePaymentIntentId:
+          typeof session.payment_intent === 'string' ? session.payment_intent : null,
+      });
+      return NextResponse.json({ received: true });
+    }
+
     if (meta.kind !== 'GAME_PURCHASE') {
       return NextResponse.json({ received: true, ignored: true });
     }
