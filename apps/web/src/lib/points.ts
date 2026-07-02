@@ -20,10 +20,18 @@ import {
   ACCHI_WIN_REWARD,
   remainingPlays,
   applyPlanPointMultiplier,
+  MONTHLY_REWARD_POINT_BONUS,
+  EXTRA_PLAY_COST_FAN_POINTS,
+  MAX_EXTRA_PLAYS_PER_DAY,
+  requiresShipping,
+  canTransitionRedemptionStatus,
   type PointRateSettings,
   type PlanTypeLiteral,
   type SocialPlatformLiteral,
   type AcchiResult,
+  type RewardPointReasonLiteral,
+  type RewardCatalogItemKindLiteral,
+  type RewardRedemptionStatusLiteral,
 } from '@idol/shared';
 
 type PointReasonLiteral =
@@ -33,6 +41,8 @@ type PointReasonLiteral =
   | 'ADMIN_ADJUST'
   | 'SIGNUP_BONUS'
   | 'GAME_REWARD'
+  | 'ITEM_PURCHASE'
+  | 'EXTRA_PLAY_PURCHASE'
   | 'OTHER';
 
 /**
@@ -341,6 +351,130 @@ export async function adminAdjustPoints(
 }
 
 // ---------------------------------------------------------------------
+// Fan ポイントでの恋愛ADV購入 (章 / アイテム)
+// ---------------------------------------------------------------------
+
+export type FanPointGamePurchaseResult =
+  | { ok: true; balance: number; purchaseId: string }
+  | { ok: false; reason: 'NOT_FOUND' | 'NOT_FOR_SALE' | 'ALREADY_OWNED' | 'OWN_LIMIT_EXCEEDED' };
+
+/**
+ * 恋愛ADVの章 (GameScenario) を Fan ポイントで購入する。
+ *  - fanPointPrice が null/0 の章は Fan ポイント購入不可。
+ *  - 既に所持していれば ALREADY_OWNED。
+ *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
+ *    トランザクション全体 (購入記録・所持追加を含む) がロールバックされる。
+ */
+export async function purchaseScenarioWithFanPoints(
+  userId: string,
+  scenarioId: string,
+): Promise<FanPointGamePurchaseResult> {
+  return prisma.$transaction(async (tx) => {
+    const sc = await tx.gameScenario.findUnique({ where: { id: scenarioId } });
+    if (!sc || sc.status !== 'PUBLISHED') return { ok: false, reason: 'NOT_FOUND' };
+    if (!sc.fanPointPrice || sc.fanPointPrice <= 0) {
+      return { ok: false, reason: 'NOT_FOR_SALE' };
+    }
+    const owned = await tx.playerInventory.findUnique({
+      where: { userId_scenarioId: { userId, scenarioId: sc.id } },
+    });
+    if (owned) return { ok: false, reason: 'ALREADY_OWNED' };
+
+    const balance = await applyPoints(tx, {
+      userId,
+      amount: -sc.fanPointPrice,
+      reason: 'ITEM_PURCHASE',
+      note: `${sc.title} を Fan ポイントで購入`,
+    });
+
+    const purchase = await tx.playerPurchase.create({
+      data: {
+        userId,
+        kind: 'SCENARIO',
+        scenarioId: sc.id,
+        quantity: 1,
+        payMethod: 'FAN_POINT',
+        amountJpy: 0,
+        fanPointAmount: sc.fanPointPrice,
+        paymentStatus: 'SUCCEEDED',
+        paidAt: new Date(),
+      },
+    });
+
+    await tx.playerInventory.upsert({
+      where: { userId_scenarioId: { userId, scenarioId: sc.id } },
+      create: { userId, scenarioId: sc.id, quantity: 1 },
+      update: {},
+    });
+
+    return { ok: true, balance, purchaseId: purchase.id };
+  });
+}
+
+/**
+ * 恋愛ADVのアイテム (GameItem) を Fan ポイントで購入する。
+ *  - fanPointPrice が null/0 のアイテムは Fan ポイント購入不可。
+ *  - maxOwn (所持上限) を超える場合は OWN_LIMIT_EXCEEDED。
+ */
+export async function purchaseItemWithFanPoints(
+  userId: string,
+  itemId: string,
+  quantity: number,
+): Promise<FanPointGamePurchaseResult> {
+  return prisma.$transaction(async (tx) => {
+    const it = await tx.gameItem.findUnique({ where: { id: itemId } });
+    if (!it || !it.isActive) return { ok: false, reason: 'NOT_FOUND' };
+    if (!it.fanPointPrice || it.fanPointPrice <= 0) {
+      return { ok: false, reason: 'NOT_FOR_SALE' };
+    }
+    if (it.maxOwn) {
+      const inv = await tx.playerInventory.findUnique({
+        where: { userId_itemId: { userId, itemId: it.id } },
+      });
+      if (inv && inv.quantity + quantity > it.maxOwn) {
+        return { ok: false, reason: 'OWN_LIMIT_EXCEEDED' };
+      }
+    }
+
+    const totalCost = it.fanPointPrice * quantity;
+    const balance = await applyPoints(tx, {
+      userId,
+      amount: -totalCost,
+      reason: 'ITEM_PURCHASE',
+      note: `${it.name} × ${quantity} を Fan ポイントで購入`,
+    });
+
+    const purchase = await tx.playerPurchase.create({
+      data: {
+        userId,
+        kind: 'ITEM',
+        itemId: it.id,
+        quantity,
+        payMethod: 'FAN_POINT',
+        amountJpy: 0,
+        fanPointAmount: totalCost,
+        paymentStatus: 'SUCCEEDED',
+        paidAt: new Date(),
+      },
+    });
+
+    const inv = await tx.playerInventory.findUnique({
+      where: { userId_itemId: { userId, itemId: it.id } },
+    });
+    if (inv) {
+      await tx.playerInventory.update({
+        where: { id: inv.id },
+        data: { quantity: inv.quantity + quantity },
+      });
+    } else {
+      await tx.playerInventory.create({ data: { userId, itemId: it.id, quantity } });
+    }
+
+    return { ok: true, balance, purchaseId: purchase.id };
+  });
+}
+
+// ---------------------------------------------------------------------
 // 整合性検証 / 異常検知 (管理者がポイントの不正・バグを監視するための土台)
 // ---------------------------------------------------------------------
 
@@ -481,12 +615,14 @@ export type AcchiPlayPersistResult = {
   result: AcchiResult;
   /** 付与ポイント (勝利時のみ > 0) */
   reward: number;
-  /** プレイ後の残高 */
+  /** プレイ後の残高 (Fan ポイント) */
   balance: number;
   /** プレイ後の本日プレイ回数 */
   playedToday: number;
-  /** プレイ後の本日残り回数 */
+  /** プレイ後の本日残り回数 (Fan ポイント購入分の追加回数を含む) */
   remaining: number;
+  /** 本日の上限回数 (標準上限 + Fan ポイント購入分) */
+  maxPerDay: number;
 };
 
 /**
@@ -503,6 +639,31 @@ export async function getAcchiPlayCountToday(
 }
 
 /**
+ * 本日、Fan ポイントで購入済みの追加プレイ回数を取得する (JST 基準)。
+ */
+export async function getAcchiExtraPlaysToday(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const date = jstDateKey(now);
+  const row = await prisma.miniGameExtraPlayPurchase.findUnique({
+    where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
+  });
+  return row?.purchasedCount ?? 0;
+}
+
+/**
+ * 本日の実効上限 (標準上限 + Fan ポイント購入分) を取得する。
+ */
+export async function getAcchiEffectiveMaxPerDay(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const extra = await getAcchiExtraPlaysToday(userId, now);
+  return ACCHI_MAX_PLAYS_PER_DAY + extra;
+}
+
+/**
  * あっち向いてホイの 1 プレイをサーバー側で確定・記録する。
  *
  * セキュリティ上の不変条件:
@@ -510,6 +671,7 @@ export async function getAcchiPlayCountToday(
  *    クライアントから結果やポイントを直接受け取らない (改ざん不可)。
  *  - 「1 日 N 回まで」の上限チェック、プレイ記録の作成、ポイント付与を
  *    すべて同一トランザクション内で実行し、cluster 並列でも超過付与を防ぐ。
+ *  - 上限は「標準上限 (ACCHI_MAX_PLAYS_PER_DAY) + Fan ポイントで購入した追加回数」。
  *  - 上限到達時は accepted=false を返し、記録も付与も行わない。
  *  - 付与は result==='WIN' のときのみ。それ以外は 0pt (記録のみ)。
  *
@@ -530,12 +692,16 @@ export async function recordAcchiPlay(
     const reward =
       result === 'WIN' ? applyPlanPointMultiplier(ACCHI_WIN_REWARD, plan) : 0;
 
-    // トランザクション内で当日プレイ数を数え、上限チェック (競合に強い)
-    const playedBefore = await tx.miniGamePlay.count({
-      where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
-    });
+    // トランザクション内で当日プレイ数と Fan ポイント購入済み追加回数を数え、上限チェック (競合に強い)
+    const [playedBefore, extraRow] = await Promise.all([
+      tx.miniGamePlay.count({ where: { userId, gameType: 'ACCHI_MUITE_HOI', date } }),
+      tx.miniGameExtraPlayPurchase.findUnique({
+        where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
+      }),
+    ]);
+    const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
 
-    if (playedBefore >= ACCHI_MAX_PLAYS_PER_DAY) {
+    if (playedBefore >= maxPerDay) {
       const u = await tx.user.findUnique({
         where: { id: userId },
         select: { points: true },
@@ -547,6 +713,7 @@ export async function recordAcchiPlay(
         balance: u?.points ?? 0,
         playedToday: playedBefore,
         remaining: 0,
+        maxPerDay,
       };
     }
 
@@ -584,7 +751,360 @@ export async function recordAcchiPlay(
       reward,
       balance,
       playedToday,
-      remaining: remainingPlays(playedToday),
+      remaining: remainingPlays(playedToday, maxPerDay),
+      maxPerDay,
     };
+  });
+}
+
+export type BuyExtraPlayResult =
+  | { ok: true; balance: number; purchasedToday: number; maxPerDay: number }
+  | { ok: false; reason: 'LIMIT_REACHED' };
+
+/**
+ * ミニゲーム (あっち向いてホイ) の追加プレイ回数を Fan ポイントで購入する。
+ *  - 1 日に購入できる追加回数には上限がある (MAX_EXTRA_PLAYS_PER_DAY)。
+ *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
+ *    トランザクション全体 (購入回数の加算を含む) がロールバックされる。
+ */
+export async function buyAcchiExtraPlay(
+  userId: string,
+  now: Date = new Date(),
+): Promise<BuyExtraPlayResult> {
+  const date = jstDateKey(now);
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.miniGameExtraPlayPurchase.findUnique({
+      where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
+    });
+    const purchasedBefore = existing?.purchasedCount ?? 0;
+
+    if (purchasedBefore >= MAX_EXTRA_PLAYS_PER_DAY) {
+      return { ok: false, reason: 'LIMIT_REACHED' as const };
+    }
+
+    const balance = await applyPoints(tx, {
+      userId,
+      amount: -EXTRA_PLAY_COST_FAN_POINTS,
+      reason: 'EXTRA_PLAY_PURCHASE',
+      note: 'あっち向いてホイ 追加プレイ購入',
+    });
+
+    if (existing) {
+      await tx.miniGameExtraPlayPurchase.update({
+        where: { id: existing.id },
+        data: {
+          purchasedCount: { increment: 1 },
+          totalFanPointsSpent: { increment: EXTRA_PLAY_COST_FAN_POINTS },
+        },
+      });
+    } else {
+      await tx.miniGameExtraPlayPurchase.create({
+        data: {
+          userId,
+          gameType: 'ACCHI_MUITE_HOI',
+          date,
+          purchasedCount: 1,
+          totalFanPointsSpent: EXTRA_PLAY_COST_FAN_POINTS,
+        },
+      });
+    }
+
+    const purchasedToday = purchasedBefore + 1;
+    return {
+      ok: true as const,
+      balance,
+      purchasedToday,
+      maxPerDay: ACCHI_MAX_PLAYS_PER_DAY + purchasedToday,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------
+// 特典ポイント (Reward Point) — 課金 / 会員特典で貯まり、景品交換に使う
+// ---------------------------------------------------------------------
+
+/**
+ * 特典ポイントを増減し、履歴を残す (内部用)。残高を返す。
+ * tx を渡せば既存トランザクションに参加する。applyPoints (Fan ポイント用) と
+ * 同じ不変条件 (整数 / 非ゼロ / 上限内 / マイナス残高禁止) を適用する。
+ */
+async function applyRewardPoints(
+  client: Prisma.TransactionClient,
+  params: {
+    userId: string;
+    amount: number;
+    reason: RewardPointReasonLiteral;
+    note?: string;
+    allowNegative?: boolean;
+  },
+): Promise<number> {
+  if (!isValidPointAmount(params.amount)) {
+    if (!Number.isInteger(params.amount)) {
+      throw new PointIntegrityError('特典ポイントは整数で指定してください');
+    }
+    if (params.amount === 0) {
+      throw new PointIntegrityError('0 特典ポイントの取引は記録できません');
+    }
+    throw new PointIntegrityError(
+      `1 取引で動かせる特典ポイントは ±${MAX_POINTS_PER_TX} までです`,
+    );
+  }
+
+  const user = await client.user.update({
+    where: { id: params.userId },
+    data: { rewardPoints: { increment: params.amount } },
+    select: { rewardPoints: true },
+  });
+
+  if (!params.allowNegative && user.rewardPoints < 0) {
+    throw new PointIntegrityError('特典ポイント残高が不足しています');
+  }
+
+  await client.rewardPointTransaction.create({
+    data: {
+      userId: params.userId,
+      amount: params.amount,
+      balance: user.rewardPoints,
+      reason: params.reason,
+      note: params.note ?? null,
+    },
+  });
+  return user.rewardPoints;
+}
+
+/**
+ * 管理者による特典ポイント手動調整。amount は正負どちらも可。
+ */
+export async function adminAdjustRewardPoints(
+  userId: string,
+  amount: number,
+  note?: string,
+): Promise<number> {
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!target) throw new PointIntegrityError('対象ユーザーが見つかりません');
+  return prisma.$transaction((tx) =>
+    applyRewardPoints(tx, { userId, amount, reason: 'ADMIN_ADJUST', note }),
+  );
+}
+
+export type RewardPointPurchaseConfirmResult =
+  | { ok: true; balance: number }
+  | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_PROCESSED' };
+
+/**
+ * Stripe 決済確定 (webhook) を受けて特典ポイントを付与する。
+ *  - RewardPointPurchase.status が既に SUCCEEDED なら二重付与しない。
+ *  - purchaseId は RewardPointPurchase.id (checkout 作成時に発行済み)。
+ */
+export async function grantRewardPointsFromStripePurchase(
+  purchaseId: string,
+  opts?: { stripePaymentIntentId?: string | null },
+): Promise<RewardPointPurchaseConfirmResult> {
+  return prisma.$transaction(async (tx) => {
+    const purchase = await tx.rewardPointPurchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase) return { ok: false, reason: 'NOT_FOUND' };
+    if (purchase.status === 'SUCCEEDED') return { ok: false, reason: 'ALREADY_PROCESSED' };
+
+    await tx.rewardPointPurchase.update({
+      where: { id: purchaseId },
+      data: {
+        status: 'SUCCEEDED',
+        paidAt: new Date(),
+        stripePaymentIntentId: opts?.stripePaymentIntentId ?? purchase.stripePaymentIntentId,
+      },
+    });
+
+    const balance = await applyRewardPoints(tx, {
+      userId: purchase.userId,
+      amount: purchase.points,
+      reason: 'STRIPE_PURCHASE',
+      note: `特典ポイントパック購入 (${purchase.points}pt / ¥${purchase.amountJpy.toLocaleString()})`,
+    });
+
+    return { ok: true, balance };
+  });
+}
+
+export type MonthlyRewardPointGrantResult =
+  | { granted: true; amount: number; balance: number }
+  | { granted: false; reason: 'NO_BONUS_FOR_PLAN' | 'ALREADY_GRANTED' };
+
+/**
+ * サブスクプランに応じた月次特典ポイントを自動付与する。
+ *  - MonthlyRewardPointGrant (userId, yearMonth) のユニーク制約で二重付与を防止。
+ *  - FREE プランは付与額 0 のため NO_BONUS_FOR_PLAN を返す。
+ */
+export async function grantMonthlyRewardPointBonus(
+  userId: string,
+  plan: PlanTypeLiteral,
+  yearMonth: string,
+): Promise<MonthlyRewardPointGrantResult> {
+  const amount = MONTHLY_REWARD_POINT_BONUS[plan] ?? 0;
+  if (amount <= 0) return { granted: false, reason: 'NO_BONUS_FOR_PLAN' };
+
+  try {
+    const balance = await prisma.$transaction(async (tx) => {
+      const existing = await tx.monthlyRewardPointGrant.findUnique({
+        where: { userId_yearMonth: { userId, yearMonth } },
+      });
+      if (existing) throw new Error('ALREADY_GRANTED');
+
+      await tx.monthlyRewardPointGrant.create({
+        data: { userId, yearMonth, plan, points: amount },
+      });
+
+      return applyRewardPoints(tx, {
+        userId,
+        amount,
+        reason: 'SUBSCRIPTION_BONUS',
+        note: `${plan} プラン ${yearMonth} 月次特典ポイント`,
+      });
+    });
+    return { granted: true, amount, balance };
+  } catch (e) {
+    if (e instanceof Error && e.message === 'ALREADY_GRANTED') {
+      return { granted: false, reason: 'ALREADY_GRANTED' };
+    }
+    if (isUniqueViolation(e)) {
+      return { granted: false, reason: 'ALREADY_GRANTED' };
+    }
+    throw e;
+  }
+}
+
+export type RedeemCatalogItemResult =
+  | { ok: true; redemptionId: string; balance: number }
+  | {
+      ok: false;
+      reason: 'NOT_FOUND' | 'NOT_AVAILABLE' | 'OUT_OF_STOCK' | 'SHIPPING_REQUIRED';
+    };
+
+/**
+ * 景品カタログ交換 (特典ポイント消費)。
+ *  - stock が設定されている場合は在庫を原子的にデクリメントする。
+ *  - GOODS (発送必要) は配送先情報が必須。
+ *  - 特典ポイント残高不足時は applyRewardPoints が PointIntegrityError を投げ、
+ *    トランザクション全体 (在庫デクリメント・交換記録を含む) がロールバックされる。
+ */
+export async function redeemRewardCatalogItem(
+  userId: string,
+  catalogItemId: string,
+  shipping?: {
+    shippingName?: string;
+    shippingPhone?: string;
+    shippingPostalCode?: string;
+    shippingPrefecture?: string;
+    shippingAddress1?: string;
+    shippingAddress2?: string;
+  },
+): Promise<RedeemCatalogItemResult> {
+  return prisma.$transaction(async (tx) => {
+    const item = await tx.rewardCatalogItem.findUnique({ where: { id: catalogItemId } });
+    if (!item) return { ok: false, reason: 'NOT_FOUND' };
+    if (item.status !== 'PUBLISHED') return { ok: false, reason: 'NOT_AVAILABLE' };
+    if (item.stock !== null && item.stock <= 0) return { ok: false, reason: 'OUT_OF_STOCK' };
+
+    const needsShipping = requiresShipping(item.kind as RewardCatalogItemKindLiteral);
+    if (needsShipping && (!shipping?.shippingName || !shipping?.shippingAddress1)) {
+      return { ok: false, reason: 'SHIPPING_REQUIRED' };
+    }
+
+    // 在庫があれば原子的にデクリメント (競合時は WHERE 条件で 0 件更新 = 品切れ扱い)
+    if (item.stock !== null) {
+      const updated = await tx.rewardCatalogItem.updateMany({
+        where: { id: item.id, stock: { gt: 0 } },
+        data: { stock: { decrement: 1 } },
+      });
+      if (updated.count === 0) return { ok: false, reason: 'OUT_OF_STOCK' };
+    }
+
+    const balance = await applyRewardPoints(tx, {
+      userId,
+      amount: -item.pointCost,
+      reason: 'REDEMPTION',
+      note: `${item.name} と交換`,
+    });
+
+    const redemption = await tx.rewardRedemption.create({
+      data: {
+        userId,
+        catalogItemId: item.id,
+        itemName: item.name,
+        itemKind: item.kind,
+        pointCost: item.pointCost,
+        status: 'PENDING',
+        shippingName: needsShipping ? shipping?.shippingName : undefined,
+        shippingPhone: needsShipping ? shipping?.shippingPhone : undefined,
+        shippingPostalCode: needsShipping ? shipping?.shippingPostalCode : undefined,
+        shippingPrefecture: needsShipping ? shipping?.shippingPrefecture : undefined,
+        shippingAddress1: needsShipping ? shipping?.shippingAddress1 : undefined,
+        shippingAddress2: needsShipping ? shipping?.shippingAddress2 : undefined,
+      },
+    });
+
+    return { ok: true, redemptionId: redemption.id, balance };
+  });
+}
+
+export type UpdateRedemptionStatusResult =
+  | { ok: true }
+  | { ok: false; reason: 'NOT_FOUND' | 'INVALID_TRANSITION' };
+
+/**
+ * 景品交換の発送ステータスを更新する (管理者操作)。
+ *  - 許可されたステータス遷移のみ受け付ける (REWARD_REDEMPTION_STATUS_TRANSITIONS)。
+ *  - CANCELED へ遷移する場合は特典ポイントを返還する (REFUND)。
+ *  - SHIPPED/COMPLETED/CANCELED への遷移時は対応する日時カラムを記録する。
+ */
+export async function updateRedemptionStatus(
+  redemptionId: string,
+  next: RewardRedemptionStatusLiteral,
+  opts?: { trackingNumber?: string; adminNote?: string },
+): Promise<UpdateRedemptionStatusResult> {
+  return prisma.$transaction(async (tx) => {
+    const redemption = await tx.rewardRedemption.findUnique({ where: { id: redemptionId } });
+    if (!redemption) return { ok: false, reason: 'NOT_FOUND' };
+
+    const current = redemption.status as RewardRedemptionStatusLiteral;
+    if (!canTransitionRedemptionStatus(current, next)) {
+      return { ok: false, reason: 'INVALID_TRANSITION' };
+    }
+
+    const now = new Date();
+    await tx.rewardRedemption.update({
+      where: { id: redemptionId },
+      data: {
+        status: next,
+        trackingNumber: opts?.trackingNumber ?? redemption.trackingNumber,
+        adminNote: opts?.adminNote ?? redemption.adminNote,
+        shippedAt: next === 'SHIPPED' ? now : redemption.shippedAt,
+        completedAt: next === 'COMPLETED' ? now : redemption.completedAt,
+        canceledAt: next === 'CANCELED' ? now : redemption.canceledAt,
+      },
+    });
+
+    // キャンセル時は特典ポイントを返還する
+    if (next === 'CANCELED') {
+      await applyRewardPoints(tx, {
+        userId: redemption.userId,
+        amount: redemption.pointCost,
+        reason: 'REFUND',
+        note: `${redemption.itemName} の交換キャンセルによる返還`,
+      });
+      // 在庫を戻す (無制限=null の場合は何もしない)
+      const item = await tx.rewardCatalogItem.findUnique({
+        where: { id: redemption.catalogItemId },
+        select: { stock: true },
+      });
+      if (item && item.stock !== null) {
+        await tx.rewardCatalogItem.update({
+          where: { id: redemption.catalogItemId },
+          data: { stock: { increment: 1 } },
+        });
+      }
+    }
+
+    return { ok: true };
   });
 }
