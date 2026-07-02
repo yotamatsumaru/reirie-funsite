@@ -6,7 +6,9 @@ import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getAcchiWinSettings } from '@/lib/app-setting';
+import { listGameAudio } from '@/lib/game-audio';
 import { AcchiSettingsClient } from './acchi-settings-client';
+import { GameAudioClient, type GameAudioItem } from './game-audio-client';
 
 export const metadata: Metadata = { title: 'ゲーム経済 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -38,7 +40,7 @@ type Item = { id: string; slug: string; name: string; priceJpy: number };
 type Character = { id: string; name: string; slug: string };
 
 export default async function SuperAdminGamePage() {
-  const [purchases, progress, scenarios, items, characters, acchiSettings] =
+  const [purchases, progress, scenarios, items, characters, acchiSettings, gameAudio] =
     await Promise.all([
       prisma.playerPurchase.findMany({}),
       prisma.playerProgress.findMany({}),
@@ -46,7 +48,15 @@ export default async function SuperAdminGamePage() {
       prisma.gameItem.findMany({}),
       prisma.gameCharacter.findMany({}),
       getAcchiWinSettings(),
+      listGameAudio(),
     ]);
+  const gameAudioItems: GameAudioItem[] = gameAudio.map((a) => ({
+    slot: a.slot,
+    url: a.url,
+    fileName: a.fileName,
+    sizeBytes: a.sizeBytes,
+    updatedAt: a.updatedAt.toISOString(),
+  }));
   const purchasesT = purchases as unknown as Purchase[];
   const progressT = progress as unknown as Progress[];
   const scenariosT = scenarios as unknown as Scenario[];
@@ -126,6 +136,9 @@ export default async function SuperAdminGamePage() {
 
       {/* あっち向いてホイ 勝率設定 */}
       <AcchiSettingsClient initial={acchiSettings} />
+
+      {/* あっち向いてホイ キャラボイス アップロード */}
+      <GameAudioClient initial={gameAudioItems} />
 
       {/* シナリオ別 */}
       <Card className="mt-6">

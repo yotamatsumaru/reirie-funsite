@@ -4,6 +4,7 @@ import { jstDateKey, remainingPlays, ACCHI_MAX_PLAYS_PER_DAY, ACCHI_WIN_REWARD }
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { getAcchiPlayCountToday } from '@/lib/points';
+import { getAcchiVoiceUrlMap } from '@/lib/game-audio';
 import { AcchiGameClient } from './acchi-client';
 
 export const metadata: Metadata = { title: 'あっち向いてホイ' };
@@ -15,12 +16,13 @@ export default async function AcchiGamePage() {
     redirect('/signin?callbackUrl=/me/games/acchi');
   }
 
-  const [playedToday, user] = await Promise.all([
+  const [playedToday, user, voiceUrls] = await Promise.all([
     getAcchiPlayCountToday(session.user.id),
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { points: true },
     }),
+    getAcchiVoiceUrlMap(),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function AcchiGamePage() {
           remaining: remainingPlays(playedToday),
           balance: user?.points ?? 0,
         }}
+        voiceUrls={voiceUrls}
       />
     </div>
   );

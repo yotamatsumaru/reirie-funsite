@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import {
   type JankenHand,
   type AcchiDirection,
+  type AcchiVoiceUrlMap,
 } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
 import { CharacterAvatar } from './CharacterAvatar';
@@ -91,9 +92,15 @@ const DIR_LABEL: Record<AcchiDirection, string> = {
 
 type Phase = 'janken' | 'direction' | 'result';
 
-export function AcchiGameClient({ initial }: { initial: Initial }) {
+export function AcchiGameClient({
+  initial,
+  voiceUrls = {},
+}: {
+  initial: Initial;
+  voiceUrls?: AcchiVoiceUrlMap;
+}) {
   const router = useRouter();
-  const sound = useAcchiSound();
+  const sound = useAcchiSound(voiceUrls);
   const [remaining, setRemaining] = useState(initial.remaining);
   const [balance, setBalance] = useState(initial.balance);
   const [phase, setPhase] = useState<Phase>('janken');
