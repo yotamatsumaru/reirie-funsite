@@ -352,14 +352,28 @@ export const GiftUseInputSchema = z.object({
 export type GiftUseInput = z.infer<typeof GiftUseInputSchema>;
 
 /** 章購入 / アイテム購入 */
-export const GamePurchaseInputSchema = z.object({
-  kind: z.enum(['SCENARIO', 'ITEM']),
-  scenarioId: z.uuid().optional(),
-  itemId: z.uuid().optional(),
-  quantity: z.number().int().min(1).max(99).default(1),
-  successUrl: z.url(),
-  cancelUrl: z.url(),
-});
+export const GamePurchaseInputSchema = z
+  .object({
+    kind: z.enum(['SCENARIO', 'ITEM']),
+    scenarioId: z.uuid().optional(),
+    itemId: z.uuid().optional(),
+    quantity: z.number().int().min(1).max(99).default(1),
+    // 決済手段。STRIPE (既定) = クレジットカード課金 / FAN_POINT = Fan ポイント即時消費。
+    // successUrl/cancelUrl は STRIPE のときのみ必須 (FAN_POINT は即時確定するため不要)。
+    payMethod: z.enum(['STRIPE', 'FAN_POINT']).default('STRIPE'),
+    successUrl: z.url().optional(),
+    cancelUrl: z.url().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.payMethod === 'STRIPE') {
+      if (!val.successUrl) {
+        ctx.addIssue({ code: 'custom', path: ['successUrl'], message: 'successUrl が必要です' });
+      }
+      if (!val.cancelUrl) {
+        ctx.addIssue({ code: 'custom', path: ['cancelUrl'], message: 'cancelUrl が必要です' });
+      }
+    }
+  });
 
 export type GamePurchaseInput = z.infer<typeof GamePurchaseInputSchema>;
 
@@ -402,6 +416,8 @@ export const AdminGameScenarioInputSchema = z.object({
   summary: z.string().max(2000).optional(),
   scriptJson: z.unknown(), // 別途 validateScenarioScript で検証
   priceJpy: z.number().int().min(0).max(50_000).default(0),
+  // Fan ポイントでの購入 (null/未指定 = Fan ポイント購入不可、Stripe 課金のみ)
+  fanPointPrice: z.number().int().min(1).max(1_000_000).nullable().optional(),
   isFreeTrial: z.boolean().default(false),
   isPremiumIncluded: z.boolean().default(false),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']).default('DRAFT'),
@@ -419,6 +435,8 @@ export const AdminGameItemInputSchema = z.object({
   description: z.string().max(500).optional(),
   iconUrl: z.url().optional(),
   priceJpy: z.number().int().min(0).max(50_000),
+  // Fan ポイントでの購入 (null/未指定 = Fan ポイント購入不可、Stripe 課金のみ)
+  fanPointPrice: z.number().int().min(1).max(1_000_000).nullable().optional(),
   isPremiumOnly: z.boolean().default(false),
   affinityBoost: z.number().int().min(0).max(50).default(0),
   maxOwn: z.number().int().min(1).max(99).nullable().optional(),

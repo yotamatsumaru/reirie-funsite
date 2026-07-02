@@ -16,3 +16,4 @@ export * from './schemas/ticket';
 export * from './schemas/admin';
 export * from './schemas/game';
 export * from './schemas/call';
+export * from './schemas/reward';
