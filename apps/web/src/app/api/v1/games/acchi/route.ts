@@ -20,13 +20,19 @@ import {
   isAcchiDirection,
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
+  EXTRA_PLAY_COST_FAN_POINTS,
+  MAX_EXTRA_PLAYS_PER_DAY,
   resolveAcchiSettingForPlan,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { requireApiPrincipal } from '@/lib/api-auth';
-import { getAcchiPlayCountToday, recordAcchiPlay } from '@/lib/points';
+import {
+  getAcchiPlayCountToday,
+  getAcchiExtraPlaysToday,
+  recordAcchiPlay,
+} from '@/lib/points';
 import { resolveAcchiPlay } from '@/lib/games/acchi';
 import { getAcchiWinSettings } from '@/lib/app-setting';
 import { env } from '@/lib/env';
@@ -51,8 +57,9 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
 export const GET = handle(async (req: Request) => {
   const principal = await requireApiPrincipal(req);
 
-  const [playedToday, user] = await Promise.all([
+  const [playedToday, purchasedExtra, user] = await Promise.all([
     getAcchiPlayCountToday(principal.userId),
+    env.demoMode ? Promise.resolve(0) : getAcchiExtraPlaysToday(principal.userId),
     env.demoMode
       ? Promise.resolve(null)
       : prisma.user.findUnique({
@@ -61,13 +68,21 @@ export const GET = handle(async (req: Request) => {
         }),
   ]);
 
+  const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + purchasedExtra;
   return NextResponse.json({
     date: jstDateKey(),
-    maxPerDay: ACCHI_MAX_PLAYS_PER_DAY,
+    baseMaxPerDay: ACCHI_MAX_PLAYS_PER_DAY,
+    maxPerDay,
     winReward: ACCHI_WIN_REWARD,
     playedToday,
-    remaining: remainingPlays(playedToday),
+    remaining: remainingPlays(playedToday, maxPerDay),
     balance: user?.points ?? 0,
+    extraPlay: {
+      purchasedToday: purchasedExtra,
+      maxPurchasesPerDay: MAX_EXTRA_PLAYS_PER_DAY,
+      costFanPoints: EXTRA_PLAY_COST_FAN_POINTS,
+      canBuyMore: purchasedExtra < MAX_EXTRA_PLAYS_PER_DAY,
+    },
   });
 });
 
@@ -136,6 +151,7 @@ export const POST = handle(async (req: Request) => {
     balance: persisted.balance,
     playedToday: persisted.playedToday,
     remaining: persisted.remaining,
+    maxPerDay: persisted.maxPerDay,
     sequence: play.sequence,
   });
 });

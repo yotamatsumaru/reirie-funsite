@@ -19,13 +19,19 @@ import {
   isAcchiDirection,
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
+  EXTRA_PLAY_COST_FAN_POINTS,
+  MAX_EXTRA_PLAYS_PER_DAY,
   resolveAcchiSettingForPlan,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { requireSession } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import { getAcchiPlayCountToday, recordAcchiPlay } from '@/lib/points';
+import {
+  getAcchiPlayCountToday,
+  getAcchiExtraPlaysToday,
+  recordAcchiPlay,
+} from '@/lib/points';
 import { resolveAcchiPlay } from '@/lib/games/acchi';
 import { getAcchiWinSettings } from '@/lib/app-setting';
 
@@ -46,20 +52,29 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
 
 export const GET = handle(async () => {
   const session = await requireSession();
-  const [playedToday, user] = await Promise.all([
+  const [playedToday, purchasedExtra, user] = await Promise.all([
     getAcchiPlayCountToday(session.user.id),
+    getAcchiExtraPlaysToday(session.user.id),
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { points: true },
     }),
   ]);
+  const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + purchasedExtra;
   return NextResponse.json({
     date: jstDateKey(),
-    maxPerDay: ACCHI_MAX_PLAYS_PER_DAY,
+    baseMaxPerDay: ACCHI_MAX_PLAYS_PER_DAY,
+    maxPerDay,
     winReward: ACCHI_WIN_REWARD,
     playedToday,
-    remaining: remainingPlays(playedToday),
+    remaining: remainingPlays(playedToday, maxPerDay),
     balance: user?.points ?? 0,
+    extraPlay: {
+      purchasedToday: purchasedExtra,
+      maxPurchasesPerDay: MAX_EXTRA_PLAYS_PER_DAY,
+      costFanPoints: EXTRA_PLAY_COST_FAN_POINTS,
+      canBuyMore: purchasedExtra < MAX_EXTRA_PLAYS_PER_DAY,
+    },
   });
 });
 
@@ -129,6 +144,7 @@ export const POST = handle(async (req: Request) => {
     balance: persisted.balance,
     playedToday: persisted.playedToday,
     remaining: persisted.remaining,
+    maxPerDay: persisted.maxPerDay,
     // 演出用シーケンス (やり直しを含む決着までの流れ)
     sequence: play.sequence,
   });

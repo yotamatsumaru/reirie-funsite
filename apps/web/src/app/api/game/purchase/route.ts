@@ -1,8 +1,10 @@
 /**
  * POST /api/game/purchase
- *   - 章 (GameScenario) または アイテム (GameItem) を Stripe Checkout で購入
+ *   - 章 (GameScenario) または アイテム (GameItem) を購入する
+ *   - 決済手段は Stripe (課金) または Fan ポイント (payMethod で指定)
+ *     - STRIPE: Checkout Session を作成して返す。確定は webhook (kind=GAME_PURCHASE) で行う。
+ *     - FAN_POINT: サーバー側で即時に Fan ポイントを消費し、PlayerInventory に確定付与する。
  *   - 確定報酬型 DLC のみ (ガチャ禁止)
- *   - 成功時は webhook で PlayerInventory に追加 (本ファイルでは Checkout Session 作成のみ)
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
@@ -10,19 +12,60 @@ import { GamePurchaseInputSchema } from '@idol/shared';
 import { requireSession } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { getStripe } from '@/lib/stripe';
+import { purchaseScenarioWithFanPoints, purchaseItemWithFanPoints } from '@/lib/points';
 
 export const runtime = 'nodejs';
+
+const FAN_POINT_ERROR_MESSAGES: Record<string, string> = {
+  NOT_FOUND: '対象が見つかりません',
+  NOT_FOR_SALE: 'Fan ポイントでは購入できません',
+  ALREADY_OWNED: '既に購入済みです',
+  OWN_LIMIT_EXCEEDED: '所持上限を超えています',
+};
 
 export const POST = handle(async (req: Request) => {
   const session = await requireSession();
   const userId = session.user.id;
   const body = GamePurchaseInputSchema.parse(await req.json());
+  const quantity = body.quantity;
+
+  // ===== Fan ポイント決済 (即時確定・Stripe不要) =====
+  if (body.payMethod === 'FAN_POINT') {
+    if (body.kind === 'SCENARIO') {
+      if (!body.scenarioId) throw errors.badRequest('scenarioId が必要です');
+      const result = await purchaseScenarioWithFanPoints(userId, body.scenarioId);
+      if (!result.ok) {
+        throw errors.conflict(FAN_POINT_ERROR_MESSAGES[result.reason] ?? '購入できません');
+      }
+      return NextResponse.json({
+        payMethod: 'FAN_POINT',
+        purchaseId: result.purchaseId,
+        balance: result.balance,
+      });
+    } else if (body.kind === 'ITEM') {
+      if (!body.itemId) throw errors.badRequest('itemId が必要です');
+      const result = await purchaseItemWithFanPoints(userId, body.itemId, quantity);
+      if (!result.ok) {
+        throw errors.conflict(FAN_POINT_ERROR_MESSAGES[result.reason] ?? '購入できません');
+      }
+      return NextResponse.json({
+        payMethod: 'FAN_POINT',
+        purchaseId: result.purchaseId,
+        balance: result.balance,
+      });
+    }
+    throw errors.badRequest('kind が不正です');
+  }
+
+  // ===== Stripe 決済 (Checkout Session を作成し、webhook で確定) =====
+  if (!body.successUrl || !body.cancelUrl) {
+    throw errors.badRequest('successUrl / cancelUrl が必要です');
+  }
 
   let amountJpy: number;
   let name: string;
   let scenarioId: string | null = null;
   let itemId: string | null = null;
-  const quantity = body.quantity;
 
   if (body.kind === 'SCENARIO') {
     if (!body.scenarioId) throw errors.badRequest('scenarioId が必要です');
@@ -69,6 +112,7 @@ export const POST = handle(async (req: Request) => {
       scenarioId,
       itemId,
       quantity,
+      payMethod: 'STRIPE',
       amountJpy,
       paymentStatus: 'PENDING',
     },
@@ -106,5 +150,9 @@ export const POST = handle(async (req: Request) => {
     data: { stripeCheckoutSessionId: checkout.id },
   });
 
-  return NextResponse.json({ checkoutUrl: checkout.url, sessionId: checkout.id });
+  return NextResponse.json({
+    payMethod: 'STRIPE',
+    checkoutUrl: checkout.url,
+    sessionId: checkout.id,
+  });
 });
