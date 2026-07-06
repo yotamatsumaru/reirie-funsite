@@ -20,6 +20,7 @@ import {
   Crown,
   CreditCard,
   Repeat,
+  Gift,
   MessageCircle,
   Menu,
   X,
@@ -68,7 +69,8 @@ const MEMBER_GROUP: NavGroup = {
   title: '会員',
   items: [
     { href: '/me/card', label: '会員カード', icon: CreditCard },
-    { href: '/me/points', label: 'ポイント交換', icon: Repeat },
+    { href: '/me/points', label: 'ポイント履歴', icon: Repeat },
+    { href: '/me/rewards', label: '景品交換', icon: Gift },
     { href: '/me/games/acchi', label: 'あっち向いてホイ', icon: Gamepad2 },
     { href: '/me/dm', label: 'REIRIE への DM', icon: MessageCircle },
   ],
