@@ -31,10 +31,11 @@ import { requireApiPrincipal } from '@/lib/api-auth';
 import {
   getAcchiPlayCountToday,
   getAcchiExtraPlaysToday,
+  getAcchiRewardBonusGrantedToday,
   recordAcchiPlay,
 } from '@/lib/points';
 import { resolveAcchiPlay } from '@/lib/games/acchi';
-import { getAcchiWinSettings } from '@/lib/app-setting';
+import { getAcchiWinSettings, getAcchiRewardBonusSettings } from '@/lib/app-setting';
 import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
@@ -57,16 +58,19 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
 export const GET = handle(async (req: Request) => {
   const principal = await requireApiPrincipal(req);
 
-  const [playedToday, purchasedExtra, user] = await Promise.all([
-    getAcchiPlayCountToday(principal.userId),
-    env.demoMode ? Promise.resolve(0) : getAcchiExtraPlaysToday(principal.userId),
-    env.demoMode
-      ? Promise.resolve(null)
-      : prisma.user.findUnique({
-          where: { id: principal.userId },
-          select: { points: true },
-        }),
-  ]);
+  const [playedToday, purchasedExtra, user, rewardBonusSettings, rewardPointGrantedToday] =
+    await Promise.all([
+      getAcchiPlayCountToday(principal.userId),
+      env.demoMode ? Promise.resolve(0) : getAcchiExtraPlaysToday(principal.userId),
+      env.demoMode
+        ? Promise.resolve(null)
+        : prisma.user.findUnique({
+            where: { id: principal.userId },
+            select: { points: true, rewardPoints: true },
+          }),
+      getAcchiRewardBonusSettings(),
+      env.demoMode ? Promise.resolve(0) : getAcchiRewardBonusGrantedToday(principal.userId),
+    ]);
 
   const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + purchasedExtra;
   return NextResponse.json({
@@ -83,6 +87,12 @@ export const GET = handle(async (req: Request) => {
       costFanPoints: EXTRA_PLAY_COST_FAN_POINTS,
       canBuyMore: purchasedExtra < MAX_EXTRA_PLAYS_PER_DAY,
     },
+    rewardPointBonus: {
+      perWin: rewardBonusSettings.perWin,
+      dailyCap: rewardBonusSettings.dailyCap,
+      grantedToday: rewardPointGrantedToday,
+      balance: user?.rewardPoints ?? 0,
+    },
   });
 });
 
@@ -97,9 +107,10 @@ export const POST = handle(async (req: Request) => {
   }
 
   // プラン → 設定 (1〜6) → 勝率 を解決し、サーバー側で勝敗を確定する
-  const [plan, winSettings] = await Promise.all([
+  const [plan, winSettings, rewardBonusSettings] = await Promise.all([
     resolveUserPlan(principal.userId),
     getAcchiWinSettings(),
+    getAcchiRewardBonusSettings(),
   ]);
   const setting = resolveAcchiSettingForPlan(winSettings, plan);
 
@@ -114,13 +125,19 @@ export const POST = handle(async (req: Request) => {
     setting,
   });
 
-  const persisted = await recordAcchiPlay(principal.userId, play.result, detail);
+  const persisted = await recordAcchiPlay(
+    principal.userId,
+    play.result,
+    detail,
+    undefined,
+    rewardBonusSettings,
+  );
 
   if (!persisted.accepted) {
     throw errors.rateLimited('本日のプレイ回数の上限に達しました。明日また挑戦してください');
   }
 
-  if (persisted.reward > 0) {
+  if (persisted.reward > 0 || persisted.rewardPointBonus > 0) {
     await logAudit({
       userId: principal.userId,
       action: 'points.game_reward',
@@ -128,6 +145,7 @@ export const POST = handle(async (req: Request) => {
       metadata: {
         game: 'ACCHI_MUITE_HOI',
         amount: persisted.reward,
+        rewardPointBonus: persisted.rewardPointBonus,
         result: persisted.result,
         via: principal.source,
         plan,
@@ -152,6 +170,10 @@ export const POST = handle(async (req: Request) => {
     playedToday: persisted.playedToday,
     remaining: persisted.remaining,
     maxPerDay: persisted.maxPerDay,
+    rewardPointBonus: persisted.rewardPointBonus,
+    rewardPointBalance: persisted.rewardPointBalance,
+    rewardPointGrantedToday: persisted.rewardPointGrantedToday,
+    rewardPointDailyCap: persisted.rewardPointDailyCap,
     sequence: play.sequence,
   });
 });
