@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { auth } from '@/auth';
 import { hasCapability, hasAnyCapability, type AdminCapabilityLiteral } from '@idol/shared';
+import { AdminThemeProvider } from '@/components/admin/AdminThemeProvider';
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,55 +62,63 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   );
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
-      <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8 lg:flex lg:gap-8">
-        {/* モバイル: 横スクロールタブナビ */}
-        <nav className="-mx-3 mb-4 flex gap-1.5 overflow-x-auto px-3 pb-2 text-sm lg:hidden">
-          {nav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* デスクトップ: サイドバー */}
-        <aside className="hidden w-60 flex-shrink-0 lg:block">
-          <nav className="sticky top-20">
-            <p className="px-3 pb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Admin
-            </p>
-            <ul className="space-y-0.5">
+    <AdminThemeProvider>
+      <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
+        <div className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-8 lg:flex lg:gap-8">
+          {/* モバイル: 横スクロールタブナビ + テーマ切替 */}
+          <div className="-mx-3 mb-4 flex items-center gap-2 overflow-x-auto px-3 pb-2 lg:hidden">
+            <nav className="flex flex-1 gap-1.5 overflow-x-auto text-sm">
               {nav.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
-                    >
-                      <Icon
-                        className="h-4 w-4 text-slate-400 transition-colors group-hover:text-brand-600"
-                        aria-hidden
-                      />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  </li>
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-slate-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                  >
+                    <Icon className="h-4 w-4" aria-hidden />
+                    {item.label}
+                  </Link>
                 );
               })}
-            </ul>
-          </nav>
-        </aside>
+            </nav>
+            <AdminThemeToggle />
+          </div>
 
-        <div className="min-w-0 flex-1">{children}</div>
+          {/* デスクトップ: サイドバー */}
+          <aside className="hidden w-60 flex-shrink-0 lg:block">
+            <nav className="sticky top-20">
+              <div className="flex items-center justify-between px-3 pb-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Admin
+                </p>
+                <AdminThemeToggle />
+              </div>
+              <ul className="space-y-0.5">
+                {nav.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                      >
+                        <Icon
+                          className="h-4 w-4 text-slate-400 transition-colors group-hover:text-brand-600"
+                          aria-hidden
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+          </aside>
+
+          <div className="min-w-0 flex-1">{children}</div>
+        </div>
       </div>
-    </div>
+    </AdminThemeProvider>
   );
 }
