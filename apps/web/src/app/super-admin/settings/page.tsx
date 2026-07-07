@@ -9,7 +9,9 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { listSettings } from '@/lib/demo-store';
 import { requireSuperAdmin } from '@/auth';
+import { listSiteImages } from '@/lib/site-image';
 import { SettingRow } from './setting-row';
+import { SiteImageClient, type SiteImageItem } from './site-image-client';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -39,6 +41,14 @@ export default async function SuperAdminSettingsPage() {
   await requireSuperAdmin();
 
   const settings = listSettings();
+  const siteImages = await listSiteImages();
+  const siteImageItems: SiteImageItem[] = siteImages.map((img) => ({
+    slot: img.slot,
+    url: img.url,
+    fileName: img.fileName,
+    sizeBytes: img.sizeBytes,
+    updatedAt: img.updatedAt.toISOString(),
+  }));
   const grouped = {
     system: settings.filter((s) => s.category === 'system'),
     features: settings.filter((s) => s.category === 'features'),
@@ -92,6 +102,9 @@ export default async function SuperAdminSettingsPage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* サイト画像 (トップページのヒーロー画像等) */}
+      <SiteImageClient initial={siteImageItems} />
 
       {/* カテゴリ別 */}
       {(['system', 'features', 'pricing'] as const).map((category) => {

@@ -119,6 +119,80 @@ button {
   outline-offset: 2px;
 }
 
+/* =========================================================================
+ * 管理画面 専用ダークモード
+ * -------------------------------------------------------------------------
+ * 公開サイト（トップ/会員ページ）は City Editorial のライトテーマ固定のまま
+ * 一切変更しない。/admin, /super-admin のレイアウトだけが
+ * <div data-admin-theme="dark"> でラップされた場合に、Tailwind v4 の
+ * カラーユーティリティが参照する CSS カスタムプロパティ
+ * (--color-slate-*, --color-white, --color-rose-* など) をこのスコープ内だけ
+ * 上書きする。個々のコンポーネントの className (bg-slate-50 等) は
+ * 一切変更不要で、既存の管理画面 UI がそのままダークカラーで再描画される。
+ * ========================================================================= */
+[data-admin-theme='dark'] {
+  color-scheme: dark;
+
+  /* ニュートラル (背景・枠線・本文) — グレースケールを反転させたトーン */
+  --color-white: #1b1d24;
+  --color-slate-50: #14151a;
+  --color-slate-100: #1b1d24;
+  --color-slate-200: #262932;
+  --color-slate-300: #363a46;
+  --color-slate-400: #757c8c;
+  --color-slate-500: #9aa1b0;
+  --color-slate-600: #b7bccb;
+  --color-slate-700: #d3d7e1;
+  --color-slate-800: #e7e9ef;
+  --color-slate-900: #f5f6f9;
+
+  /* ブランド (マゼンタ) — 暗背景でも視認できるよう明度を調整 */
+  --color-brand-50: #2b1522;
+  --color-brand-100: #3a1c2d;
+  --color-brand-300: #a45a86;
+  --color-brand-400: #c777a8;
+  --color-brand-500: #dd8fbe;
+  --color-brand-600: #e6a2cb;
+  --color-brand-700: #efc0dd;
+
+  /* danger / success / warning / info / accent 各系統も同様に反転 */
+  --color-rose-50: #2c1420;
+  --color-rose-100: #3a1a29;
+  --color-rose-200: #55223a;
+  --color-rose-300: #7a2e4f;
+  --color-rose-500: #f0577f;
+  --color-rose-600: #f97390;
+  --color-rose-700: #ffa4b8;
+
+  --color-emerald-50: #0f2620;
+  --color-emerald-100: #133327;
+  --color-emerald-200: #164b37;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+
+  --color-amber-50: #2a2010;
+  --color-amber-100: #3a2b13;
+  --color-amber-200: #513a18;
+  --color-amber-500: #f6c453;
+  --color-amber-700: #ffd980;
+
+  --color-violet-50: #201b33;
+  --color-violet-200: #3c3260;
+  --color-violet-600: #a78bfa;
+  --color-violet-700: #c4b5fd;
+
+  --color-sky-50: #0f2130;
+  --color-sky-100: #16324a;
+  --color-sky-700: #7dd3fc;
+
+  color: var(--color-slate-800);
+}
+
+/* ダークテーマ配下は「黒背景に黒文字」等の既定 body スタイルを打ち消す */
+[data-admin-theme='dark'] {
+  background: var(--color-slate-50);
+}
+
 /* ===== City Editorial ユーティリティ =====
  * 旧「Rosy Twilight」のグラスモーフィズム／グロー／フォググレイン演出は撤去し、
  * cityxofxangels.com を参考にしたフラット・エディトリアルなトーンに刷新。

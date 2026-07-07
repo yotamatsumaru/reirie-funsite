@@ -1536,3 +1536,25 @@ model GameAudio {
 
   @@map("game_audios")
 }
+
+/// サイト内の差し替え可能画像 (トップページのヒーロー画像等)。
+/// 管理画面からアップロードし、slot ごとに 1 件だけ保持する (再アップロードで置き換え)。
+/// 保存方針は GameAudio / ProductImage と同じ:
+///   - S3 アセットバケットが設定済み → S3 に置き url は外部URL / data は null。
+///   - 未設定 → data にバイト列を保存し /api/media/site-image/{id} 経由で配信。
+/// standalone + PM2 cluster + 再ビルドでも消えない単一の真実として DB を用いる。
+model SiteImage {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// 用途を表すスロット識別子 (例: home.hero)。同一 slot は 1 件のみ。
+  slot        String   @unique
+  url         String
+  contentType String?  @map("content_type")
+  /// 元ファイル名 (表示用)
+  fileName    String?  @map("file_name")
+  sizeBytes   Int?     @map("size_bytes")
+  data        Bytes?   @map("data")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("site_images")
+}
