@@ -1,29 +1,18 @@
 import type { Metadata, Viewport } from 'next';
-import { Cormorant_Garamond, Zen_Maru_Gothic, Shrikhand } from 'next/font/google';
+import { Zen_Kaku_Gothic_New } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/layout/Providers';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Footer } from '@/components/layout/Footer';
 
-// ===== Rosy Twilight タイポグラフィ =====
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['400', '600'],
-  variable: '--font-cormorant',
-  display: 'swap',
-});
-
-const zenMaru = Zen_Maru_Gothic({
+// ===== City Editorial タイポグラフィ =====
+// 旧: Cormorant Garamond（英字セリフ）+ Zen Maru Gothic（丸ゴシック）+ Shrikhand（装飾）
+// 新: ゴシック体（ヒラギノ角ゴ 系）に統一。Web フォントは太字表現に強い Zen Kaku Gothic New を採用し、
+//     システムのヒラギノ角ゴ ProN / Hiragino Sans をフォールバックとして併用する。
+const zenKaku = Zen_Kaku_Gothic_New({
   subsets: ['latin'],
   weight: ['500', '700', '900'],
-  variable: '--font-zen-maru',
-  display: 'swap',
-});
-
-const shrikhand = Shrikhand({
-  subsets: ['latin'],
-  weight: ['400'],
-  variable: '--font-shrikhand',
+  variable: '--font-zen-kaku',
   display: 'swap',
 });
 
@@ -33,22 +22,19 @@ export const metadata: Metadata = {
     template: '%s | ReiRieRoom',
   },
   description:
-    'REIRIE（黒宮れい × 金子理江）公式ファンクラブ「ReiRieRoom」。限定コンテンツ・ライブ配信・特典会・先行チケット・公式グッズ。紫水晶の部屋へようこそ。',
+    'REIRIE（黒宮れい × 金子理江）公式ファンクラブ「ReiRieRoom」。限定コンテンツ・ライブ配信・特典会・先行チケット・公式グッズ。',
   robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#4a2d5c',
+  themeColor: '#c263a2',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="ja"
-      className={`${zenMaru.variable} ${cormorant.variable} ${shrikhand.variable}`}
-    >
+    <html lang="ja" className={zenKaku.variable}>
       <body className="min-h-screen">
         <Providers>
           <Sidebar />

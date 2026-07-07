@@ -100,29 +100,26 @@ export function Sidebar() {
   return (
     <>
       {/* ===== モバイル上部バー ===== */}
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/15 bg-twilight-plum/85 px-4 backdrop-blur-xl md:hidden">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b-2 border-black bg-white/90 px-4 backdrop-blur-xl md:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="メニューを開く"
-          className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-md text-twilight-cream hover:bg-white/10"
+          className="-ml-2 inline-flex h-10 w-10 items-center justify-center rounded-md text-black hover:bg-twilight-lavender/40"
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
-        <Link
-          href="/"
-          className="font-serif text-lg font-semibold tracking-wide text-twilight-cream text-glow"
-        >
+        <Link href="/" className="text-lg font-black uppercase tracking-wide text-black">
           ReiRieRoom
         </Link>
         <Link
           href="/cart"
           aria-label={`カート (${cartCount}点)`}
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-twilight-cream hover:bg-white/10"
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-md text-black hover:bg-twilight-lavender/40"
         >
           <ShoppingCart className="h-5 w-5" aria-hidden="true" />
           {cartCount > 0 && (
-            <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-twilight-btn px-1 text-[10px] font-semibold text-white">
+            <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-twilight-rose px-1 text-[10px] font-semibold text-white">
               {cartCount}
             </span>
           )}
@@ -130,7 +127,7 @@ export function Sidebar() {
       </header>
 
       {/* ===== PC: 固定サイドバー ===== */}
-      <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:w-64 md:flex-col md:border-r md:border-white/10 md:bg-twilight-plum">
+      <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:w-64 md:flex-col md:border-r-2 md:border-black md:bg-white">
         <SidebarContent
           cartCount={cartCount}
           status={status}
@@ -150,14 +147,14 @@ export function Sidebar() {
       >
         {/* オーバーレイ */}
         <div
-          className={`absolute inset-0 bg-twilight-plum/60 backdrop-blur-sm transition-opacity ${
+          className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity ${
             open ? 'opacity-100' : 'opacity-0'
           }`}
           onClick={() => setOpen(false)}
         />
         {/* ドロワー本体 */}
         <aside
-          className={`absolute inset-y-0 left-0 flex w-72 max-w-[80%] flex-col bg-twilight-plum shadow-2xl transition-transform ${
+          className={`absolute inset-y-0 left-0 flex w-72 max-w-[80%] flex-col border-r-2 border-black bg-white shadow-2xl transition-transform ${
             open ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -165,7 +162,7 @@ export function Sidebar() {
             type="button"
             onClick={() => setOpen(false)}
             aria-label="メニューを閉じる"
-            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-twilight-cream hover:bg-white/10"
+            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md text-black hover:bg-twilight-lavender/40"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -200,15 +197,12 @@ function SidebarContent({
   pathname: string;
 }) {
   return (
-    <div className="flex h-full flex-col overflow-y-auto px-4 py-6 text-twilight-cream">
+    <div className="flex h-full flex-col overflow-y-auto px-4 py-6 text-black">
       {/* ロゴ */}
-      <Link
-        href="/"
-        className="mb-1 px-2 font-serif text-2xl font-semibold tracking-wide text-twilight-cream text-glow"
-      >
+      <Link href="/" className="mb-1 px-2 text-2xl font-black uppercase tracking-wide text-black">
         ReiRieRoom
       </Link>
-      <p className="mb-6 px-2 font-serif text-[10px] uppercase tracking-[0.3em] text-twilight-rose/80">
+      <p className="mb-6 px-2 text-[10px] font-bold uppercase tracking-[0.3em] text-twilight-rose">
         Amethyst Room
       </p>
 
@@ -216,7 +210,7 @@ function SidebarContent({
       <nav className="flex-1 space-y-6">
         {NAV_GROUPS.map((group) => (
           <div key={group.title}>
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-twilight-cream/40">
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
               {group.title}
             </p>
             <ul className="space-y-1">
@@ -240,7 +234,7 @@ function SidebarContent({
         {/* 会員メニュー（ログイン時のみ） */}
         {session?.user && (
           <div>
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-twilight-cream/40">
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
               {MEMBER_GROUP.title}
             </p>
             <ul className="space-y-1">
@@ -260,7 +254,7 @@ function SidebarContent({
         {/* 管理メニュー */}
         {(isAdmin || isSuper) && (
           <div>
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-twilight-cream/40">
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
               管理
             </p>
             <ul className="space-y-1">
@@ -289,12 +283,12 @@ function SidebarContent({
       </nav>
 
       {/* アカウント領域 */}
-      <div className="mt-6 border-t border-white/10 pt-4">
-        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-twilight-cream/40">
+      <div className="mt-6 border-t border-black/10 pt-4">
+        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
           アカウント
         </p>
         {status === 'loading' ? (
-          <div className="px-3 py-2 text-sm text-twilight-cream/50">読み込み中…</div>
+          <div className="px-3 py-2 text-sm text-black/50">読み込み中…</div>
         ) : session?.user ? (
           <div className="space-y-1">
             <NavLink
@@ -303,7 +297,7 @@ function SidebarContent({
               cartCount={cartCount}
             />
             <div className="flex items-center gap-2 px-3 py-1">
-              <p className="truncate text-xs text-twilight-cream/55">{session.user.email}</p>
+              <p className="truncate text-xs text-black/55">{session.user.email}</p>
               {session.user.plan && session.user.plan !== 'FREE' && (
                 <Badge tone={session.user.plan === 'PREMIUM' ? 'brand' : 'info'}>
                   {session.user.plan}
@@ -313,7 +307,7 @@ function SidebarContent({
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: '/' })}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-twilight-cream/75 transition hover:bg-white/10 hover:text-twilight-rose"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-black/75 transition hover:bg-twilight-lavender/40 hover:text-twilight-rose"
             >
               <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
               ログアウト
@@ -328,7 +322,7 @@ function SidebarContent({
             />
             <Link
               href="/signup"
-              className="flex items-center justify-center gap-2 rounded-full bg-twilight-btn px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              className="flex items-center justify-center gap-2 rounded-full bg-twilight-btn px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-white shadow-sm transition hover:opacity-90"
             >
               <UserPlus className="h-[18px] w-[18px]" aria-hidden="true" />
               新規会員登録
@@ -357,18 +351,18 @@ function NavLink({
     <Link
       href={item.href}
       aria-current={active ? 'page' : undefined}
-      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
         active
           ? 'bg-twilight-btn text-white shadow-sm'
           : special
-            ? 'text-twilight-gold hover:bg-white/10'
-            : 'text-twilight-cream/75 hover:bg-white/10 hover:text-twilight-cream'
+            ? 'text-twilight-rose hover:bg-twilight-lavender/40'
+            : 'text-black/75 hover:bg-twilight-lavender/40 hover:text-black'
       }`}
     >
       <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
       <span className="flex-1">{item.label}</span>
       {item.badge === 'cart' && cartCount > 0 && (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-twilight-rose px-1.5 text-[11px] font-semibold text-twilight-plum">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-twilight-rose px-1.5 text-[11px] font-semibold text-white">
           {cartCount}
         </span>
       )}

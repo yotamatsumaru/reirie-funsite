@@ -1,53 +1,52 @@
 @import 'tailwindcss';
 
 @theme {
-  /* ===== Rosy Twilight — ReiRieRoom ブランドカラー =====
-   * brand-* を「Soft Amethyst（紫アクセント）」を基調に再定義。
+  /* ===== City Editorial — ReiRieRoom ブランドカラー (2026 リニューアル) =====
+   * トンマナ刷新: 背景=ラベンダー #b9b2d8 / ポイントカラー=マゼンタ #c263a2 / 文字=黒。
+   * brand-* を「ポイントカラー（マゼンタ）」基調に再定義。
    * 既存コンポーネントの bg-brand-600 などはそのまま新トーンへ移行する。 */
-  --color-brand-50: #f6effb;
-  --color-brand-100: #ecdcf6;
-  --color-brand-200: #ddc3ee;
-  --color-brand-300: #c79fe0;
-  --color-brand-400: #b083d4;
-  --color-brand-500: #9b6fc4; /* Soft Amethyst */
-  --color-brand-600: #8455b0;
-  --color-brand-700: #6b4093;
-  --color-brand-800: #543075;
-  --color-brand-900: #4a2d5c; /* Plum Violet */
+  --color-brand-50: #faf1f6;
+  --color-brand-100: #f4dfee;
+  --color-brand-200: #e9c0de;
+  --color-brand-300: #dc96c8;
+  --color-brand-400: #cd71b0;
+  --color-brand-500: #c263a2; /* Point Magenta（指定色そのまま） */
+  --color-brand-600: #a84f89; /* 主要ボタン・リンク（白文字コントラスト確保のため少し濃く） */
+  --color-brand-700: #883d6f;
+  --color-brand-800: #6a2f57;
+  --color-brand-900: #2b1522; /* 見出し等の濃色 */
 
-  /* ===== Rosy Twilight パレット（意味のある名前） ===== */
-  --color-twilight-rose: #e8a8c8; /* Dusty Rose   — グラデ上側・主アクセント */
-  --color-twilight-mauve: #d98fb5; /* Mauve Pink   — グラデ中間 */
-  --color-twilight-amethyst: #9b6fc4; /* Soft Amethyst— ボタン/リンク */
-  --color-twilight-plum: #4a2d5c; /* Plum Violet  — 奥行き・文字 */
-  --color-twilight-cream: #fbeef5; /* Cream Pink   — 見出し・明色文字 */
-  --color-twilight-gold: #e6b88a; /* Rose Gold    — 会員ランク・差し色 */
+  /* ===== City Editorial パレット（意味のある名前・旧 twilight-* 名を継続利用） ===== */
+  --color-twilight-lavender: #b9b2d8; /* Base Lavender — 背景の水色(紫)部分 */
+  --color-twilight-rose: #c263a2; /* Point Magenta — 濃い水色部分(ポイントカラー) */
+  --color-twilight-mauve: #cf7fb3; /* Magenta (light) — グラデ/ホバー用の淡色 */
+  --color-twilight-amethyst: #c263a2; /* Point Magenta — ボタン/リンク（rose と同色） */
+  --color-twilight-plum: #000000; /* Ink Black — 基本の文字色・濃色背景 */
+  --color-twilight-cream: #ffffff; /* White — 濃色背景上の文字・カード面 */
+  --color-twilight-gold: #b9b2d8; /* Lavender（差し色）— 特別枠(スーパー管理者など) */
 
   --font-sans:
-    var(--font-zen-maru), 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui,
+    var(--font-zen-kaku), 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, system-ui,
     -apple-system, sans-serif;
-  --font-serif: var(--font-cormorant), 'Times New Roman', serif;
-  --font-display: var(--font-shrikhand), var(--font-cormorant), serif;
+  /* 旧デザインの明朝/セリフ・装飾フォントは廃止し、ゴシック体一本化。
+   * font-serif / font-display は後方互換のため残すが、実体は font-sans と同じにする。 */
+  --font-serif: var(--font-sans);
+  --font-display: var(--font-sans);
 }
 
 :root {
   color-scheme: light;
 
-  /* Rosy Twilight グラデーション（CSS から参照） */
-  --gradient-twilight: linear-gradient(
-    160deg,
-    #e8a8c8 0%,
-    #d98fb5 35%,
-    #9b6fc4 70%,
-    #4a2d5c 100%
-  );
-  --gradient-twilight-btn: linear-gradient(135deg, #e8a8c8 0%, #9b6fc4 100%);
+  /* City Editorial: 装飾グラデーションは廃止しフラットな単色に。
+   * クラス名 (bg-twilight / bg-twilight-btn) は既存コードとの互換のため維持。 */
+  --gradient-twilight: var(--color-twilight-lavender);
+  --gradient-twilight-btn: var(--color-twilight-plum);
 }
 
 html,
 body {
-  background: #fbeef5;
-  color: #4a2d5c;
+  background: #b9b2d8;
+  color: #000000;
   min-height: 100%;
 }
 
@@ -120,9 +119,12 @@ button {
   outline-offset: 2px;
 }
 
-/* ===== Rosy Twilight ユーティリティ ===== */
+/* ===== City Editorial ユーティリティ =====
+ * 旧「Rosy Twilight」のグラスモーフィズム／グロー／フォググレイン演出は撤去し、
+ * cityxofxangels.com を参考にしたフラット・エディトリアルなトーンに刷新。
+ * クラス名は互換性のため維持し、中身だけを新トーンに合わせている。 */
 
-/* フォントファミリ */
+/* フォントファミリ（ゴシック体に統一。font-serif/font-display も同じ実体） */
 .font-serif {
   font-family: var(--font-serif);
 }
@@ -130,61 +132,44 @@ button {
   font-family: var(--font-display);
 }
 
-/* メイン背景グラデーション */
+/* メイン背景（旧グラデーション → フラットな単色に変更） */
 .bg-twilight {
-  background: var(--gradient-twilight);
+  background: var(--color-twilight-lavender);
 }
 .bg-twilight-btn {
-  background: var(--gradient-twilight-btn);
+  background: var(--color-twilight-plum);
 }
 
-/* グラスモーフィズム（フロストガラス カード） */
+/* カード面（旧: すりガラス風 → フラットな白 + 黒枠のエディトリアル調） */
 .glass {
-  background: rgba(251, 238, 245, 0.1);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  border: 1px solid rgba(251, 238, 245, 0.18);
-  box-shadow:
-    0 8px 32px rgba(74, 45, 92, 0.25),
-    inset 0 1px 0 rgba(251, 238, 245, 0.15);
+  background: #ffffff;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.9);
 }
 .glass-light {
-  background: rgba(251, 238, 245, 0.72);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-  border: 1px solid rgba(155, 111, 196, 0.18);
-  box-shadow: 0 8px 28px rgba(74, 45, 92, 0.12);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-/* やわらかい発光 */
+/* 旧: 発光エフェクト → 現行はフラットなドロップシャドウに置換 */
 .glow-rose {
-  box-shadow:
-    0 0 24px rgba(232, 168, 200, 0.45),
-    0 0 60px rgba(155, 111, 196, 0.25);
+  box-shadow: 0 10px 26px rgba(194, 99, 162, 0.35);
 }
 .text-glow {
-  text-shadow: 0 0 18px rgba(251, 238, 245, 0.55);
+  text-shadow: none;
 }
 
-/* Rose Gold グラデテキスト（会員ランク等） */
+/* ポイントカラーの単色テキスト（旧グラデテキストの後継） */
 .text-gradient-rose {
-  background: linear-gradient(135deg, #fbeef5 0%, #e8a8c8 50%, #e6b88a 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--color-twilight-rose);
+  background: none;
+  -webkit-text-fill-color: currentColor;
 }
 
-/* フォググレイン（ふわっとした霧のオーバーレイ） */
+/* 旧: フォググレイン装飾 → 現行では非表示（余白重視のフラットな背景へ） */
 .fog-grain {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(60% 50% at 20% 15%, rgba(251, 238, 245, 0.35) 0%, transparent 60%),
-    radial-gradient(50% 40% at 80% 30%, rgba(232, 168, 200, 0.3) 0%, transparent 60%),
-    radial-gradient(55% 45% at 50% 90%, rgba(74, 45, 92, 0.35) 0%, transparent 65%);
-  mix-blend-mode: screen;
+  display: none;
 }
 
 /* きらめき(sparkle)・浮遊アニメーション */

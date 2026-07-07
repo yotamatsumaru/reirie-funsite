@@ -186,7 +186,7 @@ export function AcchiGameClient({
   return (
     <div>
       {/* ヘッダー */}
-      <div className="mb-6 rounded-2xl bg-gradient-to-br from-twilight-plum via-purple-800 to-twilight-amethyst p-6 text-white shadow-lg">
+      <div className="mb-6 rounded-2xl border-2 border-black bg-twilight-rose p-6 text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)]">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold">あっち向いてホイ</h1>
           {/* 音声 ON/OFF 切り替え */}
