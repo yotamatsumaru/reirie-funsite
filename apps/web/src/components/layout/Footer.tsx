@@ -1,15 +1,15 @@
 export function Footer() {
   return (
-    <footer className="mt-12 border-t border-twilight-amethyst/15 bg-twilight-plum text-twilight-cream/70 sm:mt-16">
+    <footer className="mt-12 border-t-2 border-black bg-black text-white/70 sm:mt-16">
       <div className="mx-auto max-w-5xl px-4 py-8 text-sm sm:px-8 sm:py-10 safe-bottom">
         <div className="flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
           <div>
-            <p className="font-serif text-lg tracking-wide text-twilight-cream">ReiRieRoom</p>
-            <p className="mt-1 text-xs text-twilight-cream/55">
+            <p className="text-lg font-black uppercase tracking-wide text-white">ReiRieRoom</p>
+            <p className="mt-1 text-xs text-white/55">
               © {new Date().getFullYear()} ReiRieRoom — REIRIE Official Fan Club
             </p>
           </div>
-          <nav className="flex flex-wrap gap-x-5 gap-y-2 text-xs sm:text-sm">
+          <nav className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold sm:text-sm">
             <a href="/terms" className="transition hover:text-twilight-rose">
               利用規約
             </a>
