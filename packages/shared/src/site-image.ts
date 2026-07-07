@@ -1,0 +1,55 @@
+/**
+ * サイト内の差し替え可能画像（トップページのヒーロー画像など）のスロット定義。
+ *
+ * ここは純粋な定数のみ (DB 非依存)。管理画面のアップロード UI と、
+ * 表示側 (トップページ等) の両方が同じスロット定義を参照することで、
+ * 用途のズレを防ぐ。
+ *
+ * game-audio.ts と同じ設計方針: スロットごとに 1 件だけ保持し、
+ * 再アップロードで置き換える。コード変更・再デプロイ不要で差し替え可能にする。
+ */
+
+/** 画像スロット識別子 (DB SiteImage.slot に保存する値)。 */
+export const SITE_IMAGE_SLOTS = ['home.hero'] as const;
+
+export type SiteImageSlot = (typeof SITE_IMAGE_SLOTS)[number];
+
+/** slot が有効なサイト画像スロットか。 */
+export function isSiteImageSlot(v: unknown): v is SiteImageSlot {
+  return typeof v === 'string' && (SITE_IMAGE_SLOTS as readonly string[]).includes(v);
+}
+
+/** 各スロットのメタ情報 (管理画面表示用)。 */
+export type SiteImageSlotMeta = {
+  slot: SiteImageSlot;
+  /** 管理画面に出す見出し */
+  label: string;
+  /** 表示箇所の説明 */
+  description: string;
+  /** 推奨アスペクト比 (表示の目安) */
+  recommendedAspect: string;
+};
+
+export const SITE_IMAGE_SLOT_META: Record<SiteImageSlot, SiteImageSlotMeta> = {
+  'home.hero': {
+    slot: 'home.hero',
+    label: 'トップページ ヒーロー画像',
+    description: 'トップページ最上部に表示されるメインビジュアル画像です。',
+    recommendedAspect: '縦長 4:5 推奨 (例: 1200×1500px)',
+  },
+};
+
+/** slot → 公開URL のマップ (未設定スロットは欠落)。 */
+export type SiteImageUrlMap = Partial<Record<SiteImageSlot, string>>;
+
+/** アップロード可能な画像の MIME → 拡張子。 */
+export const ALLOWED_SITE_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+};
+
+/** 画像 1 ファイルの最大サイズ (8MB)。 */
+export const MAX_SITE_IMAGE_BYTES = 8 * 1024 * 1024;

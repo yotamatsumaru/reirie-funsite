@@ -5,6 +5,7 @@ export * from './membership';
 export * from './membership-rank';
 export * from './mini-game';
 export * from './game-audio';
+export * from './site-image';
 export * from './dm';
 export * from './schemas/auth';
 export * from './schemas/common';

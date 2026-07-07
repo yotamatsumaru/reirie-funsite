@@ -4,8 +4,11 @@ import { PLAN_LABELS, PLAN_PRICES, PLAN_BILLING_INTERVAL } from '@idol/shared';
 import { formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
 import { listAnnouncements } from '@/lib/demo-store';
+import { getSiteImageUrl } from '@/lib/site-image';
 
 export const dynamic = 'force-dynamic';
+
+const DEFAULT_HERO_IMAGE = '/images/hero/hero-main.jpg';
 
 function formatDate(d: Date | null): string {
   if (!d) return '';
@@ -20,6 +23,9 @@ export default async function HomePage() {
   const latestNotices = listAnnouncements()
     .filter((a) => a.status === 'PUBLISHED' && a.audience === 'ALL')
     .slice(0, 3);
+
+  // ヒーロー画像 (super-admin で差し替え可能。未設定時はデフォルト画像)
+  const heroImageUrl = (await getSiteImageUrl('home.hero')) ?? DEFAULT_HERO_IMAGE;
 
   return (
     <div className="bg-twilight-lavender">
@@ -61,10 +67,13 @@ export default async function HomePage() {
           <div className="relative">
             <div className="relative aspect-[4/5] w-full overflow-hidden rounded-sm">
               <Image
-                src="/images/hero/hero-main.jpg"
+                src={heroImageUrl}
                 alt="REIRIE"
                 fill
                 priority
+                // S3/CloudFront 等の外部URL (remotePatterns 未登録の可能性がある) は
+                // 最適化をスキップして安全側に倒す。ローカル/同一オリジンの相対パスはそのまま最適化。
+                unoptimized={/^https?:\/\//.test(heroImageUrl) && heroImageUrl !== DEFAULT_HERO_IMAGE}
                 sizes="(min-width: 768px) 40vw, 90vw"
                 className="object-cover"
               />
