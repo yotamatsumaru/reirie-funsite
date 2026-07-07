@@ -62,12 +62,20 @@ export default async function MeRewardsPage() {
       </header>
 
       <Card>
-        <CardBody className="flex items-center justify-between">
-          <p className="text-sm text-slate-500">保有 特典ポイント</p>
-          <p className="text-3xl font-bold text-slate-900">
-            {balance.toLocaleString()}
-            <span className="ml-1 text-base font-normal text-slate-500">pt</span>
-          </p>
+        <CardBody className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-slate-500">保有 特典ポイント</p>
+            <p className="text-3xl font-bold text-slate-900">
+              {balance.toLocaleString()}
+              <span className="ml-1 text-base font-normal text-slate-500">pt</span>
+            </p>
+          </div>
+          <Link
+            href="/me/rewards/buy"
+            className="inline-flex items-center rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            + ポイントを購入する
+          </Link>
         </CardBody>
       </Card>
 
