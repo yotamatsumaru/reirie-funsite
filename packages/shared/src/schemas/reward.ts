@@ -20,6 +20,7 @@ export const REWARD_POINT_REASONS = [
   'ADMIN_ADJUST',
   'REDEMPTION',
   'REFUND',
+  'GAME_REWARD',
   'OTHER',
 ] as const;
 export type RewardPointReasonLiteral = (typeof REWARD_POINT_REASONS)[number];
@@ -30,6 +31,7 @@ export const REWARD_POINT_REASON_LABELS: Record<RewardPointReasonLiteral, string
   ADMIN_ADJUST: '運営による調整',
   REDEMPTION: '景品交換',
   REFUND: '交換キャンセル返還',
+  GAME_REWARD: 'ミニゲーム勝利報酬',
   OTHER: 'その他',
 };
 

@@ -25,6 +25,9 @@ import {
   MAX_EXTRA_PLAYS_PER_DAY,
   requiresShipping,
   canTransitionRedemptionStatus,
+  computeAcchiRewardBonus,
+  DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
+  type AcchiRewardBonusSettings,
   type PointRateSettings,
   type PlanTypeLiteral,
   type SocialPlatformLiteral,
@@ -623,6 +626,14 @@ export type AcchiPlayPersistResult = {
   remaining: number;
   /** 本日の上限回数 (標準上限 + Fan ポイント購入分) */
   maxPerDay: number;
+  /** 今回のプレイで付与された特典ポイント (勝利時、かつ本日上限内のみ > 0) */
+  rewardPointBonus: number;
+  /** プレイ後の特典ポイント残高 */
+  rewardPointBalance: number;
+  /** 本日 (JST) 付与済みの特典ポイント合計 (このプレイ分を含む) */
+  rewardPointGrantedToday: number;
+  /** 本日 (JST) 付与できる特典ポイントの上限 */
+  rewardPointDailyCap: number;
 };
 
 /**
@@ -650,6 +661,22 @@ export async function getAcchiExtraPlaysToday(
     where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
   });
   return row?.purchasedCount ?? 0;
+}
+
+/**
+ * 本日 (JST) 既に付与済みの特典ポイントボーナス合計を取得する。
+ * GET (状況表示) 用。実際の上限チェックは recordAcchiPlay 内でトランザクション内に行う。
+ */
+export async function getAcchiRewardBonusGrantedToday(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const date = jstDateKey(now);
+  const agg = await prisma.miniGamePlay.aggregate({
+    where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
+    _sum: { bonusRewardPoint: true },
+  });
+  return agg._sum.bonusRewardPoint ?? 0;
 }
 
 /**
@@ -683,6 +710,7 @@ export async function recordAcchiPlay(
   result: AcchiResult,
   detail?: string,
   now: Date = new Date(),
+  rewardBonusSettings: AcchiRewardBonusSettings = DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
 ): Promise<AcchiPlayPersistResult> {
   const date = jstDateKey(now);
 
@@ -692,19 +720,26 @@ export async function recordAcchiPlay(
     const reward =
       result === 'WIN' ? applyPlanPointMultiplier(ACCHI_WIN_REWARD, plan) : 0;
 
-    // トランザクション内で当日プレイ数と Fan ポイント購入済み追加回数を数え、上限チェック (競合に強い)
-    const [playedBefore, extraRow] = await Promise.all([
+    // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数・
+    // 本日付与済みの特典ポイント合計を数え、上限チェック (競合に強い)
+    const [playedBefore, extraRow, bonusAgg] = await Promise.all([
       tx.miniGamePlay.count({ where: { userId, gameType: 'ACCHI_MUITE_HOI', date } }),
       tx.miniGameExtraPlayPurchase.findUnique({
         where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
       }),
+      tx.miniGamePlay.aggregate({
+        where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
+        _sum: { bonusRewardPoint: true },
+      }),
     ]);
     const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
+    const rewardPointGrantedBefore = bonusAgg._sum.bonusRewardPoint ?? 0;
+    const rewardPointDailyCap = rewardBonusSettings.dailyCap;
 
     if (playedBefore >= maxPerDay) {
       const u = await tx.user.findUnique({
         where: { id: userId },
-        select: { points: true },
+        select: { points: true, rewardPoints: true },
       });
       return {
         accepted: false,
@@ -714,8 +749,21 @@ export async function recordAcchiPlay(
         playedToday: playedBefore,
         remaining: 0,
         maxPerDay,
+        rewardPointBonus: 0,
+        rewardPointBalance: u?.rewardPoints ?? 0,
+        rewardPointGrantedToday: rewardPointGrantedBefore,
+        rewardPointDailyCap,
       };
     }
+
+    // 「薄い還元率 + 1日上限」の特典ポイントボーナスを計算する (純粋関数)。
+    // Fan ポイントは無料で貯まるため、そのまま特典ポイントに交換されないよう
+    // ここで厳しく絞る (勝利時のみ・1日上限あり)。
+    const rewardPointBonus = computeAcchiRewardBonus(
+      result,
+      rewardPointGrantedBefore,
+      rewardBonusSettings,
+    );
 
     await tx.miniGamePlay.create({
       data: {
@@ -724,6 +772,7 @@ export async function recordAcchiPlay(
         date,
         result,
         rewardPoint: reward,
+        bonusRewardPoint: rewardPointBonus,
         detail: detail ?? null,
       },
     });
@@ -744,6 +793,22 @@ export async function recordAcchiPlay(
       balance = u?.points ?? 0;
     }
 
+    let rewardPointBalance: number;
+    if (rewardPointBonus > 0) {
+      rewardPointBalance = await applyRewardPoints(tx, {
+        userId,
+        amount: rewardPointBonus,
+        reason: 'GAME_REWARD',
+        note: 'あっち向いてホイ 勝利ボーナス (特典ポイント)',
+      });
+    } else {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { rewardPoints: true },
+      });
+      rewardPointBalance = u?.rewardPoints ?? 0;
+    }
+
     const playedToday = playedBefore + 1;
     return {
       accepted: true,
@@ -753,6 +818,10 @@ export async function recordAcchiPlay(
       playedToday,
       remaining: remainingPlays(playedToday, maxPerDay),
       maxPerDay,
+      rewardPointBonus,
+      rewardPointBalance,
+      rewardPointGrantedToday: rewardPointGrantedBefore + rewardPointBonus,
+      rewardPointDailyCap,
     };
   });
 }

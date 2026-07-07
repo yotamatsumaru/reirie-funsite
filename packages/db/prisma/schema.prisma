@@ -131,6 +131,7 @@ enum RewardPointReason {
   ADMIN_ADJUST // 管理者による手動調整
   REDEMPTION // 景品交換 (消費)
   REFUND // 交換キャンセル等による返還
+  GAME_REWARD // ミニゲーム (あっち向いてホイ) 勝利による少量付与 (Fan ポイントの薄い還元率で1日上限あり)
   OTHER
 }
 
@@ -1430,7 +1431,9 @@ model MiniGamePlay {
   gameType    MiniGameType   @map("game_type")
   date        String // JST 基準の "YYYY-MM-DD" (1 日の回数制限の集計キー)
   result      MiniGameResult
-  rewardPoint Int            @default(0) @map("reward_point") // 付与ポイント (勝利時のみ > 0)
+  rewardPoint Int            @default(0) @map("reward_point") // 付与 Fan ポイント (勝利時のみ > 0)
+  // 勝利時に付与した特典ポイント (薄い還元率・1日上限あり)。Fan ポイントとは別枠の付与。
+  bonusRewardPoint Int       @default(0) @map("bonus_reward_point")
   // 監査・検証用の手の記録 (JSON 文字列)。例: {"jankenPlayer":"ROCK","jankenCpu":"SCISSORS",...}
   detail      String?
   createdAt   DateTime       @default(now()) @map("created_at")
