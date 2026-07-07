@@ -27,6 +27,8 @@ const users = [
     role: 'USER',
     avatarUrl: null,
     marketingOptIn: true,
+    points: 350,
+    rewardPoints: 1500,
     deletedAt: null,
     createdAt: daysAgo(45),
     updatedAt: daysAgo(1),
@@ -904,6 +906,143 @@ const gameItem = [
 ];
 
 // =====================================================================
+// 特典ポイントパック (Stripe 課金で購入する特典ポイント)
+// =====================================================================
+const rewardPointPack = [
+  {
+    id: 'rpp-500',
+    name: '特典ポイント 500pt パック',
+    points: 500,
+    priceJpy: 500,
+    isActive: true,
+    sortOrder: 0,
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(60),
+  },
+  {
+    id: 'rpp-1200',
+    name: '特典ポイント 1,200pt パック',
+    points: 1200,
+    priceJpy: 1000,
+    isActive: true,
+    sortOrder: 1,
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(60),
+  },
+  {
+    id: 'rpp-3000',
+    name: '特典ポイント 3,000pt パック (お得)',
+    points: 3000,
+    priceJpy: 2500,
+    isActive: true,
+    sortOrder: 2,
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(60),
+  },
+  {
+    id: 'rpp-6500',
+    name: '特典ポイント 6,500pt パック (更にお得)',
+    points: 6500,
+    priceJpy: 5000,
+    isActive: true,
+    sortOrder: 3,
+    createdAt: daysAgo(60),
+    updatedAt: daysAgo(60),
+  },
+];
+
+// =====================================================================
+// 特典ポイント購入履歴 (デモユーザーの購入実績サンプル)
+// =====================================================================
+const rewardPointPurchase = [
+  {
+    id: 'rppu-1',
+    userId: DEMO_USER_ID,
+    packId: 'rpp-1200',
+    points: 1200,
+    amountJpy: 1000,
+    status: 'SUCCEEDED',
+    stripePaymentIntentId: 'pi_demo_reward_1',
+    stripeCheckoutSessionId: 'cs_demo_reward_1',
+    paidAt: daysAgo(10),
+    createdAt: daysAgo(10),
+    updatedAt: daysAgo(10),
+  },
+];
+
+// =====================================================================
+// 景品カタログ (特典ポイントで交換できる景品)
+// =====================================================================
+const rewardCatalogItem = [
+  {
+    id: 'rci-tote',
+    slug: 'reirie-tote-bag',
+    kind: 'GOODS',
+    name: 'REIRIE オリジナルトートバッグ',
+    description: 'ライブ会場限定デザインのトートバッグです。',
+    imageUrl: 'https://picsum.photos/seed/tote/400/300',
+    pointCost: 2000,
+    stock: 25,
+    status: 'PUBLISHED',
+    sortOrder: 0,
+    createdAt: daysAgo(50),
+    updatedAt: daysAgo(50),
+  },
+  {
+    id: 'rci-call-priority',
+    slug: 'call-priority-ticket',
+    kind: 'CALL_PRIORITY',
+    name: '特典会 優先案内枠',
+    description: '次回の特典会で優先的に呼ばれる枠と交換できます。',
+    imageUrl: 'https://picsum.photos/seed/callpriority/400/300',
+    pointCost: 5000,
+    stock: null,
+    status: 'PUBLISHED',
+    sortOrder: 1,
+    createdAt: daysAgo(40),
+    updatedAt: daysAgo(40),
+  },
+  {
+    id: 'rci-wallpaper',
+    slug: 'digital-wallpaper-set',
+    kind: 'DIGITAL',
+    name: '限定壁紙セット (デジタル)',
+    description: 'スマホ・PC用の限定壁紙5枚セットをダウンロードできます。',
+    imageUrl: 'https://picsum.photos/seed/wallpaper/400/300',
+    pointCost: 800,
+    stock: null,
+    status: 'PUBLISHED',
+    sortOrder: 2,
+    createdAt: daysAgo(30),
+    updatedAt: daysAgo(30),
+  },
+];
+
+// =====================================================================
+// 特典ポイント取引履歴 (デモユーザーのサンプル)
+// =====================================================================
+const rewardPointTransaction = [
+  {
+    id: 'rpt-1',
+    userId: DEMO_USER_ID,
+    amount: 1200,
+    balance: 1200,
+    reason: 'STRIPE_PURCHASE',
+    note: '特典ポイントパック購入 (1200pt / ¥1,000)',
+    createdAt: daysAgo(10),
+  },
+  {
+    id: 'rpt-2',
+    userId: DEMO_USER_ID,
+    amount: 300,
+    balance: 1500,
+    reason: 'SUBSCRIPTION_BONUS',
+    note: 'サブスク月次特典',
+    createdAt: daysAgo(3),
+  },
+];
+
+// =====================================================================
 // その他空テーブル (Prisma 呼び出し時に空配列を返せばよい)
 // =====================================================================
 const empty: unknown[] = [];
@@ -941,6 +1080,12 @@ const fixtures: Record<string, unknown[]> = {
   playerPurchase,
   playerSaveSlot: empty,
   bonusGiftGrant: empty,
+  rewardPointPack,
+  rewardPointPurchase,
+  rewardCatalogItem,
+  rewardPointTransaction,
+  rewardRedemption: empty,
+  monthlyRewardPointGrant: empty,
   // デモ専用 (Prisma schema には未登録、メモリ上のみで動作)
   announcement,
   systemSetting,

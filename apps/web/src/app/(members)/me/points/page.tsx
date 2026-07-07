@@ -105,9 +105,14 @@ export default async function PointsHistoryPage() {
             <p className="mt-2 text-xs text-slate-500">
               購入 or サブスク月次特典で貯まり、景品カタログとの交換に使えます。
             </p>
-            <Link href="/me/rewards" className="mt-2 inline-block text-xs text-brand-600 hover:underline">
-              景品と交換する →
-            </Link>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              <Link href="/me/rewards/buy" className="inline-block text-xs text-brand-600 hover:underline">
+                ポイントを購入する →
+              </Link>
+              <Link href="/me/rewards" className="inline-block text-xs text-brand-600 hover:underline">
+                景品と交換する →
+              </Link>
+            </div>
           </CardBody>
         </Card>
       </div>
