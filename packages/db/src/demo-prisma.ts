@@ -83,6 +83,20 @@ function applyDataToRow(
  * 単純な where 条件のマッチング (id, slug, status, characterId 等の eq に対応)
  * 完全な Prisma セマンティクスではなく、デモに十分な範囲で実装。
  */
+const KNOWN_FILTER_OPERATORS = [
+  'in',
+  'notIn',
+  'equals',
+  'not',
+  'contains',
+  'startsWith',
+  'endsWith',
+  'lt',
+  'lte',
+  'gt',
+  'gte',
+];
+
 function matches(row: Record<string, unknown>, where: AnyArgs): boolean {
   if (!where || typeof where !== 'object') return true;
   for (const [k, v] of Object.entries(where as Record<string, unknown>)) {
@@ -92,17 +106,54 @@ function matches(row: Record<string, unknown>, where: AnyArgs): boolean {
     }
     if (v && typeof v === 'object') {
       const cond = v as Record<string, unknown>;
+      const hasKnownOperator = KNOWN_FILTER_OPERATORS.some((op) => op in cond);
+      if (!hasKnownOperator) {
+        // Prisma の複合ユニークキー (例: `@@unique([userId, gameType, date])` による
+        // `findUnique({ where: { userId_gameType_date: { userId, gameType, date } } })`)。
+        // オペレータを含まないネストされたオブジェクトは「各フィールドをそのまま row と比較する」
+        // 複合キー条件とみなし、サブフィールドごとに等価チェックする。
+        // (これを無視すると絞り込みが一切効かず、常に先頭行にマッチしてしまう)
+        for (const [subKey, subVal] of Object.entries(cond)) {
+          if (row[subKey] !== subVal) return false;
+        }
+        continue;
+      }
       if ('in' in cond && Array.isArray(cond.in)) {
         if (!cond.in.includes(row[k])) return false;
-      } else if ('equals' in cond) {
+      }
+      if ('notIn' in cond && Array.isArray(cond.notIn)) {
+        if (cond.notIn.includes(row[k])) return false;
+      }
+      if ('equals' in cond) {
         if (row[k] !== cond.equals) return false;
-      } else if ('not' in cond) {
+      }
+      if ('not' in cond) {
         if (row[k] === cond.not) return false;
-      } else if ('contains' in cond) {
+      }
+      if ('contains' in cond) {
         const target = String(row[k] ?? '');
         if (!target.includes(String(cond.contains))) return false;
       }
-      // 他の Prisma 条件 (lt/lte/gt/gte 等) はデモでは無視
+      if ('startsWith' in cond) {
+        const target = String(row[k] ?? '');
+        if (!target.startsWith(String(cond.startsWith))) return false;
+      }
+      if ('endsWith' in cond) {
+        const target = String(row[k] ?? '');
+        if (!target.endsWith(String(cond.endsWith))) return false;
+      }
+      if ('lt' in cond) {
+        if (!(Number(row[k]) < Number(cond.lt))) return false;
+      }
+      if ('lte' in cond) {
+        if (!(Number(row[k]) <= Number(cond.lte))) return false;
+      }
+      if ('gt' in cond) {
+        if (!(Number(row[k]) > Number(cond.gt))) return false;
+      }
+      if ('gte' in cond) {
+        if (!(Number(row[k]) >= Number(cond.gte))) return false;
+      }
     } else {
       if (row[k] !== v) return false;
     }
