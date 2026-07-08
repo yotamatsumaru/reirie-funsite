@@ -750,7 +750,8 @@ paths:
       tags: [Me, Game]
       summary: あっち向いてホイ — 本日の残りプレイ回数と残高
       description: |
-        `/api/v1/games/acchi` と同一のミニゲーム機能を Web 用 URL でも提供するもの。
+        `/api/v1/games/acchi` と実装(サーバーロジック)を共有しているミニゲーム機能。
+        Web フロントエンドはこちらの URL を呼ぶ。挙動は完全に同一 (Bearer / Cookie 両対応)。
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200': { description: 成功 }
@@ -1133,6 +1134,9 @@ paths:
     get:
       tags: [API v1 (Mobile/Unity), Game]
       summary: あっち向いてホイ — 本日の残りプレイ回数と残高
+      description: |
+        `/api/me/games/acchi` と実装(サーバーロジック)を共有しているミニゲーム機能。
+        Unity 等ネイティブクライアント向けのバージョン付き URL。挙動は完全に同一。
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200':

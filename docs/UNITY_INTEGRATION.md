@@ -1,10 +1,16 @@
-# Unity 連携ガイド (API v1)
+# Unity / モバイルアプリ 連携ガイド
 
-このドキュメントは、将来 Web 版のミニゲームを **Unity (ネイティブ / WebGL) に移行**する際に、
+このドキュメントは、将来 Web 版のミニゲームやその他の会員向け機能を
+**Unity (ネイティブ / WebGL) やスマホアプリに移行・並行提供**する際に、
 既存のバックエンド (Next.js API) をそのまま引き継ぐための手引きです。
 
 Web 版とまったく同じ API・同じサーバーロジック (勝敗判定・ポイント付与・不正対策) を
-Unity から利用できます。Unity 側で実装するのは「画面と入力」だけです。
+Unity / モバイルアプリから利用できます。クライアント側で実装するのは「画面と入力」だけです。
+
+> 2026年7月時点では、あっち向いてホイ用のバージョン付き `/api/v1/*` に加えて、
+> **Web が使っている既存 API のほぼすべて**が Bearer トークンで呼べるようになっています
+> (詳細は §3.2)。ミニゲーム以外の機能 (プロフィール・注文・チケット・通話など) を
+> モバイルアプリに実装する場合はこちらも参照してください。
 
 ---
 
@@ -41,15 +47,56 @@ Unity から利用できます。Unity 側で実装するのは「画面と入�
 
 ---
 
-## 3. エンドポイント一覧 (v1)
+## 3. エンドポイント一覧
+
+### 3.1 `/api/v1/*` (バージョン付き・クライアント非依存)
 
 | メソッド | パス | 説明 | 認証 |
 |---|---|---|---|
 | POST | `/api/v1/auth/token` | email+password でトークン発行 | 不要 |
 | POST | `/api/v1/auth/token/refresh` | access トークン再発行 | refresh トークン |
 | GET  | `/api/v1/auth/me` | 自分の情報・ポイント残高 | Bearer |
-| GET  | `/api/v1/games/acchi` | 本日の残り回数・残高 | Bearer |
-| POST | `/api/v1/games/acchi` | あっち向いてホイを 1 回プレイ | Bearer |
+| GET  | `/api/v1/games/acchi` | 本日の残り回数・残高 | Bearer / Cookie |
+| POST | `/api/v1/games/acchi` | あっち向いてホイを 1 回プレイ | Bearer / Cookie |
+| POST | `/api/v1/games/acchi/buy-extra-play` | 追加プレイ権を Fan ポイントで購入 | Bearer / Cookie |
+
+> `/api/v1/games/acchi*` は `/api/me/games/acchi*` (3.2) と**サーバーロジックを完全に共有**しています
+> (`apps/web/src/lib/games/acchi-handlers.ts`)。どちらの URL を呼んでも挙動・レスポンスは同一です。
+> Unity 側は当面 `/api/v1/...` を使い続けてください (バージョン付き URL の後方互換を維持するため)。
+
+### 3.2 その他すべての Web API (`/api/me/*`, `/api/contents/*`, `/api/game/*`, `/api/tickets/*` など)
+
+2026年7月のアップデートで、**Web フロントエンドが使っている既存 API のほぼすべて**が
+`/api/v1/*` と同様に Bearer トークンでも呼べるようになりました。
+新しい `/api/v2` を待たずに、以下の URL を Unity / モバイルアプリからそのまま利用できます。
+
+- `GET/POST /api/me/*` (プロフィール、ポイント、DM、注文履歴、リワード交換など)
+- `GET /api/contents/*`, `POST /api/contents/comments`
+- `GET/POST /api/game/*` (進行状況、セーブスロット、購入、ギフト)
+- `GET/POST /api/tickets/*`, `/api/live/*`, `/api/videos/*`, `/api/subscriptions/*`, `/api/orders/*`, `/api/cart/*`
+- `GET/POST /api/call/*` (通話イベント・シグナリング・待機列)
+
+対応状況・パラメータの詳細は `docs/openapi.yaml` の各エンドポイントの `security` 欄
+(`bearerAuth` が付いているもの)を参照してください。認証方式は
+`Authorization: Bearer <accessToken>` ヘッダを付けるだけで、Web と同じレスポンス形式が返ります。
+
+> ⚠️ 管理者向け `/api/admin/*` `/api/super-admin/*` は対象外です (ADMIN/SUPER_ADMIN ロール専用、
+> ネイティブアプリからの利用は想定していません)。
+
+### 3.3 SSE (Server-Sent Events) を Bearer で使う場合
+
+`EventSource` (ブラウザ標準 API、あるいは Unity 側の SSE クライアントライブラリ) は
+カスタムヘッダ (`Authorization`) を送れません。そのため、SSE エンドポイント
+(例: `/api/call/events/[id]/queue/events` の待機列リアルタイム更新) は
+クエリパラメータ `?access_token=<accessToken>` でも Bearer トークンを受け付けます。
+
+```
+GET /api/call/events/{id}/queue/events?access_token=<accessToken>
+```
+
+`Authorization` ヘッダとクエリパラメータのどちらでも認証できますが、
+ヘッダを付けられる通常の HTTP リクエストでは **ヘッダ方式を優先**してください
+(URL やログにトークンが残る `access_token` クエリは SSE 専用の代替手段です)。
 
 詳細なリクエスト/レスポンス形式は `docs/openapi.yaml` を参照 (Swagger UI 等で閲覧可)。
 
@@ -222,4 +269,6 @@ StartCoroutine(client.Login("user@example.com", "password", ok => {
 - [ ] 429 (上限到達) の UI を実装
 - [ ] (WebGL の場合) CORS 設定を追加
 - [ ] 新しいゲームを足す場合も「サーバーで結果確定」を厳守
-```
+- [ ] ミニゲーム以外の機能を実装する場合は §3.2 の対応エンドポイント一覧と
+      `docs/openapi.yaml` の `security` 欄 (`bearerAuth`) を確認
+- [ ] SSE (リアルタイム更新) を使う場合は §3.3 の `?access_token=` クエリ方式を利用
