@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ListProductsQuerySchema, canAccess } from '@idol/shared';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { effectiveUnitPrice } from '@/lib/pricing';
 import type { Prisma } from '@idol/db';
@@ -22,7 +22,7 @@ export const GET = handle(async (req: Request) => {
     limit: url.searchParams.get('limit') ?? 20,
   });
 
-  const session = await auth();
+  const session = await resolveApiSession(req);
   const plan = session?.user?.plan ?? 'FREE';
 
   // プラン別の閲覧可否

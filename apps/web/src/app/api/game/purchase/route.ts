@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { GamePurchaseInputSchema } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { getStripe } from '@/lib/stripe';
 import { purchaseScenarioWithFanPoints, purchaseItemWithFanPoints } from '@/lib/points';
@@ -24,7 +24,7 @@ const FAN_POINT_ERROR_MESSAGES: Record<string, string> = {
 };
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const userId = session.user.id;
   const body = GamePurchaseInputSchema.parse(await req.json());
   const quantity = body.quantity;

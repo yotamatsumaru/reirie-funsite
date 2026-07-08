@@ -8,13 +8,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { SaveSlotInputSchema, SAVE_SLOT_LIMIT } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const userId = session.user.id;
   const plan = session.user.plan;
   const url = new URL(req.url);
@@ -29,7 +29,7 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const userId = session.user.id;
   const plan = session.user.plan;
   const body = SaveSlotInputSchema.parse(await req.json());

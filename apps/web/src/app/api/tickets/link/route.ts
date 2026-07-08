@@ -6,14 +6,14 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const link = await prisma.ticketLink.findUnique({
     where: { userId: session.user.id },
     select: {
@@ -44,8 +44,8 @@ export const GET = handle(async () => {
   });
 });
 
-export const DELETE = handle(async () => {
-  const session = await requireSession();
+export const DELETE = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const link = await prisma.ticketLink.findUnique({
     where: { userId: session.user.id },
   });

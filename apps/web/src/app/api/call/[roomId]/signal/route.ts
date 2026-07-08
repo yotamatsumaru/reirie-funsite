@@ -12,7 +12,7 @@
  *   }
  */
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { relaySignal } from '@/lib/call-hub';
 import type { SignalMessage } from '@/lib/call-types';
 
@@ -43,7 +43,7 @@ export async function POST(
   { params }: { params: Promise<{ roomId: string }> },
 ) {
   const { roomId } = await params;
-  const session = await auth();
+  const session = await resolveApiSession(req);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -6,16 +6,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { effectiveUnitPrice } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(
-  async (_req: Request, ctx: { params: Promise<{ slug: string }> }) => {
+  async (req: Request, ctx: { params: Promise<{ slug: string }> }) => {
     const { slug } = await ctx.params;
-    const session = await auth();
+    const session = await resolveApiSession(req);
     const plan = session?.user?.plan ?? 'FREE';
 
     const product = await prisma.product.findUnique({

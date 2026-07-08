@@ -24,7 +24,7 @@ import {
   resolveAcchiSettingForPlan,
   type PlanTypeLiteral,
 } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import {
@@ -51,8 +51,8 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
   return (sub?.planType as PlanTypeLiteral | undefined) ?? 'FREE';
 }
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const [playedToday, purchasedExtra, user, rewardBonusSettings, rewardPointGrantedToday] =
     await Promise.all([
       getAcchiPlayCountToday(session.user.id),
@@ -89,7 +89,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
 
   const body = (await req.json().catch(() => null)) as
     | { hand?: unknown; direction?: unknown }

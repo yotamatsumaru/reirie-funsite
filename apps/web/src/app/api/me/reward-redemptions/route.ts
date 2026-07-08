@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { RedeemRewardCatalogItemInputSchema } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { redeemRewardCatalogItem } from '@/lib/points';
@@ -19,8 +19,8 @@ const REDEEM_ERROR_MESSAGES: Record<string, string> = {
   SHIPPING_REQUIRED: '発送先情報を入力してください',
 };
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const redemptions = await prisma.rewardRedemption.findMany({
     where: { userId: session.user.id },
     orderBy: { createdAt: 'desc' },
@@ -30,7 +30,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = RedeemRewardCatalogItemInputSchema.parse(await req.json());
 
   const result = await redeemRewardCatalogItem(session.user.id, body.catalogItemId, {

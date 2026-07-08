@@ -3,14 +3,14 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { ensureMemberNumber } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const memberNumber = await ensureMemberNumber(session.user.id);
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },

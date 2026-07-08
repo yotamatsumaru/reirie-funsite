@@ -4,15 +4,15 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
 export const DELETE = handle(
-  async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
     const { id } = await ctx.params;
-    const session = await requireSession();
+    const session = await requireApiSession(req);
 
     const comment = await prisma.contentComment.findUnique({ where: { id } });
     if (!comment) throw errors.notFound('コメントが見つかりません');

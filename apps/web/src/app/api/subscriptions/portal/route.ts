@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { getStripe } from '@/lib/stripe';
 import { env } from '@/lib/env';
@@ -8,7 +8,7 @@ import { env } from '@/lib/env';
 export const runtime = 'nodejs';
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = (await req.json().catch(() => ({}))) as { returnUrl?: string };
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });

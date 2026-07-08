@@ -14,7 +14,7 @@ import {
   CAN_POST_COMMENT,
   canAccess,
 } from '@idol/shared';
-import { auth, requireAccessLevel } from '@/auth';
+import { requireApiAccessLevel, resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -37,7 +37,7 @@ export const GET = handle(async (req: Request) => {
   }
 
   // 会員限定記事のコメント閲覧にはプラン要件を適用
-  const session = await auth();
+  const session = await resolveApiSession(req);
   if (!canAccess(session?.user?.plan, content.accessLevel)) {
     throw errors.planRequired(content.accessLevel === 'PREMIUM' ? 'プレミアム' : 'スタンダード');
   }
@@ -81,7 +81,7 @@ export const GET = handle(async (req: Request) => {
 
 export const POST = handle(async (req: Request) => {
   // STANDARD 以上のみ投稿可能
-  const session = await requireAccessLevel('MEMBERS');
+  const session = await requireApiAccessLevel(req, 'MEMBERS');
   if (!session?.user?.id) throw errors.unauthorized();
 
   const input = CreateContentCommentSchema.parse(await req.json());

@@ -15,7 +15,7 @@
  * クエリ:
  *   ?role=performer  (演者側) or ?role=fan (ファン側)
  */
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { joinRoom, type CallRole, type SignalEvent } from '@/lib/call-hub';
 import { randomUUID } from 'crypto';
 
@@ -27,7 +27,7 @@ export async function GET(
   { params }: { params: Promise<{ roomId: string }> },
 ) {
   const { roomId } = await params;
-  const session = await auth();
+  const session = await resolveApiSession(req);
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 });
   }

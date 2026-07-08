@@ -5,14 +5,14 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import type { Prisma } from '@idol/db';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const url = new URL(req.url);
   const includeExpired = url.searchParams.get('includeExpired') === 'true';
 

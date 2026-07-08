@@ -12,7 +12,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { RequestPresaleAccessSchema, planRank } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { grantLawsonPresale } from '@/lib/lawson';
 import { logAudit } from '@/lib/audit';
@@ -20,7 +20,7 @@ import { logAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = RequestPresaleAccessSchema.parse(await req.json());
 
   // 1) イベント取得

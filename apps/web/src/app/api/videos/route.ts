@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await auth();
+export const GET = handle(async (req: Request) => {
+  const session = await resolveApiSession(req);
   const allowed: Array<'PUBLIC' | 'MEMBERS' | 'PREMIUM'> = ['PUBLIC'];
   if (canAccess(session?.user?.plan, 'MEMBERS')) allowed.push('MEMBERS');
   if (canAccess(session?.user?.plan, 'PREMIUM')) allowed.push('PREMIUM');

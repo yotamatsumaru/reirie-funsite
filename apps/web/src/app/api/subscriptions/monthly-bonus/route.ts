@@ -25,7 +25,7 @@ import {
   currentYearMonth,
   type PlanTypeLiteral,
 } from '@idol/shared';
-import { auth, requireSession } from '@/auth';
+import { requireApiSession, resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
 import { logAudit } from '@/lib/audit';
@@ -48,7 +48,7 @@ export const POST = handle(async (req: Request) => {
   const cronSecret = req.headers.get('x-cron-secret');
   const validCron = cronSecret && env.cron?.secret && cronSecret === env.cron.secret;
   if (!validCron) {
-    const session = await auth();
+    const session = await resolveApiSession(req);
     if (!session?.user?.id || session.user.role !== 'ADMIN') {
       throw errors.forbidden('Cron secret もしくは管理者権限が必要です');
     }
@@ -154,7 +154,7 @@ export const POST = handle(async (req: Request) => {
 
   // 監査ログ
   await logAudit({
-    userId: validCron ? null : (await auth())?.user?.id ?? null,
+    userId: validCron ? null : (await resolveApiSession(req))?.user?.id ?? null,
     action: 'MONTHLY_BONUS_GRANT',
     resource: yearMonth,
     metadata: {
@@ -174,9 +174,9 @@ export const POST = handle(async (req: Request) => {
   });
 });
 
-export const GET = handle(async () => {
+export const GET = handle(async (req: Request) => {
   // 自分の今月の受給状況を取得
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const yearMonth = currentYearMonth();
   const plan = session.user.plan;
   const eligibleCount = MONTHLY_BONUS_GIFT_COUNT[plan];
