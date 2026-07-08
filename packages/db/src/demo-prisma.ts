@@ -3,39 +3,80 @@
  *
  * DB 接続無しで Next.js を起動するため、Prisma の主要メソッド
  * (findUnique / findMany / findFirst / count / create / update / delete / upsert
- *  / aggregate / groupBy / $transaction) を空の値や fixtures から返す。
+ *  / aggregate / groupBy / $transaction) を fixtures ベースのインメモリストアで模倣する。
  *
  * NEXT_PUBLIC_DEMO_MODE / DEMO_MODE 環境変数が "1" / "true" のときに有効化。
  *
- * fixtures は loadFixture(modelName) で動的にロード。
+ * fixtures は loadFixture(modelName) で動的にロードし、以降の
+ * create / update / upsert / delete はこのプロセスメモリ上のコピーを実際に書き換える
+ * (Next.js dev サーバーの HMR で保持されるよう globalThis にキャッシュ)。
+ * ※ プロセス再起動 (デプロイ/再起動) でリセットされる点はデモ用途として許容する。
  */
 
 type AnyArgs = Record<string, unknown> | undefined;
 
-let fixturesCache: Record<string, unknown[]> | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __demoFixturesStore: Record<string, unknown[]> | undefined;
+}
 
 async function loadFixtures(): Promise<Record<string, unknown[]>> {
-  if (fixturesCache) return fixturesCache;
+  if (global.__demoFixturesStore) return global.__demoFixturesStore;
+  let initial: Record<string, unknown[]> = {};
   try {
     const mod = (await import('./demo-fixtures')) as {
       default?: Record<string, unknown[]>;
       fixtures?: Record<string, unknown[]>;
     };
-    fixturesCache = mod.default ?? mod.fixtures ?? {};
+    initial = mod.default ?? mod.fixtures ?? {};
   } catch {
-    fixturesCache = {};
+    initial = {};
   }
-  return fixturesCache!;
+  // deep clone しておき、fixtures モジュール本体 (import キャッシュ) を汚さない
+  global.__demoFixturesStore = JSON.parse(JSON.stringify(initial));
+  return global.__demoFixturesStore!;
 }
 
 /**
- * fixtures からモデルのレコード一覧を取得。
+ * fixtures からモデルのレコード一覧 (書き込み可能な実体配列) を取得。
  * デモはサーバーコンポーネントから async で読まれるため、await できる。
+ * 返す配列はストアの実体そのもの (push/splice で create/delete を反映できる)。
  */
 async function getRows(modelName: string): Promise<Record<string, unknown>[]> {
-  const f = await loadFixtures();
-  const rows = (f[modelName] as Record<string, unknown>[] | undefined) ?? [];
-  return rows;
+  const store = await loadFixtures();
+  if (!store[modelName]) store[modelName] = [];
+  return store[modelName] as Record<string, unknown>[];
+}
+
+/**
+ * Prisma の `data` オブジェクトに含まれるフィールド演算子
+ * ({ increment } / { decrement } / { set } / { multiply } / { divide }) を適用し、
+ * 素の値へ変換する。
+ */
+function resolveScalarValue(current: unknown, value: unknown): unknown {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const ops = value as Record<string, unknown>;
+    if ('increment' in ops) return (Number(current) || 0) + Number(ops.increment);
+    if ('decrement' in ops) return (Number(current) || 0) - Number(ops.decrement);
+    if ('multiply' in ops) return (Number(current) || 0) * Number(ops.multiply);
+    if ('divide' in ops) return (Number(current) || 0) / Number(ops.divide);
+    if ('set' in ops) return ops.set;
+  }
+  return value;
+}
+
+/**
+ * data オブジェクトを row に適用する (increment 等の演算子を解決しつつマージ)。
+ */
+function applyDataToRow(
+  row: Record<string, unknown>,
+  data: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!data) return row;
+  for (const [k, v] of Object.entries(data)) {
+    row[k] = resolveScalarValue(row[k], v);
+  }
+  return row;
 }
 
 /**
@@ -214,37 +255,164 @@ function makeDelegate(modelName: string): DelegateMethods {
       return rows.filter((r) => matches(r, a.where)).length;
     },
     async create(args) {
-      const a = (args ?? {}) as { data?: Record<string, unknown> };
-      return { id: 'demo-' + Math.random().toString(36).slice(2), ...(a.data ?? {}) };
+      const rows = await getRows(modelName);
+      const a = (args ?? {}) as { data?: Record<string, unknown>; include?: AnyArgs };
+      const now = new Date();
+      const row: Record<string, unknown> = {
+        id: 'demo-' + Math.random().toString(36).slice(2, 10),
+        createdAt: now,
+        updatedAt: now,
+        ...(a.data ?? {}),
+      };
+      rows.push(row);
+      const f = await loadFixtures();
+      return applyInclude(row, a.include, f);
     },
     async createMany(args) {
-      const a = (args ?? {}) as { data?: unknown[] };
-      return { count: Array.isArray(a.data) ? a.data.length : 0 };
+      const rows = await getRows(modelName);
+      const a = (args ?? {}) as { data?: Record<string, unknown>[] };
+      const now = new Date();
+      const list = Array.isArray(a.data) ? a.data : [];
+      for (const d of list) {
+        rows.push({
+          id: 'demo-' + Math.random().toString(36).slice(2, 10),
+          createdAt: now,
+          updatedAt: now,
+          ...d,
+        });
+      }
+      return { count: list.length };
     },
     async update(args) {
-      const a = (args ?? {}) as { where?: Record<string, unknown>; data?: Record<string, unknown> };
-      return { ...(a.where ?? {}), ...(a.data ?? {}) };
+      const rows = await getRows(modelName);
+      const a = (args ?? {}) as {
+        where?: Record<string, unknown>;
+        data?: Record<string, unknown>;
+        include?: AnyArgs;
+      };
+      const row = rows.find((r) => matches(r, a.where));
+      if (!row) {
+        throw new Error(
+          `[demo-prisma] update: レコードが見つかりません (model=${modelName})`,
+        );
+      }
+      applyDataToRow(row, a.data);
+      row.updatedAt = new Date();
+      const f = await loadFixtures();
+      return applyInclude(row, a.include, f);
     },
-    async updateMany() {
-      return { count: 0 };
+    async updateMany(args) {
+      const rows = await getRows(modelName);
+      const a = (args ?? {}) as { where?: Record<string, unknown>; data?: Record<string, unknown> };
+      const targets = rows.filter((r) => matches(r, a.where));
+      for (const row of targets) {
+        applyDataToRow(row, a.data);
+        row.updatedAt = new Date();
+      }
+      return { count: targets.length };
     },
     async upsert(args) {
+      const rows = await getRows(modelName);
       const a = (args ?? {}) as {
         where?: Record<string, unknown>;
         create?: Record<string, unknown>;
         update?: Record<string, unknown>;
+        include?: AnyArgs;
       };
-      return { ...(a.where ?? {}), ...(a.create ?? {}), ...(a.update ?? {}) };
+      const existing = rows.find((r) => matches(r, a.where));
+      const f = await loadFixtures();
+      if (existing) {
+        applyDataToRow(existing, a.update);
+        existing.updatedAt = new Date();
+        return applyInclude(existing, a.include, f);
+      }
+      const now = new Date();
+      const row: Record<string, unknown> = {
+        id: 'demo-' + Math.random().toString(36).slice(2, 10),
+        createdAt: now,
+        updatedAt: now,
+        ...(a.where ?? {}),
+        ...(a.create ?? {}),
+      };
+      rows.push(row);
+      return applyInclude(row, a.include, f);
     },
     async delete(args) {
+      const rows = await getRows(modelName);
       const a = (args ?? {}) as { where?: Record<string, unknown> };
-      return { ...(a.where ?? {}) };
+      const idx = rows.findIndex((r) => matches(r, a.where));
+      if (idx === -1) {
+        throw new Error(
+          `[demo-prisma] delete: レコードが見つかりません (model=${modelName})`,
+        );
+      }
+      const [removed] = rows.splice(idx, 1);
+      return removed as Record<string, unknown>;
     },
-    async deleteMany() {
-      return { count: 0 };
+    async deleteMany(args) {
+      const rows = await getRows(modelName);
+      const a = (args ?? {}) as { where?: Record<string, unknown> };
+      const remaining: Record<string, unknown>[] = [];
+      let count = 0;
+      for (const r of rows) {
+        if (matches(r, a.where)) {
+          count += 1;
+        } else {
+          remaining.push(r);
+        }
+      }
+      rows.length = 0;
+      rows.push(...remaining);
+      return { count };
     },
-    async aggregate() {
-      return { _count: 0, _sum: {}, _avg: {}, _min: {}, _max: {} };
+    async aggregate(args) {
+      const rows = await getRows(modelName);
+      const a = (args ?? {}) as {
+        where?: AnyArgs;
+        _sum?: Record<string, boolean>;
+        _avg?: Record<string, boolean>;
+        _min?: Record<string, boolean>;
+        _max?: Record<string, boolean>;
+        _count?: boolean | Record<string, boolean>;
+      };
+      const filtered = rows.filter((r) => matches(r, a.where));
+      const numeric = (field: string) =>
+        filtered.map((r) => Number(r[field]) || 0);
+
+      const out: Record<string, unknown> = {};
+      if (a._count) {
+        out._count =
+          a._count === true
+            ? filtered.length
+            : Object.fromEntries(
+                Object.keys(a._count as Record<string, boolean>).map((k) => [
+                  k,
+                  filtered.length,
+                ]),
+              );
+      }
+      for (const [outKey, fields] of [
+        ['_sum', a._sum],
+        ['_avg', a._avg],
+        ['_min', a._min],
+        ['_max', a._max],
+      ] as const) {
+        if (!fields) continue;
+        const res: Record<string, number | null> = {};
+        for (const field of Object.keys(fields)) {
+          const nums = numeric(field);
+          if (nums.length === 0) {
+            res[field] = outKey === '_sum' ? 0 : null;
+            continue;
+          }
+          if (outKey === '_sum') res[field] = nums.reduce((s, n) => s + n, 0);
+          else if (outKey === '_avg') res[field] = nums.reduce((s, n) => s + n, 0) / nums.length;
+          else if (outKey === '_min') res[field] = Math.min(...nums);
+          else res[field] = Math.max(...nums);
+        }
+        out[outKey] = res;
+      }
+      return out;
     },
     async groupBy() {
       return [];
