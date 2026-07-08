@@ -3,13 +3,13 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  await requireSession();
+export const GET = handle(async (req: Request) => {
+  await requireApiSession(req);
   const items = await prisma.rewardCatalogItem.findMany({
     where: { status: 'PUBLISHED' },
     orderBy: [{ sortOrder: 'asc' }, { pointCost: 'asc' }],

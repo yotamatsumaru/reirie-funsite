@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { UpdateProfileSchema } from '@idol/shared';
-import { auth, requireSession } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { requireApiSession } from '@/lib/api-auth';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     include: {
@@ -40,7 +40,7 @@ export const GET = handle(async () => {
 });
 
 export const PATCH = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = await req.json();
   const input = UpdateProfileSchema.parse(body);
   await prisma.user.update({
@@ -54,8 +54,8 @@ export const PATCH = handle(async (req: Request) => {
   return NextResponse.json({ message: '更新しました' });
 });
 
-export const DELETE = handle(async () => {
-  const session = await requireSession();
+export const DELETE = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   await prisma.user.update({
     where: { id: session.user.id },
     data: { deletedAt: new Date() },
@@ -64,5 +64,3 @@ export const DELETE = handle(async () => {
   return NextResponse.json({ message: '退会処理を受け付けました' });
 });
 
-// auth() の利用を保持するため (lint対策)
-void auth;

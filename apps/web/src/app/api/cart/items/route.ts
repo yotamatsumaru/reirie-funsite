@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AddToCartSchema, canAccess } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -20,7 +20,7 @@ async function getOrCreateCart(userId: string) {
 }
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const plan = session.user.plan;
   const body = AddToCartSchema.parse(await req.json());
 

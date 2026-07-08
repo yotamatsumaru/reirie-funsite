@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { CreateCheckoutSessionSchema } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { getStripe, getPriceId } from '@/lib/stripe';
 import { logAudit } from '@/lib/audit';
@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = await req.json();
   const input = CreateCheckoutSessionSchema.parse(body);
 

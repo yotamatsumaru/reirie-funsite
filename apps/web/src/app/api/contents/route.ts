@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ListContentsQuerySchema, canAccess } from '@idol/shared';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -14,7 +14,7 @@ export const GET = handle(async (req: Request) => {
     page: url.searchParams.get('page') ?? 1,
     limit: url.searchParams.get('limit') ?? 12,
   });
-  const session = await auth();
+  const session = await resolveApiSession(req);
 
   const allowed: Array<'PUBLIC' | 'MEMBERS' | 'PREMIUM'> = ['PUBLIC'];
   if (canAccess(session?.user?.plan, 'MEMBERS')) allowed.push('MEMBERS');

@@ -6,15 +6,15 @@
  */
 import { NextResponse } from 'next/server';
 import { EXTRA_PLAY_COST_FAN_POINTS, MAX_EXTRA_PLAYS_PER_DAY } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { buyAcchiExtraPlay } from '@/lib/points';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
-export const POST = handle(async () => {
-  const session = await requireSession();
+export const POST = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const result = await buyAcchiExtraPlay(session.user.id);
 
   if (!result.ok) {

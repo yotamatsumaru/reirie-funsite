@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { SocialShareInputSchema, SOCIAL_PLATFORMS, jstDateKey } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getPointRates } from '@/lib/app-setting';
@@ -18,8 +18,8 @@ import { grantSocialShare } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const today = jstDateKey();
   const grants = await prisma.socialShareGrant.findMany({
     where: { userId: session.user.id, date: today },
@@ -36,7 +36,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = SocialShareInputSchema.safeParse(await req.json().catch(() => null));
   if (!body.success) {
     throw errors.unprocessable('プラットフォームを指定してください', body.error.flatten());

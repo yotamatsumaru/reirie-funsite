@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { calculateOrderTotals, effectiveUnitPrice } from '@/lib/pricing';
 
@@ -21,8 +21,8 @@ async function getOrCreateCart(userId: string) {
   return prisma.cart.create({ data: { userId } });
 }
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const plan = session.user.plan;
   const cart = await getOrCreateCart(session.user.id);
 

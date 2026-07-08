@@ -11,7 +11,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { SendDirectMessageSchema, resolvePreferredName } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import {
@@ -24,8 +24,8 @@ import {
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const [user, messages, ngWords] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
@@ -44,7 +44,7 @@ export const GET = handle(async () => {
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
 
   const json = (await req.json().catch(() => null)) as { body?: unknown } | null;
   const parsed = SendDirectMessageSchema.safeParse(json ?? {});

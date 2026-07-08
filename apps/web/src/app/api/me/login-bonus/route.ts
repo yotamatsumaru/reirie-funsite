@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { jstDateKey } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getPointRates } from '@/lib/app-setting';
@@ -15,8 +15,8 @@ import { grantLoginBonus } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  const session = await requireSession();
+export const GET = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const today = jstDateKey();
   const [grant, user] = await Promise.all([
     prisma.loginBonusGrant.findUnique({
@@ -36,8 +36,8 @@ export const GET = handle(async () => {
   });
 });
 
-export const POST = handle(async () => {
-  const session = await requireSession();
+export const POST = handle(async (req: Request) => {
+  const session = await requireApiSession(req);
   const rates = await getPointRates();
   const result = await grantLoginBonus(session.user.id, rates);
 

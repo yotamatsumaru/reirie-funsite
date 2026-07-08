@@ -4,18 +4,18 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(
-  async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
     const { id } = await ctx.params;
     const event = await prisma.ticketEvent.findUnique({ where: { id } });
     if (!event || !event.isActive) throw errors.notFound('イベントが見つかりません');
 
-    const session = await auth();
+    const session = await resolveApiSession(req);
     let userStatus: {
       hasLink: boolean;
       granted: boolean;

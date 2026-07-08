@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ConfirmTicketLinkSchema } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { confirmLawsonLink } from '@/lib/lawson';
 import { logAudit } from '@/lib/audit';
@@ -14,7 +14,7 @@ import { logAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = ConfirmTicketLinkSchema.parse(await req.json());
 
   const link = await prisma.ticketLink.findUnique({

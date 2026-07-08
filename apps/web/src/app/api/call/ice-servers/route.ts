@@ -18,7 +18,7 @@
  *   { iceServers: RTCIceServer[] }
  */
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -28,8 +28,8 @@ const STUN_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-export const GET = handle(async () => {
-  const session = await auth();
+export const GET = handle(async (req: Request) => {
+  const session = await resolveApiSession(req);
   if (!session?.user?.id) throw errors.unauthorized();
 
   const iceServers: RTCIceServer[] = [...STUN_SERVERS];

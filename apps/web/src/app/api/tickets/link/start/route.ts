@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { StartTicketLinkSchema } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { startLawsonLink } from '@/lib/lawson';
 import { env } from '@/lib/env';
@@ -18,7 +18,7 @@ import { logAudit } from '@/lib/audit';
 export const runtime = 'nodejs';
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSession();
+  const session = await requireApiSession(req);
   const body = StartTicketLinkSchema.parse(await req.json());
 
   // 既に他ユーザーがこのローチケIDで LINKED の場合は拒否

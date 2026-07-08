@@ -19,7 +19,7 @@
  * 注意 (Vercel/Cloudflare 等のデプロイ環境):
  *   Node.js ランタイム + standalone モードで動作することを前提とする。
  */
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { prisma } from '@idol/db';
 import type { CallQueueSnapshot } from '@idol/shared';
 
@@ -88,7 +88,7 @@ async function buildSnapshot(eventId: string, userId: string | undefined): Promi
 
 export async function GET(req: Request, ctx: Ctx) {
   const { id: eventId } = await ctx.params;
-  const session = await auth();
+  const session = await resolveApiSession(req);
   const userId = session?.user?.id;
 
   const encoder = new TextEncoder();

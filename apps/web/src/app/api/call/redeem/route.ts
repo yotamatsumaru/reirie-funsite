@@ -20,7 +20,7 @@
  */
 import { NextResponse } from 'next/server';
 import { Prisma, prisma } from '@idol/db';
-import { requireAccessLevel } from '@/auth';
+import { requireApiAccessLevel } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { RedeemCallSerialSchema, normalizeSerialCode } from '@idol/shared';
 
@@ -28,7 +28,7 @@ export const runtime = 'nodejs';
 
 export const POST = handle(async (req) => {
   // ログイン + ファンクラブ会員 (MEMBERS = STANDARD 以上) 必須
-  const session = await requireAccessLevel('MEMBERS');
+  const session = await requireApiAccessLevel(req, 'MEMBERS');
   const userId = session!.user!.id;
 
   const body = await req.json();

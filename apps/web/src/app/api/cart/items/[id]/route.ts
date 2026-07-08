@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { UpdateCartItemSchema } from '@idol/shared';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -23,7 +23,7 @@ async function loadOwnedItem(itemId: string, userId: string) {
 
 export const PATCH = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireSession();
+    const session = await requireApiSession(req);
     const { id } = await ctx.params;
     const body = UpdateCartItemSchema.parse(await req.json());
 
@@ -57,8 +57,8 @@ export const PATCH = handle(
 );
 
 export const DELETE = handle(
-  async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireSession();
+  async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
+    const session = await requireApiSession(req);
     const { id } = await ctx.params;
     const item = await loadOwnedItem(id, session.user.id);
     await prisma.cartItem.delete({ where: { id: item.id } });

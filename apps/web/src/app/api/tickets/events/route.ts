@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { canAccess } from '@idol/shared';
 import type { Prisma } from '@idol/db';
@@ -28,7 +28,7 @@ export const GET = handle(async (req: Request) => {
     take: 100,
   });
 
-  const session = await auth();
+  const session = await resolveApiSession(req);
   let grantsMap = new Map<string, { grantedAt: Date; expiresAt: Date | null }>();
   let hasLink = false;
 

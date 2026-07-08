@@ -4,7 +4,21 @@ info:
   version: 0.1.0
   description: |
     アイドルファンサイト REST API 仕様。Next.js 16 Route Handlers で実装。
-    認証は Auth.js v5 (Credentials Provider, JWT cookie)。
+
+    ## 認証方式 (2種類、多くのエンドポイントで両対応)
+    - **Cookie セッション** (`sessionCookie`): Web ブラウザ向け。Auth.js v5
+      (Credentials Provider) でログインすると発行される。
+    - **Bearer トークン** (`bearerAuth`): モバイル / ネイティブアプリ (Unity 等) 向け。
+      `POST /api/v1/auth/token` に email + password を送信して取得し、
+      `Authorization: Bearer <accessToken>` ヘッダを付けて呼び出す。
+      期限切れ時は `POST /api/v1/auth/token/refresh` で再発行する。
+      (SSE/`EventSource` エンドポイントのみカスタムヘッダを送れないため、
+      `?access_token=<accessToken>` クエリでも指定可)
+
+    `security` に `bearerAuth` と `sessionCookie` の両方が列挙されているエンドポイントは、
+    どちらの認証方式でも同じ URL・同じレスポンスで利用できる
+    (Web とモバイルアプリで同一の API を共有する設計)。
+    `Admin` タグのエンドポイントは管理画面専用のため `sessionCookie` のみ対応。
 
 servers:
   - url: https://example.com
@@ -25,6 +39,7 @@ tags:
   - name: Me
   - name: Admin
   - name: Game
+  - name: Call
   - name: API v1 (Mobile/Unity)
 
 components:
@@ -179,7 +194,7 @@ paths:
     post:
       tags: [Subscriptions]
       summary: Stripe Checkout (mode=subscription) URL を発行
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
         content:
@@ -203,7 +218,7 @@ paths:
     post:
       tags: [Subscriptions]
       summary: Stripe Billing Portal URL を発行
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200': { description: 成功 }
 
@@ -211,7 +226,7 @@ paths:
     get:
       tags: [Subscriptions]
       summary: 現在のサブスクリプション情報
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200': { description: 成功 }
 
@@ -219,13 +234,31 @@ paths:
     post:
       tags: [Subscriptions]
       summary: 解約予約 (cancel_at_period_end=true)
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   /api/subscriptions/change-plan:
     post:
       tags: [Subscriptions]
       summary: プラン変更 (即時 proration)
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+
+  /api/subscriptions/monthly-bonus:
+    get:
+      tags: [Subscriptions]
+      summary: 今月の月次ボーナス受給状況
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Subscriptions]
+      summary: 月次ボーナスギフトを全アクティブ会員に付与 (Cron 用)
+      description: |
+        `x-cron-secret` ヘッダで CRON_SECRET と一致する場合、または
+        ログイン中の管理者からのみ実行可能。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+        '401': { description: 未認証/CRON_SECRET不一致 }
 
   # ─── Contents ─────────────────────────────────────────────────────
   /api/contents:
@@ -262,12 +295,76 @@ paths:
         '403': { description: プラン要件未達 }
         '404': { description: 見つからない }
 
+  /api/contents/comments:
+    get:
+      tags: [Contents]
+      summary: コメント一覧 (記事に紐づく)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: query, name: contentId, required: true, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: 成功 }
+        '404': { description: 記事が見つからない }
+    post:
+      tags: [Contents]
+      summary: コメント投稿 (スタンダード以上限定)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentId, body]
+              properties:
+                contentId: { type: string }
+                body: { type: string }
+      responses:
+        '201': { description: 投稿成功 }
+        '402': { description: プラン要件未達 }
+        '404': { description: 記事が見つからない }
+
+  /api/contents/comments/{id}:
+    delete:
+      tags: [Contents]
+      summary: コメント削除 (本人 or 管理者のみ)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 削除成功 }
+        '403': { description: 権限なし }
+        '404': { description: 見つからない }
+
   # ─── Videos ───────────────────────────────────────────────────────
+  /api/videos:
+    get:
+      tags: [Videos]
+      summary: 動画一覧 (プラン別表示制御)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/videos/{id}:
+    get:
+      tags: [Videos]
+      summary: 動画詳細
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+        '401': { description: 未認証 }
+        '403': { description: プラン要件未達 }
+        '404': { description: 見つからない }
+
   /api/videos/{id}/playback:
     get:
       tags: [Videos]
       summary: 動画 HLS の CloudFront 署名URL を発行
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
       responses:
@@ -291,7 +388,9 @@ paths:
     get:
       tags: [Live]
       summary: IVS 署名 playback URL を発行
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   # ─── Products ─────────────────────────────────────────────────────
   /api/products:
@@ -319,6 +418,8 @@ paths:
     get:
       tags: [Products]
       summary: 商品詳細
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
 
   /api/products/categories:
     get:
@@ -330,7 +431,7 @@ paths:
     get:
       tags: [Cart]
       summary: 自分のカート
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200':
           description: 成功
@@ -342,7 +443,7 @@ paths:
     post:
       tags: [Cart]
       summary: カートに追加
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
         content:
@@ -358,13 +459,13 @@ paths:
     patch:
       tags: [Cart]
       summary: 数量変更
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
     delete:
       tags: [Cart]
       summary: 削除
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       parameters:
         - { in: path, name: id, required: true, schema: { type: string } }
 
@@ -373,7 +474,7 @@ paths:
     post:
       tags: [Orders]
       summary: カートから注文確定 + Stripe Checkout URL
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
         content:
@@ -402,7 +503,9 @@ paths:
     get:
       tags: [Orders]
       summary: 注文詳細
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   # ─── Tickets ──────────────────────────────────────────────────────
   /api/tickets/events:
@@ -416,28 +519,30 @@ paths:
     get:
       tags: [Tickets]
       summary: イベント詳細
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   /api/tickets/link:
     get:
       tags: [Tickets]
       summary: ローソンチケット連携状態
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
     delete:
       tags: [Tickets]
       summary: 連携解除
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   /api/tickets/link/start:
     post:
       tags: [Tickets]
       summary: 連携開始 (verifyToken 発行)
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   /api/tickets/link/confirm:
     post:
       tags: [Tickets]
       summary: 連携確定 (token + Lawson API 検証)
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
         content:
@@ -453,36 +558,398 @@ paths:
     post:
       tags: [Tickets]
       summary: 先行受付申請 (LINKED + プラン + 期間チェック)
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   /api/tickets/presale/grants:
     get:
       tags: [Tickets]
       summary: 自分の先行受付状況
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   # ─── Me ───────────────────────────────────────────────────────────
   /api/me:
     get:
       tags: [Me]
       summary: 自分のプロフィール
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
     patch:
       tags: [Me]
       summary: 表示名・住所などの更新
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   /api/me/orders:
     get:
       tags: [Me]
       summary: 注文履歴
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
 
   /api/me/payments:
     get:
       tags: [Me]
       summary: 支払い履歴
-      security: [{ sessionCookie: [] }]
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+
+  /api/me/card:
+    get:
+      tags: [Me]
+      summary: 会員カード情報 (会員番号を未付与なら採番)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/me/points:
+    get:
+      tags: [Me]
+      summary: ポイント残高 & 取引履歴 (直近50件)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/me/login-bonus:
+    get:
+      tags: [Me]
+      summary: 今日のログインボーナス受給状況
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Me]
+      summary: 毎日のログインボーナスを受け取る
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+        '409': { description: 本日は受給済み }
+
+  /api/me/social-share:
+    get:
+      tags: [Me]
+      summary: 今日の SNS シェア報酬受給状況 (プラットフォーム別)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Me]
+      summary: SNS シェアを報告してポイント付与 (X / Instagram, 1日1回まで)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [platform]
+              properties:
+                platform: { type: string, enum: [X, INSTAGRAM] }
+      responses:
+        '200': { description: 成功 }
+        '409': { description: 本日は受給済み }
+
+  /api/me/dm:
+    get:
+      tags: [Me]
+      summary: REIRIE との DM 一覧 + 呼んでほしい名前 + NGワード
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Me]
+      summary: REIRIE への DM を送信
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+      responses:
+        '200': { description: 送信成功 }
+        '422': { description: NGワード/文字数エラー }
+
+  /api/me/profile/preferred-name:
+    put:
+      tags: [Me]
+      summary: 「呼んでほしい名前」を更新 (空文字で解除)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferredName: { type: string, nullable: true }
+      responses:
+        '200': { description: 成功 }
+        '422': { description: 入力不正 }
+
+  /api/me/reward-catalog:
+    get:
+      tags: [Me]
+      summary: 公開中の景品カタログ一覧
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/me/reward-points:
+    get:
+      tags: [Me]
+      summary: 特典ポイント残高 & 取引履歴 (直近50件)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/me/reward-points/purchase:
+    post:
+      tags: [Me]
+      summary: 特典ポイントパックを Stripe Checkout で購入
+      description: 確定は Stripe Webhook (`/api/game/webhook`) で行う。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [packId]
+              properties:
+                packId: { type: string }
+      responses:
+        '200': { description: Checkout URL 発行成功 }
+        '404': { description: ポイントパックが見つからない }
+
+  /api/me/reward-redemptions:
+    get:
+      tags: [Me]
+      summary: 自分の景品交換履歴
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Me]
+      summary: 景品交換申請 (特典ポイント消費)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId]
+              properties:
+                itemId: { type: string }
+                shipping: { $ref: '#/components/schemas/ShippingAddress' }
+      responses:
+        '200': { description: 交換成功 }
+        '409': { description: 在庫切れ/交換不可 }
+
+  /api/me/games/acchi:
+    get:
+      tags: [Me, Game]
+      summary: あっち向いてホイ — 本日の残りプレイ回数と残高
+      description: |
+        `/api/v1/games/acchi` と同一のミニゲーム機能を Web 用 URL でも提供するもの。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Me, Game]
+      summary: あっち向いてホイ — 1 プレイ実行
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: プレイ結果 }
+        '429': { description: 本日のプレイ上限に達した }
+
+  /api/me/games/acchi/buy-extra-play:
+    post:
+      tags: [Me, Game]
+      summary: あっち向いてホイ — 追加プレイ権を購入
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 購入成功 }
+
+  # ─── Game (ノベルゲーム) ────────────────────────────────────────────
+  /api/game/characters/{slug}:
+    get:
+      tags: [Game]
+      summary: キャラ詳細 + 章一覧 + 自分の進捗 + 所持アイテム
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: slug, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+        '404': { description: 見つからない }
+
+  /api/game/scenarios/{id}:
+    get:
+      tags: [Game]
+      summary: シナリオ本体 (script JSON + アセット解決マップ)
+      description: 課金/プレミアム/無料トライアルの所有チェックを行う。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+        '403': { description: 未所持/プラン要件未達 }
+        '404': { description: 見つからない }
+
+  /api/game/progress:
+    get:
+      tags: [Game]
+      summary: 自分の進捗を取得
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: query, name: characterId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Game]
+      summary: 進捗を保存 (upsert)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/game/save-slots:
+    get:
+      tags: [Game]
+      summary: 'セーブスロット一覧 (プラン別上限: FREE=1/STANDARD=3/PREMIUM=10)'
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: query, name: characterId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+    post:
+      tags: [Game]
+      summary: セーブスロット書込 (upsert)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+        '409': { description: スロット上限超過 }
+
+  /api/game/gift:
+    post:
+      tags: [Game]
+      summary: 所持アイテム (プレゼント) を消費して好感度を加算
+      description: 確定報酬のみ (ランダム要素なし、景表法対応)。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId]
+              properties:
+                itemId: { type: string }
+      responses:
+        '200': { description: 成功 }
+        '400': { description: 所持していない }
+        '404': { description: 見つからない }
+
+  /api/game/purchase:
+    post:
+      tags: [Game]
+      summary: 章/アイテムを購入 (Stripe課金 または Fanポイント)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, payMethod]
+              properties:
+                kind: { type: string, enum: [SCENARIO, ITEM] }
+                payMethod: { type: string, enum: [STRIPE, FAN_POINT] }
+                scenarioId: { type: string }
+                itemId: { type: string }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: 成功 (STRIPE の場合は checkoutUrl を含む) }
+        '409': { description: 既に購入済み/所持上限超過/ポイント不足 }
+
+  # ─── Call (1on1 通話) ───────────────────────────────────────────────
+  /api/call/redeem:
+    post:
+      tags: [Call]
+      summary: シリアルコードを引き換えて通話チケットを発行
+      description: ログイン + ファンクラブ会員 (STANDARD以上) 必須。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200': { description: 発行成功 }
+        '402': { description: プラン要件未達 }
+        '409': { description: コード無効/使用済み/既にチケット発行済み }
+
+  /api/call/ice-servers:
+    get:
+      tags: [Call]
+      summary: WebRTC 用 ICE サーバー (STUN/TURN) 情報を取得
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      responses:
+        '200': { description: 成功 }
+
+  /api/call/events/{id}/enter-waiting:
+    post:
+      tags: [Call]
+      summary: 待機室への自動入室 (チケットを WAITING → IN_WAITING_ROOM に進める)
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 (冪等) }
+        '403': { description: 他人のチケット }
+        '404': { description: チケットが見つからない }
+
+  /api/call/events/{id}/queue/events:
+    get:
+      tags: [Call]
+      summary: 待機キューの状態を Push する SSE エンドポイント
+      description: |
+        2秒間隔のポーリングベース SSE。`EventSource` は Authorization ヘッダを
+        送れないため、Bearer トークンは `?access_token=<token>` クエリでも渡せる。
+        未ログインでもイベント概要は取得できる。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: access_token, schema: { type: string }, description: 'Bearerトークン (EventSource用)' }
+      responses:
+        '200': { description: 'text/event-stream' }
+
+  /api/call/{roomId}/signal:
+    post:
+      tags: [Call]
+      summary: offer/answer/ICE candidate を送信し同室の別ピアへ配信
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: roomId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 成功 }
+
+  /api/call/{roomId}/events:
+    get:
+      tags: [Call]
+      summary: シグナリングメッセージを受信する SSE エンドポイント
+      description: |
+        `EventSource` は Authorization ヘッダを送れないため、Bearer トークンは
+        `?access_token=<token>` クエリでも渡せる。
+      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
+      parameters:
+        - { in: path, name: roomId, required: true, schema: { type: string } }
+        - { in: query, name: role, schema: { type: string, enum: [performer, fan] } }
+        - { in: query, name: access_token, schema: { type: string }, description: 'Bearerトークン (EventSource用)' }
+      responses:
+        '200': { description: 'text/event-stream' }
 
   # ─── Admin (require role=ADMIN) ───────────────────────────────────
   /api/admin/stats:
@@ -512,12 +979,16 @@ paths:
       tags: [Admin]
       summary: バリアント追加 (在庫初期化込み)
       security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   /api/admin/inventories/{variantId}:
     put:
       tags: [Admin]
       summary: 在庫数更新 (quantity < reserved は拒否)
       security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: variantId, required: true, schema: { type: string } }
 
   /api/admin/orders:
     get:
@@ -529,12 +1000,16 @@ paths:
       tags: [Admin]
       summary: 発送 (在庫減算 + SES通知)
       security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   /api/admin/orders/{id}/cancel:
     post:
       tags: [Admin]
       summary: キャンセル (reserved のみ戻す)
       security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   /api/admin/videos/upload-url:
     post:
@@ -547,6 +1022,8 @@ paths:
       tags: [Admin]
       summary: HLS 完成後に公開状態へ
       security: [{ sessionCookie: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
 
   /api/admin/live:
     get:

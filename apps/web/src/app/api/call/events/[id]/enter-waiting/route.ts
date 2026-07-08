@@ -17,7 +17,7 @@
  *   - ticketId が自分のものであること
  */
 import { NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { prisma } from '@idol/db';
 import { handle, errors } from '@/lib/errors';
 import { EnterCallWaitingRoomSchema } from '@idol/shared';
@@ -29,7 +29,7 @@ interface Ctx {
 }
 
 export const POST = handle(async (req, ctx: Ctx) => {
-  const session = await auth();
+  const session = await resolveApiSession(req);
   if (!session?.user?.id) throw errors.unauthorized();
   const userId = session.user.id;
 

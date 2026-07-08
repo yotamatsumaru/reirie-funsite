@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
-import { auth } from '@/auth';
+import { resolveApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async (_req: Request, ctx: { params: Promise<{ slug: string }> }) => {
+export const GET = handle(async (req: Request, ctx: { params: Promise<{ slug: string }> }) => {
   const { slug } = await ctx.params;
-  const session = await auth();
+  const session = await resolveApiSession(req);
 
   const content = await prisma.content.findUnique({
     where: { slug },

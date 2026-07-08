@@ -4,14 +4,14 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSession } from '@/auth';
+import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(
-  async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireSession();
+  async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
+    const session = await requireApiSession(req);
     const { id } = await ctx.params;
 
     const order = await prisma.order.findUnique({
