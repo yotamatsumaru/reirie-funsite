@@ -3,8 +3,11 @@
 /**
  * あっち向いてホイ用キャラクター表示。
  *
- * - `CHARACTER_IMAGES_ENABLED` が true かつ画像が読み込めれば本人画像を表示。
- * - それ以外 / 画像読み込み失敗時は SVG で描いたプレースホルダーキャラにフォールバック。
+ * - `imageUrls` (管理画面でアップロードした DB 駆動の画像 URL マップ) に pose の
+ *   画像が設定されていれば、それを最優先で表示する。
+ * - 未設定 / 画像読み込み失敗時は `CHARACTER_IMAGES_ENABLED` の静的ファイル方式
+ *   (コード同梱の public/characters 配下の画像) にフォールバック。
+ * - さらに失敗 / 未設定なら SVG で描いたプレースホルダーキャラにフォールバック。
  * - pose に応じて表情・向き (横顔) が変わる。
  *
  * pose:
@@ -14,6 +17,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { CharacterImageUrlMap } from '@idol/shared';
 import {
   CHARACTER_IMAGES_ENABLED,
   CHARACTER_NAME,
@@ -23,6 +27,8 @@ import {
 
 type Props = {
   pose: CharacterPose;
+  /** 管理画面でアップロードされたポーズ別画像 URL マップ (DB 駆動、任意)。 */
+  imageUrls?: CharacterImageUrlMap;
   /** 待機中のふわふわ揺れアニメを有効にするか。 */
   bob?: boolean;
   className?: string;
@@ -30,14 +36,18 @@ type Props = {
 
 const FACE_DIRS = new Set<CharacterPose>(['up', 'down', 'left', 'right']);
 
-export function CharacterAvatar({ pose, bob = true, className = '' }: Props) {
+export function CharacterAvatar({ pose, imageUrls, bob = true, className = '' }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
   // pose が変わったら画像エラー状態をリセット
   useEffect(() => {
     setImageFailed(false);
   }, [pose]);
 
-  const useImage = CHARACTER_IMAGES_ENABLED && !imageFailed;
+  // 優先度: 1) 管理画面アップロード画像 (DB) → 2) 静的ファイル (CHARACTER_IMAGES_ENABLED) → 3) SVG プレースホルダー
+  const dbImageUrl = imageUrls?.[pose];
+  const resolvedImageSrc = !imageFailed
+    ? dbImageUrl ?? (CHARACTER_IMAGES_ENABLED ? characterImageUrl(pose) : null)
+    : null;
 
   return (
     <div
@@ -48,10 +58,10 @@ export function CharacterAvatar({ pose, bob = true, className = '' }: Props) {
       {/* 接地影 */}
       <span className="absolute bottom-1 left-1/2 h-3 w-24 -translate-x-1/2 rounded-[50%] bg-black/15 blur-[2px]" />
 
-      {useImage ? (
+      {resolvedImageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={characterImageUrl(pose)}
+          src={resolvedImageSrc}
           alt={`${CHARACTER_NAME} (${pose})`}
           onError={() => setImageFailed(true)}
           className="h-40 w-40 object-contain drop-shadow-md transition-transform duration-300"

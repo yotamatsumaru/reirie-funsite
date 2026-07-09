@@ -7,6 +7,7 @@ export * from './stripe-mode';
 export * from './mini-game';
 export * from './game-audio';
 export * from './site-image';
+export * from './character-image';
 export * from './dm';
 export * from './schemas/auth';
 export * from './schemas/common';

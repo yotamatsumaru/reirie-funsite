@@ -36,6 +36,7 @@ import {
   type JankenHand,
   type AcchiDirection,
   type AcchiVoiceUrlMap,
+  type CharacterImageUrlMap,
 } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
 import { CharacterAvatar } from './CharacterAvatar';
@@ -130,9 +131,12 @@ const REVEAL_ROUND2_MS = 1100;
 export function AcchiGameClient({
   initial,
   voiceUrls = {},
+  characterImageUrls = {},
 }: {
   initial: Initial;
   voiceUrls?: AcchiVoiceUrlMap;
+  /** 管理画面でアップロードされたポーズ別キャラクター画像 URL マップ (任意)。 */
+  characterImageUrls?: CharacterImageUrlMap;
 }) {
   const router = useRouter();
   const sound = useAcchiSound(voiceUrls);
@@ -299,7 +303,7 @@ export function AcchiGameClient({
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           {/* キャラクター (待機で揺れる) */}
           <div className="animate-acchi-swing">
-            <CharacterAvatar pose="idle" bob />
+            <CharacterAvatar pose="idle" imageUrls={characterImageUrls} bob />
           </div>
           <p className="mb-1 text-sm text-slate-500">{CHARACTER_NAME} とじゃんけん勝負！</p>
           <p className="mb-1 text-lg font-bold text-slate-800">最初はグー、じゃんけん…</p>
@@ -325,7 +329,7 @@ export function AcchiGameClient({
       {phase === 'direction' && hand ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           {/* キャラはあなたの手を出している (演出) */}
-          <CharacterAvatar pose={HAND_POSE[hand]} bob={false} />
+          <CharacterAvatar pose={HAND_POSE[hand]} imageUrls={characterImageUrls} bob={false} />
           <p className="mb-1 text-sm text-slate-500">
             あなたの手: <span className="text-2xl">{HAND_EMOJI[hand]}</span> {HAND_LABEL[hand]}
           </p>
@@ -350,12 +354,23 @@ export function AcchiGameClient({
 
       {/* 決着演出フェーズ (ラウンド1のやり直し→決着、勝てばラウンド2) */}
       {phase === 'reveal' && outcome ? (
-        <RevealCard outcome={outcome} revealIndex={revealIndex} revealSubPhase={revealSubPhase} />
+        <RevealCard
+          outcome={outcome}
+          revealIndex={revealIndex}
+          revealSubPhase={revealSubPhase}
+          characterImageUrls={characterImageUrls}
+        />
       ) : null}
 
       {/* 結果フェーズ */}
       {phase === 'result' && outcome ? (
-        <ResultCard outcome={outcome} canPlay={remaining > 0} onAgain={playAgain} onBack={() => router.push('/me/card')} />
+        <ResultCard
+          outcome={outcome}
+          canPlay={remaining > 0}
+          onAgain={playAgain}
+          onBack={() => router.push('/me/card')}
+          characterImageUrls={characterImageUrls}
+        />
       ) : null}
 
       {error ? (
@@ -394,10 +409,12 @@ function RevealCard({
   outcome,
   revealIndex,
   revealSubPhase,
+  characterImageUrls,
 }: {
   outcome: PlayResponse;
   revealIndex: number;
   revealSubPhase: RevealSubPhase;
+  characterImageUrls?: CharacterImageUrlMap;
 }) {
   const attempts = outcome.round1.attempts;
   const attempt = attempts[revealIndex];
@@ -412,7 +429,7 @@ function RevealCard({
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
         <div key={`${revealIndex}-${attempt.outcome}`} className="animate-acchi-pop">
-          <CharacterAvatar pose={HAND_POSE[attempt.cpu]} bob={false} />
+          <CharacterAvatar pose={HAND_POSE[attempt.cpu]} imageUrls={characterImageUrls} bob={false} />
         </div>
         <div className="mt-3 flex items-center justify-center gap-6 text-sm text-slate-600">
           <div>
@@ -444,7 +461,7 @@ function RevealCard({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
       <div key={cpuPose} className="animate-acchi-turn">
-        <CharacterAvatar pose={cpuPose} bob={false} />
+        <CharacterAvatar pose={cpuPose} imageUrls={characterImageUrls} bob={false} />
       </div>
       <p className="mt-3 text-sm text-slate-500">
         あなたが「{DIR_LABEL[round2.player]}」を指す → {CHARACTER_NAME} は「
@@ -462,11 +479,13 @@ function ResultCard({
   canPlay,
   onAgain,
   onBack,
+  characterImageUrls,
 }: {
   outcome: PlayResponse;
   canPlay: boolean;
   onAgain: () => void;
   onBack: () => void;
+  characterImageUrls?: CharacterImageUrlMap;
 }) {
   const win = outcome.result === 'WIN';
   const theme = win
@@ -484,7 +503,7 @@ function ResultCard({
     <div className={`rounded-2xl border bg-gradient-to-br ${theme.bg} p-6 text-center shadow-sm`}>
       {/* REIRIE の演出 */}
       <div key={cpuPose} className="animate-acchi-turn">
-        <CharacterAvatar pose={cpuPose} bob={false} />
+        <CharacterAvatar pose={cpuPose} imageUrls={characterImageUrls} bob={false} />
       </div>
       <p className="text-xs text-slate-400">
         {round2

@@ -7,9 +7,11 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getAcchiWinSettings, getAcchiRewardBonusSettings } from '@/lib/app-setting';
 import { listGameAudio } from '@/lib/game-audio';
+import { listCharacterImages } from '@/lib/character-image';
 import { AcchiSettingsClient } from './acchi-settings-client';
 import { AcchiRewardBonusClient } from './acchi-reward-bonus-client';
 import { GameAudioClient, type GameAudioItem } from './game-audio-client';
+import { CharacterImageClient, type CharacterImageItem } from './character-image-client';
 
 export const metadata: Metadata = { title: 'ゲーム経済 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -50,6 +52,7 @@ export default async function SuperAdminGamePage() {
     acchiSettings,
     acchiRewardBonusSettings,
     gameAudio,
+    characterImages,
   ] = await Promise.all([
     prisma.playerPurchase.findMany({}),
     prisma.playerProgress.findMany({}),
@@ -59,8 +62,16 @@ export default async function SuperAdminGamePage() {
     getAcchiWinSettings(),
     getAcchiRewardBonusSettings(),
     listGameAudio(),
+    listCharacterImages(),
   ]);
   const gameAudioItems: GameAudioItem[] = gameAudio.map((a) => ({
+    slot: a.slot,
+    url: a.url,
+    fileName: a.fileName,
+    sizeBytes: a.sizeBytes,
+    updatedAt: a.updatedAt.toISOString(),
+  }));
+  const characterImageItems: CharacterImageItem[] = characterImages.map((a) => ({
     slot: a.slot,
     url: a.url,
     fileName: a.fileName,
@@ -152,6 +163,9 @@ export default async function SuperAdminGamePage() {
 
       {/* あっち向いてホイ キャラボイス アップロード */}
       <GameAudioClient initial={gameAudioItems} />
+
+      {/* あっち向いてホイ キャラクター画像 アップロード */}
+      <CharacterImageClient initial={characterImageItems} />
 
       {/* シナリオ別 */}
       <Card className="mt-6">
