@@ -14,7 +14,7 @@ export const POST = handle(async (req: Request) => {
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!user?.stripeCustomerId) throw errors.notFound('Stripe顧客が見つかりません');
 
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const portal = await stripe.billingPortal.sessions.create({
     customer: user.stripeCustomerId,
     return_url: body.returnUrl ?? `${env.appBaseUrl}/me`,

@@ -120,11 +120,8 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
   const play = resolveAcchiPlay(body.hand, body.direction, setting);
 
   const detail = JSON.stringify({
-    jankenPlayer: play.jankenPlayer,
-    jankenCpu: play.jankenCpu,
-    jankenOutcome: play.jankenOutcome,
-    playerDirection: play.playerDirection,
-    cpuDirection: play.cpuDirection,
+    round1: play.round1,
+    round2: play.round2,
     plan,
     setting,
   });
@@ -160,14 +157,17 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
   }
 
   return NextResponse.json({
+    // 後方互換用 (旧クライアント/Unity 向け): ラウンド1の "決着した" 試行を
+    // 従来と同じ shape で返す。ラウンド1で負けた場合、ラウンド2は行われないため
+    // direction.cpu は null になる (従来は必ず値が入っていた点が変更点)。
     janken: {
-      player: play.jankenPlayer,
-      cpu: play.jankenCpu,
-      outcome: play.jankenOutcome,
+      player: play.round1.decisive.player,
+      cpu: play.round1.decisive.cpu,
+      outcome: play.round1.decisive.outcome,
     },
     direction: {
-      player: play.playerDirection,
-      cpu: play.cpuDirection,
+      player: play.round2?.player ?? body.direction,
+      cpu: play.round2?.cpu ?? null,
     },
     result: persisted.result,
     reward: persisted.reward,
@@ -179,8 +179,21 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
     rewardPointBalance: persisted.rewardPointBalance,
     rewardPointGrantedToday: persisted.rewardPointGrantedToday,
     rewardPointDailyCap: persisted.rewardPointDailyCap,
-    // 演出用シーケンス (やり直しを含む決着までの流れ)
-    sequence: play.sequence,
+    // 2ラウンド制の詳細情報 (新クライアント用)。
+    //  - round1.attempts: あいこによるやり直しを含む全試行
+    //  - round1.result: 'GAME_OVER' (負けて終了) | 'ADVANCE_TO_ROUND2' (勝って進んだ)
+    //  - round2: ラウンド1で負けた場合は null (ラウンド2は行われない)
+    round1: {
+      attempts: play.round1.attempts,
+      result: play.round2 ? 'ADVANCE_TO_ROUND2' : 'GAME_OVER',
+    },
+    round2: play.round2
+      ? {
+          player: play.round2.player,
+          cpu: play.round2.cpu,
+          matched: play.round2.matched,
+        }
+      : null,
   });
 }
 

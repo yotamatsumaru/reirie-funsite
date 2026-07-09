@@ -19,10 +19,10 @@ export const POST = handle(async (req: Request) => {
   });
   if (!sub) throw errors.notFound('アクティブなサブスクリプションがありません');
 
-  const priceId = getPriceId(input.plan, input.interval);
-  if (!priceId) throw errors.badRequest('対象プランが未設定です');
+      const priceId = await getPriceId(input.plan, input.interval);
+      if (!priceId) throw errors.badRequest('対象プランが未設定です');
 
-  const stripe = getStripe();
+      const stripe = await getStripe();
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
   const itemId = stripeSub.items.data[0]?.id;
   if (!itemId) throw errors.internal('Stripeサブスクリプション形式が不正');

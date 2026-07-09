@@ -68,30 +68,36 @@ export function judgeJanken(player: JankenHand, cpu: JankenHand): JankenOutcome 
 }
 
 /**
- * あっち向いてホイの最終結果を判定する。
+ * あっち向いてホイ (2ラウンド制) — ラウンド1 (じゃんけん) の結果から、
+ * 次に何をすべきかを判定する。
  *
- * - じゃんけんがあいこ → ゲームもDRAW (もう一度じゃんけんからやり直す UI 想定)
- * - じゃんけんに勝った側が「指を差す」、負けた側が「顔を向ける」。
- *   指した方向と向いた方向が一致したら "指した側" の勝ち。
- *
- * @param janken じゃんけんのプレイヤー視点の結果
- * @param playerDir じゃんけんの結果に応じてプレイヤーが選んだ方向
- *                  (勝ったとき=指す方向 / 負けたとき=顔を向ける方向)
- * @param cpuDir 同様に CPU が選んだ方向
+ *  - WIN  → ラウンド2 (方向) へ進む
+ *  - LOSE → その場でゲーム終了 (最終結果 LOSE、ラウンド2は行われない)
+ *  - DRAW → ラウンド1 をやり直す (サーバーが自動的に CPU の手を再抽選する)
  */
-export function judgeAcchi(
-  janken: JankenOutcome,
-  playerDir: AcchiDirection,
-  cpuDir: AcchiDirection,
-): AcchiResult {
-  if (janken === 'DRAW') return 'DRAW';
-  const matched = playerDir === cpuDir;
-  if (janken === 'WIN') {
-    // プレイヤーが指す側。一致すれば CPU が釣られた → プレイヤー勝ち。
-    return matched ? 'WIN' : 'DRAW';
-  }
-  // janken === 'LOSE' → CPU が指す側。一致すればプレイヤーが釣られた → プレイヤー負け。
-  return matched ? 'LOSE' : 'DRAW';
+export type AcchiRound1Decision = 'ADVANCE_TO_ROUND2' | 'GAME_OVER' | 'RETRY';
+
+export function decideAcchiRound1(outcome: JankenOutcome): AcchiRound1Decision {
+  if (outcome === 'WIN') return 'ADVANCE_TO_ROUND2';
+  if (outcome === 'LOSE') return 'GAME_OVER';
+  return 'RETRY';
+}
+
+/**
+ * あっち向いてホイ (2ラウンド制) — ラウンド2 (方向) の一致/不一致から
+ * 最終結果を判定する。
+ *
+ * ラウンド2 に進めるのはラウンド1 (じゃんけん) に勝った場合のみ。
+ * 指した方向と向いた方向が一致 (matched) すればプレイヤーの勝ち、
+ * 不一致であればプレイヤーの負け。
+ *
+ * この「一致するかどうか」自体は、設定 (1〜6) に基づく勝率
+ * (acchiWinRate) で抽選される (=CPU の方向はこの結果に整合するよう構成する)。
+ *
+ * @param matched ラウンド2で指した方向と向いた方向が一致したか
+ */
+export function judgeAcchiRound2(matched: boolean): AcchiResult {
+  return matched ? 'WIN' : 'LOSE';
 }
 
 /** 残りプレイ回数を計算する (負にはならない) */

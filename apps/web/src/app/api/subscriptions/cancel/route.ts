@@ -21,7 +21,7 @@ export const POST = handle(async (req: Request) => {
   });
   if (!sub) throw errors.notFound();
 
-  const stripe = getStripe();
+  const stripe = await getStripe();
   if (input.cancelAtPeriodEnd) {
     await stripe.subscriptions.update(sub.stripeSubscriptionId, {
       cancel_at_period_end: true,
