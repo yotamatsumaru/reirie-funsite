@@ -31,7 +31,7 @@ export const POST = handle(async (req: Request) => {
     },
   });
 
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const checkout = await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],

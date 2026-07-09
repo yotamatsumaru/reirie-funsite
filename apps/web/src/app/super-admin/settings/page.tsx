@@ -10,8 +10,11 @@ import { Badge } from '@/components/ui/Badge';
 import { listSettings } from '@/lib/demo-store';
 import { requireSuperAdmin } from '@/auth';
 import { listSiteImages } from '@/lib/site-image';
+import { getStripeMode, getStripeTestCredentials } from '@/lib/app-setting';
+import { isStripeTestCredentialsUsable } from '@idol/shared';
 import { SettingRow } from './setting-row';
 import { SiteImageClient, type SiteImageItem } from './site-image-client';
+import { StripeModeClient } from './stripe-mode-client';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -42,6 +45,9 @@ export default async function SuperAdminSettingsPage() {
 
   const settings = listSettings();
   const siteImages = await listSiteImages();
+  const stripeMode = await getStripeMode();
+  const stripeTestCredentials = await getStripeTestCredentials();
+  const stripeTestCredentialsUsable = isStripeTestCredentialsUsable(stripeTestCredentials);
   const siteImageItems: SiteImageItem[] = siteImages.map((img) => ({
     slot: img.slot,
     url: img.url,
@@ -105,6 +111,13 @@ export default async function SuperAdminSettingsPage() {
 
       {/* サイト画像 (トップページのヒーロー画像等) */}
       <SiteImageClient initial={siteImageItems} />
+
+      {/* Stripe 本番/テストモード切り替え */}
+      <StripeModeClient
+        initialMode={stripeMode}
+        initialCredentials={stripeTestCredentials}
+        initialUsable={stripeTestCredentialsUsable}
+      />
 
       {/* カテゴリ別 */}
       {(['system', 'features', 'pricing'] as const).map((category) => {

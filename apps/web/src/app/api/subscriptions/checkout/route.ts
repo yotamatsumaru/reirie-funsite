@@ -13,12 +13,12 @@ export const POST = handle(async (req: Request) => {
   const body = await req.json();
   const input = CreateCheckoutSessionSchema.parse(body);
 
-  const priceId = getPriceId(input.plan, input.interval);
+  const priceId = await getPriceId(input.plan, input.interval);
   if (!priceId) {
     throw errors.badRequest(`Stripe Price ID が未設定です: ${input.plan} / ${input.interval}`);
   }
 
-  const stripe = getStripe();
+  const stripe = await getStripe();
 
   // 既存の Customer を再利用 (1ユーザー1顧客)
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });

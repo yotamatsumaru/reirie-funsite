@@ -23,6 +23,14 @@ import {
   DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
   AcchiRewardBonusSettingsSchema,
   type AcchiRewardBonusSettings,
+  STRIPE_MODE_SETTING_KEY,
+  DEFAULT_STRIPE_MODE,
+  StripeModeSchema,
+  type StripeMode,
+  STRIPE_TEST_CREDENTIALS_SETTING_KEY,
+  DEFAULT_STRIPE_TEST_CREDENTIALS,
+  StripeTestCredentialsSchema,
+  type StripeTestCredentials,
 } from '@idol/shared';
 
 /**
@@ -143,6 +151,66 @@ export async function setMemberRankTiers(
   await prisma.appSetting.upsert({
     where: { key: MEMBER_RANK_TIERS_KEY },
     create: { key: MEMBER_RANK_TIERS_KEY, value },
+    update: { value },
+  });
+  return validated;
+}
+
+/**
+ * Stripe の現在の運用モード (LIVE / TEST) を取得する。
+ * 未設定 / 破損時は LIVE (安全側) を返す。
+ */
+export async function getStripeMode(): Promise<StripeMode> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: STRIPE_MODE_SETTING_KEY },
+    });
+    if (!row) return DEFAULT_STRIPE_MODE;
+    const parsed = StripeModeSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : DEFAULT_STRIPE_MODE;
+  } catch {
+    return DEFAULT_STRIPE_MODE;
+  }
+}
+
+/** Stripe の運用モードを保存する (SUPER_ADMIN 限定で呼び出すこと) */
+export async function setStripeMode(mode: StripeMode): Promise<StripeMode> {
+  const validated = StripeModeSchema.parse(mode);
+  const value = JSON.stringify(validated);
+  await prisma.appSetting.upsert({
+    where: { key: STRIPE_MODE_SETTING_KEY },
+    create: { key: STRIPE_MODE_SETTING_KEY, value },
+    update: { value },
+  });
+  return validated;
+}
+
+/**
+ * テストモード用の Stripe 資格情報 (Secret Key / Webhook Secret / Price ID 等) を取得する。
+ * 未設定 / 破損時は空文字の既定値を返す。
+ */
+export async function getStripeTestCredentials(): Promise<StripeTestCredentials> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: STRIPE_TEST_CREDENTIALS_SETTING_KEY },
+    });
+    if (!row) return DEFAULT_STRIPE_TEST_CREDENTIALS;
+    const parsed = StripeTestCredentialsSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : DEFAULT_STRIPE_TEST_CREDENTIALS;
+  } catch {
+    return DEFAULT_STRIPE_TEST_CREDENTIALS;
+  }
+}
+
+/** テストモード用の Stripe 資格情報を保存する (SUPER_ADMIN 限定で呼び出すこと) */
+export async function setStripeTestCredentials(
+  creds: StripeTestCredentials,
+): Promise<StripeTestCredentials> {
+  const validated = StripeTestCredentialsSchema.parse(creds);
+  const value = JSON.stringify(validated);
+  await prisma.appSetting.upsert({
+    where: { key: STRIPE_TEST_CREDENTIALS_SETTING_KEY },
+    create: { key: STRIPE_TEST_CREDENTIALS_SETTING_KEY, value },
     update: { value },
   });
   return validated;

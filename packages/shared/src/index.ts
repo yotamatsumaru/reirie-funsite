@@ -3,6 +3,7 @@ export * from './access-control';
 export * from './plan-benefits';
 export * from './membership';
 export * from './membership-rank';
+export * from './stripe-mode';
 export * from './mini-game';
 export * from './game-audio';
 export * from './site-image';

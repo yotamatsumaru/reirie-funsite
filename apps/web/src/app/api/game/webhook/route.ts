@@ -8,8 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { getStripe } from '@/lib/stripe';
-import { env } from '@/lib/env';
+import { getStripe, getStripeWebhookSecret } from '@/lib/stripe';
 import { grantRewardPointsFromStripePurchase } from '@/lib/points';
 import type Stripe from 'stripe';
 
@@ -18,16 +17,18 @@ export const runtime = 'nodejs';
 export async function POST(req: Request): Promise<Response> {
   const sig = req.headers.get('stripe-signature');
   if (!sig) return new NextResponse('missing signature', { status: 400 });
-  if (!env.stripe.webhookSecret) {
+
+  const webhookSecret = await getStripeWebhookSecret();
+  if (!webhookSecret) {
     return new NextResponse('webhook secret not configured', { status: 500 });
   }
 
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const rawBody = await req.text();
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, env.stripe.webhookSecret);
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[game/webhook] signature verify failed', err);

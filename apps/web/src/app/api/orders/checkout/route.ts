@@ -102,7 +102,7 @@ export const POST = handle(async (req: Request) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw errors.notFound('ユーザーが見つかりません');
 
-  const stripe = getStripe();
+  const stripe = await getStripe();
   let customerId = user.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
