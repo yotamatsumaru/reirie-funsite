@@ -55,13 +55,10 @@ export function SignUpForm() {
       if (!res.ok) {
         throw new Error(json?.error?.message ?? '登録に失敗しました');
       }
-      // 登録成功 → 確認画面へ遷移し「確認メールを送信した」ことを明示する。
-      // (メール認証を案内するため、ここでは自動ログインしない)
-      const qs = new URLSearchParams({
-        email: form.email,
-        emailSent: json?.emailSent === false ? '0' : '1',
-      });
-      router.push(`/signup/complete?${qs.toString()}`);
+      // 登録成功 → 認証コード入力画面へ遷移する。
+      // (メールで送られた6桁コードを入力するまでログインできないため、ここでは自動ログインしない)
+      const qs = new URLSearchParams({ email: form.email });
+      router.push(`/verify-email?${qs.toString()}`);
     } catch (e) {
       setError((e as Error).message);
       setLoading(false);

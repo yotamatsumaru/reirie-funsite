@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { randomBytes } from 'node:crypto';
 import { prisma } from '@idol/db';
 import { SignUpSchema } from '@idol/shared';
 import { hashPassword } from '@/lib/password';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import { sendWelcomeEmail } from '@/lib/email';
-import { env } from '@/lib/env';
+import { sendVerificationCodeEmail } from '@/lib/email';
+import { generateVerificationCode, verificationCodeExpiryDate, VERIFICATION_CODE_TTL_MINUTES } from '@/lib/verification-code';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +16,8 @@ export const POST = handle(async (req: Request) => {
   const exists = await prisma.user.findUnique({ where: { email: input.email } });
   if (exists) throw errors.conflict('このメールアドレスは既に登録されています');
 
-  const verificationToken = randomBytes(24).toString('hex');
+  const verificationCode = generateVerificationCode();
+  const verificationCodeExpires = verificationCodeExpiryDate();
   const user = await prisma.user.create({
     data: {
       email: input.email,
@@ -31,27 +31,30 @@ export const POST = handle(async (req: Request) => {
       addressLine1: input.addressLine1,
       addressLine2: input.addressLine2 ?? null,
       marketingOptIn: input.marketingOptIn ?? false,
-      verificationToken,
+      verificationCode,
+      verificationCodeExpires,
+      verificationAttempts: 0,
     },
   });
 
   await logAudit({ userId: user.id, action: 'user.signup' });
 
-  // ウェルカム & メール認証メールを送信する。
+  // メール認証コードを送信する。
   // メール送信は外部 (SES) 依存のため、失敗してもアカウント作成自体は成功とする。
-  // (ユーザーは後からログインしてメール再送できる導線を用意する想定)
-  const verifyUrl = `${env.appBaseUrl}/verify-email?token=${verificationToken}`;
+  // (アカウントは emailVerified が設定されるまでログインできないため、
+  //  送信に失敗した場合は「認証コード再送」から再送してもらう導線を用意する)
   let emailSent = true;
   try {
-    await sendWelcomeEmail({
+    await sendVerificationCodeEmail({
       to: user.email,
       displayName: user.displayName ?? '',
-      verifyUrl,
+      code: verificationCode,
+      expiresInMinutes: VERIFICATION_CODE_TTL_MINUTES,
     });
   } catch (err) {
     emailSent = false;
     // eslint-disable-next-line no-console
-    console.error('[signup] welcome email failed', err);
+    console.error('[signup] verification code email failed', err);
     await logAudit({
       userId: user.id,
       action: 'user.signup_email_failed',
@@ -61,9 +64,10 @@ export const POST = handle(async (req: Request) => {
 
   return NextResponse.json({
     message: emailSent
-      ? '確認メールを送信しました。メール内のリンクからメール認証を完了してください。'
-      : 'アカウントを作成しました。確認メールの送信に失敗したため、ログイン後に再送してください。',
+      ? '認証コードをメールで送信しました。メールに記載の6桁のコードを入力してください。'
+      : 'アカウントを作成しました。認証コードの送信に失敗したため、コードの再送をお試しください。',
     userId: user.id,
+    email: user.email,
     emailSent,
   });
 });
