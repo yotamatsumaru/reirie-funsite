@@ -293,7 +293,7 @@ function SidebarContent({
           <div className="space-y-1">
             <NavLink
               item={{ href: '/me', label: 'マイページ', icon: User }}
-              active={pathname.startsWith('/me')}
+              active={pathname === '/me'}
               cartCount={cartCount}
             />
             <div className="flex items-center gap-2 px-3 py-1">
