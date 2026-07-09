@@ -5,6 +5,7 @@ import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { getAcchiPlayCountToday } from '@/lib/points';
 import { getAcchiVoiceUrlMap } from '@/lib/game-audio';
+import { getCharacterImageUrlMap } from '@/lib/character-image';
 import { AcchiGameClient } from './acchi-client';
 
 export const metadata: Metadata = { title: 'あっち向いてホイ' };
@@ -16,13 +17,14 @@ export default async function AcchiGamePage() {
     redirect('/signin?callbackUrl=/me/games/acchi');
   }
 
-  const [playedToday, user, voiceUrls] = await Promise.all([
+  const [playedToday, user, voiceUrls, characterImageUrls] = await Promise.all([
     getAcchiPlayCountToday(session.user.id),
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { points: true },
     }),
     getAcchiVoiceUrlMap(),
+    getCharacterImageUrlMap(),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export default async function AcchiGamePage() {
           balance: user?.points ?? 0,
         }}
         voiceUrls={voiceUrls}
+        characterImageUrls={characterImageUrls}
       />
     </div>
   );

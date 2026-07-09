@@ -1558,3 +1558,26 @@ model SiteImage {
 
   @@map("site_images")
 }
+
+/// あっち向いてホイのキャラクター画像 (ポーズごとの差し替え可能画像)。
+/// 管理画面からアップロードし、slot (ポーズ ID: idle/rock/scissors/paper/up/down/left/right)
+/// ごとに 1 件だけ保持する (再アップロードで置き換え)。
+/// 保存方針は GameAudio / SiteImage と同じ:
+///   - S3 アセットバケットが設定済み → S3 に置き url は外部URL / data は null。
+///   - 未設定 → data にバイト列を保存し /api/media/character-image/{id} 経由で配信。
+/// standalone + PM2 cluster + 再ビルドでも消えない単一の真実として DB を用いる。
+model CharacterImage {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// ポーズ ID (例: idle, rock, scissors, paper, up, down, left, right)。同一 slot は 1 件のみ。
+  slot        String   @unique
+  url         String
+  contentType String?  @map("content_type")
+  /// 元ファイル名 (表示用)
+  fileName    String?  @map("file_name")
+  sizeBytes   Int?     @map("size_bytes")
+  data        Bytes?   @map("data")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("character_images")
+}
