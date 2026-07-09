@@ -3,7 +3,8 @@
  */
 import {
   judgeJanken,
-  judgeAcchi,
+  decideAcchiRound1,
+  judgeAcchiRound2,
   isJankenHand,
   isAcchiDirection,
   remainingPlays,
@@ -44,26 +45,27 @@ describe('judgeJanken', () => {
   });
 });
 
-describe('judgeAcchi', () => {
-  it('じゃんけんがあいこならゲームもDRAW', () => {
-    expect(judgeAcchi('DRAW', 'UP', 'UP')).toBe('DRAW');
-    expect(judgeAcchi('DRAW', 'UP', 'DOWN')).toBe('DRAW');
+describe('decideAcchiRound1 (ラウンド1=じゃんけんの結果からの分岐)', () => {
+  it('勝ちならラウンド2へ進む', () => {
+    expect(decideAcchiRound1('WIN')).toBe('ADVANCE_TO_ROUND2');
   });
 
-  it('じゃんけんに勝ち、方向が一致すればプレイヤー勝利', () => {
-    expect(judgeAcchi('WIN', 'LEFT', 'LEFT')).toBe('WIN');
+  it('負けならその場でゲーム終了', () => {
+    expect(decideAcchiRound1('LOSE')).toBe('GAME_OVER');
   });
 
-  it('じゃんけんに勝っても方向が外れたら勝負つかず(DRAW)', () => {
-    expect(judgeAcchi('WIN', 'LEFT', 'RIGHT')).toBe('DRAW');
+  it('あいこならラウンド1をやり直す', () => {
+    expect(decideAcchiRound1('DRAW')).toBe('RETRY');
+  });
+});
+
+describe('judgeAcchiRound2 (ラウンド2=方向の一致/不一致からの最終結果)', () => {
+  it('一致すればプレイヤーの勝ち', () => {
+    expect(judgeAcchiRound2(true)).toBe('WIN');
   });
 
-  it('じゃんけんに負け、方向が一致すればプレイヤー敗北', () => {
-    expect(judgeAcchi('LOSE', 'UP', 'UP')).toBe('LOSE');
-  });
-
-  it('じゃんけんに負けても方向が外れたら勝負つかず(DRAW)', () => {
-    expect(judgeAcchi('LOSE', 'UP', 'DOWN')).toBe('DRAW');
+  it('不一致であればプレイヤーの負け', () => {
+    expect(judgeAcchiRound2(false)).toBe('LOSE');
   });
 });
 

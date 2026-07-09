@@ -19,6 +19,19 @@ Unity / モバイルアプリから利用できます。クライアント側で
 - **サーバー権威 (Server-authoritative)**: じゃんけんの CPU の手、方向、勝敗、ポイント付与は
   すべてサーバーが確定します。クライアントは「自分の手」と「方向」しか送りません。
   → Unity 側を改造してもポイントを不正に増やすことはできません。
+- **2ラウンド制のゲームルール (2026年7月〜)**: あっち向いてホイは
+  「ラウンド1 (じゃんけん) → ラウンド2 (方向)」の2段階で決着します。
+  - ラウンド1 (じゃんけん): 負けたらその場でゲーム終了。あいこならサーバーが
+    内部で自動的にやり直す (CPU の手を再抽選)。勝ったらラウンド2へ進む。
+  - ラウンド2 (方向): 指した方向と向いた方向が一致すれば勝ち、不一致なら負け。
+    一致するかどうかは、プレイヤーのプランに割り当てられた勝率設定で決まる。
+  - **API リクエスト/レスポンスの形は変わりません** (下記 §3.2 参照)。
+    クライアントは以前と同じく `{hand, direction}` を 1 回のリクエストで送るだけで、
+    サーバーが上記の2ラウンドをすべて内部で解決してから結果を返します。
+    レスポンスには新たに `round1` / `round2` フィールドが追加されており、
+    やり直し (あいこ) を含む詳細な演出情報を取得できます (後方互換のため
+    既存の `janken` / `direction` / `result` フィールドも維持されます。
+    ラウンド1で負けてラウンド2に進まなかった場合、`direction.cpu` は `null` になります)。
 - **認証は 2 方式に対応**:
   - Web ブラウザ … Cookie セッション (Auth.js)
   - Unity / モバイル … **Bearer トークン** (`Authorization: Bearer <accessToken>`)
@@ -100,15 +113,15 @@ GET /api/call/events/{id}/queue/events?access_token=<accessToken>
 
 詳細なリクエスト/レスポンス形式は `docs/openapi.yaml` を参照 (Swagger UI 等で閲覧可)。
 
-### あっち向いてホイ プレイ
-リクエスト:
+### あっち向いてホイ プレイ (2ラウンド制)
+リクエスト (変更なし。手と方向を1回でまとめて送る):
 ```json
 { "hand": "ROCK", "direction": "UP" }
 ```
 - `hand`: `ROCK` | `SCISSORS` | `PAPER`
 - `direction`: `UP` | `DOWN` | `LEFT` | `RIGHT`
 
-レスポンス:
+レスポンス (例: ラウンド1で1回あいこがあり、その後勝ってラウンド2で勝利):
 ```json
 {
   "janken":   { "player": "ROCK", "cpu": "SCISSORS", "outcome": "WIN" },
@@ -117,10 +130,27 @@ GET /api/call/events/{id}/queue/events?access_token=<accessToken>
   "reward": 30,
   "balance": 130,
   "playedToday": 1,
-  "remaining": 4
+  "remaining": 4,
+  "round1": {
+    "attempts": [
+      { "player": "ROCK", "cpu": "ROCK", "outcome": "DRAW" },
+      { "player": "ROCK", "cpu": "SCISSORS", "outcome": "WIN" }
+    ],
+    "result": "ADVANCE_TO_ROUND2"
+  },
+  "round2": { "player": "UP", "cpu": "UP", "matched": true }
 }
 ```
-- `result`: `WIN`(勝ち=報酬) / `LOSE`(負け) / `DRAW`(勝負つかず)
+- `janken` / `direction`: 後方互換用。`janken` はラウンド1の**決着した**試行
+  (`round1.attempts` の最後の要素) を表す。`direction.cpu` はラウンド1で
+  負けてラウンド2に進まなかった場合は `null` になる (以前は常に値が入っていた点が変更点)。
+- `round1.attempts`: ラウンド1 (じゃんけん) の全試行。あいこが続いた場合は複数件になる。
+  各要素の `outcome` が `WIN` または `LOSE` になった時点で決着 (それ以外は `DRAW` でやり直し)。
+- `round1.result`: `ADVANCE_TO_ROUND2` (勝ってラウンド2へ進んだ) | `GAME_OVER` (負けて終了)。
+- `round2`: ラウンド1で負けた場合は `null` (ラウンド2は行われない)。`matched` は
+  指した方向と向いた方向が一致したか (一致=勝ち/不一致=負け)。
+- `result`: `WIN`(勝ち=報酬) / `LOSE`(負け)。ラウンド1で負けた場合も `LOSE` になる
+  (2026年7月のルール変更前は `DRAW` を返すことがあったが、現在は必ず `WIN`/`LOSE` で決着する)。
 - 本日の上限 (5 回) に達していると HTTP `429` が返ります。
 
 ---
@@ -147,10 +177,12 @@ public static class ApiConfig
 }
 [Serializable] public class PlayRequest { public string hand; public string direction; }
 [Serializable] public class JankenInfo { public string player; public string cpu; public string outcome; }
-[Serializable] public class DirInfo { public string player; public string cpu; }
+[Serializable] public class DirInfo { public string player; public string cpu; } // cpu は round1 負け時 null
 [Serializable] public class PlayResponse {
     public JankenInfo janken; public DirInfo direction;
     public string result; public int reward; public int balance; public int playedToday; public int remaining;
+    // 2ラウンド制の詳細情報 (省略しても JsonUtility は無視するので後方互換に影響なし。
+    // あいこのやり直し演出をしたい場合のみ round1/round2 クラスを追加して使う)。
 }
 
 public class AcchiApiClient : MonoBehaviour

@@ -7,14 +7,24 @@
  * 勝敗・CPU の手/方向・ポイント付与はすべてサーバー (POST /api/me/games/acchi) が確定する。
  * 送信するのはプレイヤーの「手」と「方向」だけ。
  *
- * フロー:
- *  1. じゃんけん: 手を選ぶ → サーバーに送るのは方向選択後にまとめて送るため、
- *     ここではいったんローカルに手を保持し、勝敗の "見込み" は出さない。
- *  2. 方向選択: 上下左右を選ぶ → ここで初めて API を 1 回叩き、サーバーが
- *     じゃんけん結果・あっち向いて結果・ポイントをまとめて返す。
- *  3. 結果表示 → もう一度 / 終了。
+ * === ルール (2ラウンド制) ===
+ *  ラウンド1 (じゃんけん): 負けたらその場でゲーム終了。あいこならもう一回。
+ *                          勝ったらラウンド2へ進む。
+ *  ラウンド2 (方向)     : 指した方向と向いた方向が一致すれば勝ち、不一致なら負け。
  *
- * これにより「サーバーが一括判定」を保ちつつ、UI 上は 2 段階に見せられる。
+ * フロー (UI):
+ *  1. じゃんけん: 手を選ぶ (ローカル)。
+ *  2. 方向選択: 上下左右を選ぶ → ここで API を 1 回叩き、サーバーが
+ *     ラウンド1 (あいこによるやり直しを含む) とラウンド2 (進めた場合) を
+ *     まとめて解決して返す。
+ *  3. 決着演出: ラウンド1 の試行 (あいこ→やり直しを含む) を 1 つずつ
+ *     アニメーション表示する。負けで終わった場合はここで結果表示へ。
+ *     勝ってラウンド2 に進んだ場合は、方向の一致/不一致を演出してから結果表示へ。
+ *  4. 結果表示 → もう一度 / 終了。
+ *
+ * これにより「サーバーが一括判定 (1 リクエスト)」を保ちつつ、
+ * UI 上は「じゃんけんで負けたら即終了・あいこはやり直し・勝ったら方向対決」という
+ * 2ラウンド制の見え方を実現する。
  *
  * 演出: REIRIE キャラクター (CharacterAvatar) が
  *   待機 → じゃんけんの手 → あっち向いてホイで横顔
@@ -46,25 +56,39 @@ type Initial = {
   balance: number;
 };
 
-type SequenceRound = {
-  jankenPlayer: JankenHand;
-  jankenCpu: JankenHand;
-  jankenOutcome: 'WIN' | 'LOSE' | 'DRAW';
-  decided: boolean;
-  pointedDirection: AcchiDirection | null;
-  facedDirection: AcchiDirection | null;
-  attacker: 'PLAYER' | 'CPU' | null;
+type JankenOutcome = 'WIN' | 'LOSE' | 'DRAW';
+
+/** ラウンド1 (じゃんけん) の 1 試行。 */
+type Round1Attempt = {
+  player: JankenHand;
+  cpu: JankenHand;
+  outcome: JankenOutcome;
+};
+
+/** ラウンド1 (じゃんけん) 全体の結果。 */
+type Round1 = {
+  attempts: Round1Attempt[];
+  /** 'ADVANCE_TO_ROUND2' (勝ってラウンド2へ) | 'GAME_OVER' (負けて終了) */
+  result: 'ADVANCE_TO_ROUND2' | 'GAME_OVER';
+};
+
+/** ラウンド2 (方向) の結果。ラウンド1で負けた場合は null。 */
+type Round2 = {
+  player: AcchiDirection;
+  cpu: AcchiDirection;
+  matched: boolean;
 };
 
 type PlayResponse = {
-  janken: { player: JankenHand; cpu: JankenHand; outcome: 'WIN' | 'LOSE' | 'DRAW' };
-  direction: { player: AcchiDirection; cpu: AcchiDirection };
-  result: 'WIN' | 'LOSE' | 'DRAW';
+  janken: { player: JankenHand; cpu: JankenHand; outcome: JankenOutcome };
+  direction: { player: AcchiDirection; cpu: AcchiDirection | null };
+  result: 'WIN' | 'LOSE';
   reward: number;
   balance: number;
   playedToday: number;
   remaining: number;
-  sequence?: SequenceRound[];
+  round1: Round1;
+  round2: Round2 | null;
   /** 今回のプレイで付与された特典ポイント (勝利時、かつ本日上限内のみ > 0) */
   rewardPointBonus?: number;
   /** プレイ後の特典ポイント残高 */
@@ -94,7 +118,14 @@ const DIR_LABEL: Record<AcchiDirection, string> = {
   RIGHT: '右',
 };
 
-type Phase = 'janken' | 'direction' | 'result';
+type Phase = 'janken' | 'direction' | 'reveal' | 'result';
+
+/** ラウンド1 演出のサブフェーズ: 試行を1つずつ見せる → (進めば) ラウンド2 を見せる */
+type RevealSubPhase = 'round1' | 'round2';
+
+/** 各演出ステップの表示時間 (ms) */
+const REVEAL_STEP_MS = 900;
+const REVEAL_ROUND2_MS = 1100;
 
 export function AcchiGameClient({
   initial,
@@ -112,8 +143,44 @@ export function AcchiGameClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<PlayResponse | null>(null);
+  const [revealIndex, setRevealIndex] = useState(0);
+  const [revealSubPhase, setRevealSubPhase] = useState<RevealSubPhase>('round1');
 
   const canPlay = remaining > 0;
+
+  // ラウンド1 の試行を 1 つずつ演出し、決着に応じてラウンド2 演出 → 結果表示へ進める。
+  useEffect(() => {
+    if (phase !== 'reveal' || !outcome) return;
+
+    if (revealSubPhase === 'round1') {
+      const attempts = outcome.round1.attempts;
+      const attempt = attempts[revealIndex];
+      const isLast = revealIndex === attempts.length - 1;
+
+      if (!isLast) {
+        // あいこ (やり直し) の演出
+        sound.play('draw');
+        sound.play('voiceDraw');
+        const t = setTimeout(() => setRevealIndex((i) => i + 1), REVEAL_STEP_MS);
+        return () => clearTimeout(t);
+      }
+
+      // 決着した試行
+      if (attempt.outcome === 'LOSE') {
+        // ラウンド1 で負け → その場で結果表示へ (ラウンド2 なし)
+        const t = setTimeout(() => setPhase('result'), REVEAL_STEP_MS);
+        return () => clearTimeout(t);
+      }
+      // 勝ち → ラウンド2 演出へ
+      sound.play('tap');
+      const t = setTimeout(() => setRevealSubPhase('round2'), REVEAL_STEP_MS);
+      return () => clearTimeout(t);
+    }
+
+    // ラウンド2 (方向) の演出
+    const t = setTimeout(() => setPhase('result'), REVEAL_ROUND2_MS);
+    return () => clearTimeout(t);
+  }, [phase, outcome, revealIndex, revealSubPhase, sound]);
 
   // 結果フェーズに入ったら、勝敗に応じた効果音とボイスを鳴らす。
   useEffect(() => {
@@ -126,12 +193,9 @@ export function AcchiGameClient({
         const t = setTimeout(() => sound.play('point'), 450);
         return () => clearTimeout(t);
       }
-    } else if (outcome.result === 'LOSE') {
+    } else {
       sound.play('lose');
       sound.play('voiceLose');
-    } else {
-      sound.play('draw');
-      sound.play('voiceDraw');
     }
   }, [phase, outcome, sound]);
 
@@ -167,7 +231,9 @@ export function AcchiGameClient({
       setOutcome(data);
       setRemaining(data.remaining);
       setBalance(data.balance);
-      setPhase('result');
+      setRevealIndex(0);
+      setRevealSubPhase('round1');
+      setPhase('reveal');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -180,6 +246,8 @@ export function AcchiGameClient({
     setHand(null);
     setOutcome(null);
     setError(null);
+    setRevealIndex(0);
+    setRevealSubPhase('round1');
     setPhase('janken');
   }
 
@@ -234,7 +302,10 @@ export function AcchiGameClient({
             <CharacterAvatar pose="idle" bob />
           </div>
           <p className="mb-1 text-sm text-slate-500">{CHARACTER_NAME} とじゃんけん勝負！</p>
-          <p className="mb-4 text-lg font-bold text-slate-800">最初はグー、じゃんけん…</p>
+          <p className="mb-1 text-lg font-bold text-slate-800">最初はグー、じゃんけん…</p>
+          <p className="mb-4 text-xs text-slate-400">
+            負けたらその場で終了。あいこならもう一回。勝てば方向対決に進めるよ！
+          </p>
           <div className="grid grid-cols-3 gap-3">
             {(['ROCK', 'SCISSORS', 'PAPER'] as JankenHand[]).map((h) => (
               <button
@@ -261,7 +332,7 @@ export function AcchiGameClient({
           <p className="mb-4 text-lg font-bold text-slate-800">あっち向いて… ホイ！</p>
           <p className="mb-4 text-xs text-slate-400">
             じゃんけんに勝てばあなたが「指す」番。{CHARACTER_NAME} が同じ方向を向いたら
-            あなたの勝ち！（負けると {CHARACTER_NAME} が指す方向につられたら負け）
+            あなたの勝ち！（じゃんけんに負けると、方向対決に進めずその場で負けだよ）
           </p>
           <div className="mx-auto grid max-w-[220px] grid-cols-3 grid-rows-3 gap-2">
             <div />
@@ -275,6 +346,11 @@ export function AcchiGameClient({
             <div />
           </div>
         </div>
+      ) : null}
+
+      {/* 決着演出フェーズ (ラウンド1のやり直し→決着、勝てばラウンド2) */}
+      {phase === 'reveal' && outcome ? (
+        <RevealCard outcome={outcome} revealIndex={revealIndex} revealSubPhase={revealSubPhase} />
       ) : null}
 
       {/* 結果フェーズ */}
@@ -310,6 +386,77 @@ function DirButton({
   );
 }
 
+/**
+ * ラウンド1 (じゃんけん、あいこによるやり直しを含む) → (勝てば) ラウンド2 (方向)
+ * の決着までを 1 ステップずつ演出するカード。
+ */
+function RevealCard({
+  outcome,
+  revealIndex,
+  revealSubPhase,
+}: {
+  outcome: PlayResponse;
+  revealIndex: number;
+  revealSubPhase: RevealSubPhase;
+}) {
+  const attempts = outcome.round1.attempts;
+  const attempt = attempts[revealIndex];
+  const isLastAttempt = revealIndex === attempts.length - 1;
+
+  if (revealSubPhase === 'round1') {
+    const label = !isLastAttempt
+      ? 'あいこ！もう一回っ！'
+      : attempt.outcome === 'WIN'
+        ? 'じゃんけん、勝った！'
+        : 'じゃんけん、負けちゃった…';
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <div key={`${revealIndex}-${attempt.outcome}`} className="animate-acchi-pop">
+          <CharacterAvatar pose={HAND_POSE[attempt.cpu]} bob={false} />
+        </div>
+        <div className="mt-3 flex items-center justify-center gap-6 text-sm text-slate-600">
+          <div>
+            <p className="mb-1 text-xs text-slate-400">あなた</p>
+            <p className="text-3xl">{HAND_EMOJI[attempt.player]}</p>
+          </div>
+          <p className="text-lg font-bold text-slate-400">VS</p>
+          <div>
+            <p className="mb-1 text-xs text-slate-400">{CHARACTER_NAME}</p>
+            <p className="text-3xl">{HAND_EMOJI[attempt.cpu]}</p>
+          </div>
+        </div>
+        <p className="mt-4 text-xl font-bold text-slate-800">{label}</p>
+        {!isLastAttempt ? (
+          <p className="mt-1 text-xs text-slate-400">もう一度じゃんけん…</p>
+        ) : attempt.outcome === 'WIN' ? (
+          <p className="mt-1 text-xs text-slate-400">方向対決に進むよ！</p>
+        ) : (
+          <p className="mt-1 text-xs text-slate-400">ここで終了…</p>
+        )}
+      </div>
+    );
+  }
+
+  // ラウンド2 (方向) 演出
+  const round2 = outcome.round2;
+  if (!round2) return null;
+  const cpuPose: CharacterPose = DIRECTION_POSE[round2.cpu];
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+      <div key={cpuPose} className="animate-acchi-turn">
+        <CharacterAvatar pose={cpuPose} bob={false} />
+      </div>
+      <p className="mt-3 text-sm text-slate-500">
+        あなたが「{DIR_LABEL[round2.player]}」を指す → {CHARACTER_NAME} は「
+        {DIR_LABEL[round2.cpu]}」を向いた！
+      </p>
+      <p className="mt-2 text-xl font-bold text-slate-800">
+        {round2.matched ? '方向が一致…！' : '方向が外れた…！'}
+      </p>
+    </div>
+  );
+}
+
 function ResultCard({
   outcome,
   canPlay,
@@ -322,26 +469,27 @@ function ResultCard({
   onBack: () => void;
 }) {
   const win = outcome.result === 'WIN';
-  const lose = outcome.result === 'LOSE';
   const theme = win
     ? { bg: 'from-amber-50 to-yellow-100 border-amber-200', emoji: '🎉', label: 'あなたの勝ち！', color: 'text-amber-900' }
-    : lose
-      ? { bg: 'from-rose-50 to-red-100 border-rose-200', emoji: '😢', label: 'あなたの負け…', color: 'text-rose-900' }
-      : { bg: 'from-slate-50 to-slate-100 border-slate-200', emoji: '🤝', label: '勝負つかず！', color: 'text-slate-700' };
+    : { bg: 'from-rose-50 to-red-100 border-rose-200', emoji: '😢', label: 'あなたの負け…', color: 'text-rose-900' };
 
-  // CPU(=REIRIE) が向いた方向の横顔ポーズ
-  const cpuPose: CharacterPose = DIRECTION_POSE[outcome.direction.cpu];
+  const decisive = outcome.round1.attempts[outcome.round1.attempts.length - 1];
+  const round2 = outcome.round2;
+
+  // CPU(=REIRIE) のポーズ: ラウンド2まで進んだ場合は向いた方向、
+  // ラウンド1 (じゃんけん) だけで終わった場合は決着した手のポーズ。
+  const cpuPose: CharacterPose = round2 ? DIRECTION_POSE[round2.cpu] : HAND_POSE[decisive.cpu];
 
   return (
     <div className={`rounded-2xl border bg-gradient-to-br ${theme.bg} p-6 text-center shadow-sm`}>
-      {/* REIRIE が向きを変える演出 (横顔) */}
+      {/* REIRIE の演出 */}
       <div key={cpuPose} className="animate-acchi-turn">
         <CharacterAvatar pose={cpuPose} bob={false} />
       </div>
       <p className="text-xs text-slate-400">
-        {outcome.janken.outcome === 'WIN'
-          ? `あなたが「${DIR_LABEL[outcome.direction.player]}」を指す → ${CHARACTER_NAME} は「${DIR_LABEL[outcome.direction.cpu]}」を向いた！`
-          : `${CHARACTER_NAME} が「${DIR_LABEL[outcome.direction.cpu]}」を指す！`}
+        {round2
+          ? `あなたが「${DIR_LABEL[round2.player]}」を指す → ${CHARACTER_NAME} は「${DIR_LABEL[round2.cpu]}」を向いた！`
+          : `じゃんけんで負けてしまったため、方向対決には進めなかった…`}
       </p>
 
       <p className="mt-3 text-4xl animate-acchi-pop">{theme.emoji}</p>
@@ -351,16 +499,24 @@ function ResultCard({
       <div className="mt-5 flex items-center justify-center gap-6 text-sm text-slate-600">
         <div>
           <p className="mb-1 text-xs text-slate-400">あなた</p>
-          <p className="text-3xl">{HAND_EMOJI[outcome.janken.player]}</p>
-          <p className="text-2xl">{DIR_EMOJI[outcome.direction.player]}</p>
-          <p className="text-[11px] text-slate-400">{DIR_LABEL[outcome.direction.player]}</p>
+          <p className="text-3xl">{HAND_EMOJI[decisive.player]}</p>
+          {round2 ? (
+            <>
+              <p className="text-2xl">{DIR_EMOJI[round2.player]}</p>
+              <p className="text-[11px] text-slate-400">{DIR_LABEL[round2.player]}</p>
+            </>
+          ) : null}
         </div>
         <p className="text-lg font-bold text-slate-400">VS</p>
         <div>
           <p className="mb-1 text-xs text-slate-400">{CHARACTER_NAME}</p>
-          <p className="text-3xl">{HAND_EMOJI[outcome.janken.cpu]}</p>
-          <p className="text-2xl">{DIR_EMOJI[outcome.direction.cpu]}</p>
-          <p className="text-[11px] text-slate-400">{DIR_LABEL[outcome.direction.cpu]}</p>
+          <p className="text-3xl">{HAND_EMOJI[decisive.cpu]}</p>
+          {round2 ? (
+            <>
+              <p className="text-2xl">{DIR_EMOJI[round2.cpu]}</p>
+              <p className="text-[11px] text-slate-400">{DIR_LABEL[round2.cpu]}</p>
+            </>
+          ) : null}
         </div>
       </div>
 
