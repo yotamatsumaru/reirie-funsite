@@ -27,8 +27,10 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useCartItemCount } from '@/stores/cart-store';
+import { useMemberSummaryStore, useMemberSummary } from '@/stores/member-summary-store';
+import { RankBadge } from '@/components/membership/RankBadge';
 import { Badge } from '@/components/ui/Badge';
-import { isAdmin as roleIsAdmin, isSuperAdmin } from '@idol/shared';
+import { isAdmin as roleIsAdmin, isSuperAdmin, PLAN_LABELS } from '@idol/shared';
 
 type NavItem = {
   href: string;
@@ -83,6 +85,15 @@ export function Sidebar() {
   const isSuper = isSuperAdmin(session?.user?.role);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+
+  // ログイン中はプラン/ランク/ポイントを取得し、ログアウトしたらクリア
+  useEffect(() => {
+    if (status === 'authenticated') {
+      useMemberSummaryStore.getState().fetchSummary();
+    } else if (status === 'unauthenticated') {
+      useMemberSummaryStore.getState().clear();
+    }
+  }, [status]);
 
   // ルート変更でモバイルメニューを閉じる
   useEffect(() => {
@@ -196,6 +207,7 @@ function SidebarContent({
   isSuper: boolean;
   pathname: string;
 }) {
+  const summary = useMemberSummary();
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 py-6 text-black">
       {/* ロゴ */}
@@ -296,13 +308,38 @@ function SidebarContent({
               active={pathname === '/me'}
               cartCount={cartCount}
             />
+
+            {/* 会員プラン・ランク・保有ポイント */}
+            <div className="mx-1 my-1 space-y-2 rounded-xl bg-twilight-lavender/25 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
+                  プラン
+                </span>
+                <Badge tone={summary?.plan === 'PREMIUM' ? 'brand' : summary?.plan === 'STANDARD' ? 'info' : 'gray'}>
+                  {summary ? PLAN_LABELS[summary.plan] : '—'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
+                  ランク
+                </span>
+                {summary ? <RankBadge rank={summary.rank} size="sm" /> : (
+                  <span className="text-xs text-black/40">—</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
+                  保有ポイント
+                </span>
+                <span className="text-sm font-bold text-black">
+                  {summary ? summary.points.toLocaleString() : '—'}
+                  <span className="ml-0.5 text-xs font-normal text-black/50">pt</span>
+                </span>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 px-3 py-1">
               <p className="truncate text-xs text-black/55">{session.user.email}</p>
-              {session.user.plan && session.user.plan !== 'FREE' && (
-                <Badge tone={session.user.plan === 'PREMIUM' ? 'brand' : 'info'}>
-                  {session.user.plan}
-                </Badge>
-              )}
             </div>
             <button
               type="button"
