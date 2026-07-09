@@ -17,6 +17,19 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'placehold.co' },
       ...(cdnAssetDomain ? [{ protocol: 'https' as const, hostname: cdnAssetDomain }] : []),
     ],
+    // Next.js 16 で追加されたローカル画像の許可リスト。
+    // サイト画像 (super-admin からアップロードした画像。S3未設定時のDBフォールバック配信) は
+    // /api/media/site-image/{id}?v=<updatedAt> のようにキャッシュバスター用のクエリ文字列を
+    // 付与するため、これを明示的に許可しないと Image コンポーネントがエラーを throw し、
+    // 該当ページ (トップページ等) の SSR ごと落ちてしまう。
+    // ※ `search` は「省略 (undefined)」にすることで任意のクエリ文字列を許可する
+    //   (空文字 '' を指定すると「クエリ文字列が無い場合のみ許可」になり、
+    //    ?v=... 付きの実際の URL にマッチしなくなるため注意)。
+    localPatterns: [
+      { pathname: '/api/media/site-image/**' },
+      { pathname: '/api/media/product-image/**' },
+      { pathname: '/api/media/game-audio/**' },
+    ],
   },
   async headers() {
     return [
