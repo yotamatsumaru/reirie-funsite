@@ -11,7 +11,6 @@ import { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
-import { verifyPassword } from './lib/password';
 import {
   canAccess,
   hasCapability,
@@ -22,6 +21,7 @@ import {
   type UserRoleLiteral,
 } from '@idol/shared';
 import { env } from './lib/env';
+import { authenticateCredentials } from './lib/credentials';
 
 declare module 'next-auth' {
   interface Session {
@@ -64,11 +64,21 @@ class EmailNotVerifiedError extends CredentialsSignin {
   code = 'EMAIL_NOT_VERIFIED';
 }
 
+/** ブルートフォース対策でアカウントが一時ロックされている場合に返すエラー */
+class AccountLockedError extends CredentialsSignin {
+  code = 'ACCOUNT_LOCKED';
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // ↑ handlers をそのままexport ( app/api/auth/[...nextauth]/route.ts で再エクスポート)
   secret: env.auth.secret,
   trustHost: env.auth.trustHost || !env.isProduction,
   session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 30 },
+  // 本番環境では常に secure cookie (__Secure-/__Host- プレフィックス + Secure 属性) を強制する。
+  // EC2 + nginx (TLS終端) 構成のため、リクエストプロトコル自動判定に依存せず明示指定することで、
+  // 万が一 X-Forwarded-Proto の伝搬に問題があっても Cookie が平文 HTTP へ漏れることを防ぐ。
+  // CSRF トークンも __Host- cookie (Secure + SameSite=lax + パス固定) で保護される (Auth.js標準)。
+  useSecureCookies: env.isProduction,
   pages: {
     signIn: '/signin',
     error: '/signin',
@@ -127,34 +137,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           };
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email, deletedAt: null },
-          include: {
-            subscriptions: {
-              where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-            },
-          },
-        });
-        if (!user) return null;
-        if (!verifyPassword(parsed.data.password, user.passwordHash)) return null;
-        // メール認証コードを入力していないユーザーはログインできない。
-        // (既存の verificationToken リンク方式で確認済みのユーザーも emailVerified が
-        //  設定されているため、後方互換で問題なくログイン可能)
-        if (!user.emailVerified) throw new EmailNotVerifiedError();
-
-        const plan: PlanTypeLiteral = user.subscriptions[0]
-          ? (user.subscriptions[0].planType as PlanTypeLiteral)
-          : 'FREE';
+        // 認証ロジック (パスワード検証・メール認証チェック・ログインロックアウト) は
+        // /api/v1/auth/token (モバイル/API向け) と共通化されている (lib/credentials.ts)。
+        const result = await authenticateCredentials(parsed.data.email, parsed.data.password);
+        if (!result.ok) {
+          if (result.reason === 'ACCOUNT_LOCKED') throw new AccountLockedError();
+          if (result.reason === 'EMAIL_NOT_VERIFIED') throw new EmailNotVerifiedError();
+          return null;
+        }
 
         return {
-          id: user.id,
-          email: user.email,
-          name: user.displayName ?? null,
-          role: user.role,
-          plan,
-          capabilities: normalizeAdminCapabilities(user.adminCapabilities),
+          id: result.user.id,
+          email: result.user.email,
+          name: result.user.displayName ?? null,
+          role: result.user.role,
+          plan: result.user.plan,
+          capabilities: result.user.capabilities,
         };
       },
     }),

@@ -286,6 +286,8 @@ paths:
         通常は `next-auth/react` の `signIn('credentials', ...)` を使用。
         メール未認証 (`emailVerified` が null) のユーザーはログインできず、
         `code=EMAIL_NOT_VERIFIED` のエラーが返る。
+        また、ブルートフォース対策として同一アカウントへの連続ログイン失敗が
+        5回に達すると15分間ログインをブロックし、`code=ACCOUNT_LOCKED` のエラーが返る。
 
   # ─── Subscriptions ────────────────────────────────────────────────
   /api/subscriptions/checkout:
@@ -1145,6 +1147,9 @@ paths:
       description: |
         Unity / モバイルクライアント向けのログイン。成功すると access / refresh
         トークンを返す。以後 `Authorization: Bearer <accessToken>` で各 API を呼ぶ。
+        認証ロジック (パスワード検証・メール認証チェック・ブルートフォース対策の
+        アカウントロック) は Web ログイン (`/api/auth/[...nextauth]`) と共通。
+        メール未認証の場合は 403、アカウントロック中は 429 を返す。
       requestBody:
         required: true
         content:
@@ -1176,7 +1181,9 @@ paths:
                       role: { type: string }
                       plan: { type: string }
         '400': { description: 入力不正, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '401': { description: 認証失敗, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '401': { description: 認証失敗 (メールアドレスまたはパスワードが不正), content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: メール未認証, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { description: アカウントロック中 (連続ログイン失敗によるブルートフォース対策), content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/v1/auth/token/refresh:
     post:

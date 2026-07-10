@@ -11,6 +11,7 @@ import {
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { sanitizeContentBody } from '@/lib/sanitize-html';
 import type { Prisma } from '@idol/db';
 
 export const runtime = 'nodejs';
@@ -71,7 +72,7 @@ export const POST = handle(async (req: Request) => {
       slug: body.slug,
       title: body.title,
       excerpt: body.excerpt,
-      body: body.body,
+      body: sanitizeContentBody(body.body),
       coverImageUrl: body.coverImageUrl,
       accessLevel: body.accessLevel,
       status: body.status,

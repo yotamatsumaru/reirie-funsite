@@ -35,6 +35,11 @@ export function SignInForm() {
       if (res?.code === 'EMAIL_NOT_VERIFIED') {
         setNeedsVerification(true);
         setError('メール認証が完了していません。メールに送信した認証コードを入力してください。');
+      } else if (res?.code === 'ACCOUNT_LOCKED') {
+        // ACCOUNT_LOCKED: ログイン試行回数が多く一時的にロックされている。
+        setError(
+          'ログイン試行回数が多いため、一時的にアカウントをロックしています。しばらく待ってから再度お試しください。',
+        );
       } else {
         setError('メールアドレスまたはパスワードが正しくありません');
       }

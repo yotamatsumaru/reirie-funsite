@@ -31,5 +31,12 @@
     "prettier": "^3.3.3",
     "turbo": "^2.0.6",
     "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "qs": "^6.15.3",
+      "postcss": "^8.5.16",
+      "@babel/core": "^7.29.6"
+    }
   }
 }

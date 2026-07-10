@@ -24,11 +24,20 @@ export const POST = handle(async (req: Request) => {
     throw errors.badRequest('メールアドレスとパスワードを正しく指定してください');
   }
 
-  const user = await authenticateCredentials(parsed.data.email, parsed.data.password);
-  if (!user) {
+  const result = await authenticateCredentials(parsed.data.email, parsed.data.password);
+  if (!result.ok) {
+    if (result.reason === 'ACCOUNT_LOCKED') {
+      throw errors.rateLimited(
+        'ログイン試行回数が多いため、一時的にアカウントをロックしています。しばらく待ってから再度お試しください。',
+      );
+    }
+    if (result.reason === 'EMAIL_NOT_VERIFIED') {
+      throw errors.forbidden('メール認証が完了していません。認証コードを入力してください。');
+    }
     // 認証失敗はアカウントの存在を漏らさないため一律 401
     throw errors.unauthorized('メールアドレスまたはパスワードが正しくありません');
   }
+  const user = result.user;
 
   const tokens = await issueTokenPair({
     sub: user.id,
