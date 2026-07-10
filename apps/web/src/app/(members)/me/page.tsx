@@ -16,6 +16,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
 import { ManageSubscriptionButtons } from '@/components/auth/ManageSubscriptionButtons';
+import { WithdrawSection } from './withdraw-section';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -265,6 +266,10 @@ export default async function MePage() {
           </Link>
         </CardBody>
       </Card>
+
+      <div className="pt-2 text-center">
+        <WithdrawSection hasActiveSub={Boolean(sub)} />
+      </div>
     </div>
   );
 }
