@@ -13,6 +13,7 @@ import { requireCapability } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { IssueCallSerialsSchema } from '@idol/shared';
 import { generateSerialCodeDisplay, toCanonicalSerialCode } from '@/lib/call-serial';
+import { toCsv } from '@/lib/csv';
 
 export const runtime = 'nodejs';
 
@@ -97,23 +98,22 @@ export const GET = handle(async (_req, ctx: Ctx) => {
     include: { usedBy: { select: { email: true, displayName: true } } },
   });
 
-  const lines: string[] = [
-    'code_canonical,used,used_by_email,used_by_name,used_at,created_at',
+  const rows: string[][] = [
+    ['code_canonical', 'used', 'used_by_email', 'used_by_name', 'used_at', 'created_at'],
   ];
   for (const s of serials) {
-    const fields = [
+    rows.push([
       s.code,
       s.usedById ? 'yes' : 'no',
       s.usedBy?.email ?? '',
       s.usedBy?.displayName ?? '',
       s.usedAt ? s.usedAt.toISOString() : '',
       s.createdAt.toISOString(),
-    ];
-    lines.push(fields.map(csvEscape).join(','));
+    ]);
   }
 
   // UTF-8 BOM 付きで Excel での文字化けを回避
-  const body = '\uFEFF' + lines.join('\n');
+  const body = toCsv(rows);
   const filename = `call-serials-${event.id}.csv`;
   return new NextResponse(body, {
     status: 200,
@@ -123,15 +123,3 @@ export const GET = handle(async (_req, ctx: Ctx) => {
     },
   });
 });
-
-function csvEscape(v: string): string {
-  // CSV/Excel 数式インジェクション対策:
-  // 先頭が =, +, -, @, タブ, CR の場合、Excel/Sheets で数式として実行される恐れがあるため
-  // シングルクォートを前置して無害化する (OWASP CSV Injection 対策)。
-  let s = v;
-  if (/^[=+\-@\t\r]/.test(s)) {
-    s = `'${s}`;
-  }
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
