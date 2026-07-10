@@ -95,3 +95,9 @@ export const UpdateProfileSchema = z.object({
   marketingOptIn: z.boolean().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
+
+// 退会 (自己アカウント削除) — 誤操作防止のためパスワード再入力を必須にする
+export const WithdrawAccountSchema = z.object({
+  password: z.string().min(1, 'パスワードを入力してください'),
+});
+export type WithdrawAccountInput = z.infer<typeof WithdrawAccountSchema>;
