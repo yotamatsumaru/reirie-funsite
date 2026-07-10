@@ -50,10 +50,20 @@ export const SignInSchema = z.object({
 });
 export type SignInInput = z.infer<typeof SignInSchema>;
 
-export const VerifyEmailSchema = z.object({
-  token: z.string().min(1),
+// メール認証コード (6桁数字) の入力検証
+export const VerifyEmailCodeSchema = z.object({
+  email: z.email(),
+  code: z
+    .string({ error: '認証コードを入力してください' })
+    .regex(/^\d{6}$/, '認証コードは6桁の数字で入力してください'),
 });
-export type VerifyEmailInput = z.infer<typeof VerifyEmailSchema>;
+export type VerifyEmailCodeInput = z.infer<typeof VerifyEmailCodeSchema>;
+
+// 認証コードの再送依頼
+export const ResendVerificationCodeSchema = z.object({
+  email: z.email(),
+});
+export type ResendVerificationCodeInput = z.infer<typeof ResendVerificationCodeSchema>;
 
 export const ForgotPasswordSchema = z.object({
   email: z.email(),

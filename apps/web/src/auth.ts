@@ -7,6 +7,7 @@
  *   (Account/Session テーブルはOAuth拡張時に備えて Prisma スキーマに残置)
  */
 import NextAuth, { type DefaultSession } from 'next-auth';
+import { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
@@ -57,6 +58,11 @@ const CredentialsSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
 });
+
+/** メール未認証でログインを試みた場合に、クライアントへ区別可能なエラーコードを渡す */
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = 'EMAIL_NOT_VERIFIED';
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // ↑ handlers をそのままexport ( app/api/auth/[...nextauth]/route.ts で再エクスポート)
@@ -133,6 +139,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         });
         if (!user) return null;
         if (!verifyPassword(parsed.data.password, user.passwordHash)) return null;
+        // メール認証コードを入力していないユーザーはログインできない。
+        // (既存の verificationToken リンク方式で確認済みのユーザーも emailVerified が
+        //  設定されているため、後方互換で問題なくログイン可能)
+        if (!user.emailVerified) throw new EmailNotVerifiedError();
 
         const plan: PlanTypeLiteral = user.subscriptions[0]
           ? (user.subscriptions[0].planType as PlanTypeLiteral)
