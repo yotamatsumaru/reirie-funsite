@@ -125,6 +125,13 @@ export const GET = handle(async (_req, ctx: Ctx) => {
 });
 
 function csvEscape(v: string): string {
-  if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
-  return v;
+  // CSV/Excel 数式インジェクション対策:
+  // 先頭が =, +, -, @, タブ, CR の場合、Excel/Sheets で数式として実行される恐れがあるため
+  // シングルクォートを前置して無害化する (OWASP CSV Injection 対策)。
+  let s = v;
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = `'${s}`;
+  }
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
 }

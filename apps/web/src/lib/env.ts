@@ -6,9 +6,12 @@ function optional(name: string): string | undefined {
   return v && v !== '' ? v : undefined;
 }
 
+const INSECURE_DEFAULT_SECRET = 'dev-insecure-secret-change-me';
+const isProductionEnv = process.env.NODE_ENV === 'production';
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  isProduction: isProductionEnv,
 
   appBaseUrl: optional('APP_BASE_URL') ?? 'http://localhost:3000',
 
@@ -24,7 +27,7 @@ export const env = {
     process.env.NEXT_PUBLIC_DEMO_MODE === 'true',
 
   auth: {
-    secret: optional('AUTH_SECRET') ?? 'dev-insecure-secret-change-me',
+    secret: optional('AUTH_SECRET') ?? INSECURE_DEFAULT_SECRET,
     trustHost: process.env.AUTH_TRUST_HOST === 'true',
   },
 
@@ -37,7 +40,7 @@ export const env = {
     secret:
       optional('API_TOKEN_SECRET') ??
       optional('AUTH_SECRET') ??
-      'dev-insecure-secret-change-me',
+      INSECURE_DEFAULT_SECRET,
     issuer: optional('API_TOKEN_ISSUER') ?? 'reirie-funsite',
     audience: optional('API_TOKEN_AUDIENCE') ?? 'reirie-api',
     // アクセストークン有効期限 (秒)。既定 1 時間。
@@ -102,3 +105,23 @@ export const env = {
     secret: optional('CRON_SECRET') ?? '',
   },
 };
+
+/**
+ * 本番環境で開発用デフォルトシークレットのまま起動していないかを検証する。
+ * - AUTH_SECRET / API_TOKEN_SECRET が未設定のまま NODE_ENV=production で起動すると、
+ *   セッション JWT / モバイル Bearer トークンの署名鍵が固定の公開値になり、
+ *   誰でも有効なトークンを偽造できる致命的な脆弱性になる。
+ * - デプロイ起動時 (instrumentation.ts などから) に呼び出し、検出したら即座に落とす。
+ */
+export function assertProductionSecrets(): void {
+  if (!isProductionEnv) return;
+  const insecure: string[] = [];
+  if (env.auth.secret === INSECURE_DEFAULT_SECRET) insecure.push('AUTH_SECRET');
+  if (env.apiToken.secret === INSECURE_DEFAULT_SECRET) insecure.push('API_TOKEN_SECRET / AUTH_SECRET');
+  if (insecure.length > 0) {
+    throw new Error(
+      `[FATAL] 本番環境で開発用デフォルトシークレットが使用されています: ${insecure.join(', ')}。` +
+        ' AUTH_SECRET (および必要なら API_TOKEN_SECRET) を必ず環境変数で設定してください。',
+    );
+  }
+}
