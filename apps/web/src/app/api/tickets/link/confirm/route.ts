@@ -4,12 +4,25 @@
  *  - DBの verifyToken と一致 + ローチケ側でも確認OKなら LINKED に遷移
  */
 import { NextResponse } from 'next/server';
+import { timingSafeEqual } from 'node:crypto';
 import { prisma } from '@idol/db';
 import { ConfirmTicketLinkSchema } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { confirmLawsonLink } from '@/lib/lawson';
 import { logAudit } from '@/lib/audit';
+
+/** 定数時間で文字列を比較する (タイミング攻撃対策) */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) {
+    // 長さが違う場合も一定時間かけてダミー比較し、早期リターンによる時間差を減らす
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
 
 export const runtime = 'nodejs';
 
@@ -29,8 +42,8 @@ export const POST = handle(async (req: Request) => {
   }
   if (!link.verifyToken) throw errors.badRequest('検証トークンが設定されていません');
 
-  // DB のトークンと一致しなければ拒否
-  if (link.verifyToken.toUpperCase() !== body.verifyToken.toUpperCase()) {
+  // DB のトークンと一致しなければ拒否 (タイミング攻撃対策で定数時間比較)
+  if (!timingSafeStringEqual(link.verifyToken.toUpperCase(), body.verifyToken.toUpperCase())) {
     await logAudit({
       userId: session.user.id,
       action: 'ticket.link.confirm_failed',

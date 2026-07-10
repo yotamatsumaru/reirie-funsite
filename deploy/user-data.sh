@@ -285,6 +285,13 @@ server {
   proxy_read_timeout 300s;
   proxy_connect_timeout 75s;
 
+  # HSTS: Cloudflare がエッジで TLS 終端し (Flexible/Full 問わず)、
+  # オリジン (このnginx) からのレスポンスヘッダーはブラウザまで転送されるため、
+  # ここで付与すれば「ブラウザ<->Cloudflareエッジ」の接続に対して正しく機能する。
+  # preload は一度 HSTS 対象になると長期間 HTTP へ後戻りできなくなるため、
+  # Cloudflare 側で「常時HTTPS化」が確実に有効になったことを確認した上で有効化すること。
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
   location /_next/static/ {
     proxy_pass http://nextjs_upstream;
     proxy_cache_valid 200 1y;

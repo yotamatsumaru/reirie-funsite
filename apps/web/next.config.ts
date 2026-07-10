@@ -42,6 +42,26 @@ const nextConfig: NextConfig = {
           // 1on1 通話機能用にカメラ・マイクを同一オリジンで許可する
           // self = このサイト自身。クロスオリジン埋め込みは引き続き不可。
           { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=()' },
+          // Content-Security-Policy: XSS の実害範囲を限定する多層防御。
+          // - Stripe.js / IVS プレイヤー等が要求する接続先のみ許可
+          // - unsafe-inline は Next.js のインラインスタイル/一部スクリプトのために必要最小限で許可
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://api.stripe.com https://*.amazonaws.com wss: https:",
+              "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+              "media-src 'self' blob: https:",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'self'",
+            ].join('; '),
+          },
         ],
       },
     ];

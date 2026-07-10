@@ -16,6 +16,7 @@ import {
 } from '@idol/shared';
 import { requireApiAccessLevel, resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
+import { sanitizeContentBody } from '@/lib/sanitize-html';
 
 export const runtime = 'nodejs';
 
@@ -102,7 +103,10 @@ export const POST = handle(async (req: Request) => {
     data: {
       contentId: input.contentId,
       userId: session.user.id,
-      body: input.body,
+      // 現状フロントは React の自動エスケープ経由でしか body を表示していないが、
+      // 将来 dangerouslySetInnerHTML 等で表示する実装が追加された場合に備え、
+      // 保存前に HTML をサニタイズする (defense-in-depth)。
+      body: sanitizeContentBody(input.body),
     },
     include: {
       user: { select: { id: true, displayName: true, avatarUrl: true } },
