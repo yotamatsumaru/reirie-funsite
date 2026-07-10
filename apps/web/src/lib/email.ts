@@ -47,7 +47,9 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * 新規登録時のウェルカム & メール認証メールを送信する。
+ * [legacy] 新規登録時のウェルカム & メール認証 (リンク方式) メールを送信する。
+ * 現在の新規登録フローでは使用していない (代わりに sendVerificationCodeEmail を使用)。
+ * verificationToken (リンク方式) を使った旧フロー向けに後方互換で残置している。
  *  - displayName: 宛名 (ニックネーム)
  *  - verifyUrl: メール認証用の絶対URL
  *  - siteName: サイト名 (件名・本文に使用)
