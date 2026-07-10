@@ -52,10 +52,16 @@ export async function handleInvoicePaid(
   }
 
   // payment_intent / charge の解決
+  // 注: stripe-node v22 (Dahlia API 型) では Invoice.payment_intent が型定義上
+  // 削除されているが、pin している apiVersion ('2024-10-28.acacia') では
+  // 実データとしては引き続き返ってくるため、他フィールドと同様に unknown 経由で吸収する。
+  const invoicePaymentIntent = (
+    invoice as unknown as { payment_intent?: string | { id: string } }
+  ).payment_intent;
   const paymentIntentId =
-    typeof invoice.payment_intent === 'string'
-      ? invoice.payment_intent
-      : (invoice.payment_intent?.id ?? null);
+    typeof invoicePaymentIntent === 'string'
+      ? invoicePaymentIntent
+      : (invoicePaymentIntent?.id ?? null);
   const chargeId =
     typeof (invoice as unknown as { charge?: string | { id: string } }).charge === 'string'
       ? ((invoice as unknown as { charge: string }).charge)

@@ -1,15 +1,19 @@
-import type { Metadata } from 'next';
-import { Suspense } from 'react';
-import { SignupCompleteClient } from './complete-client';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = { title: '登録完了' };
+export const metadata = { title: '登録完了' };
 
-export default function SignupCompletePage() {
-  return (
-    <div className="mx-auto max-w-md px-4 py-12">
-      <Suspense fallback={<p className="text-sm text-slate-500">読み込み中…</p>}>
-        <SignupCompleteClient />
-      </Suspense>
-    </div>
-  );
+/**
+ * 旧フロー (リンク認証方式) の登録完了ページ。
+ * 認証コード方式への変更により、このページへの遷移は発生しなくなったが、
+ * 古いブックマーク/メールリンクからのアクセスに備えて
+ * 新しい認証コード入力ページ (/verify-email) へ誘導する。
+ */
+export default async function SignupCompletePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string }>;
+}) {
+  const { email } = await searchParams;
+  const qs = email ? `?email=${encodeURIComponent(email)}` : '';
+  redirect(`/verify-email${qs}`);
 }

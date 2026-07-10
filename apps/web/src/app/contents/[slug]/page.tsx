@@ -88,7 +88,8 @@ export default async function ContentDetailPage({
           )}
           <div
             className="prose prose-slate mt-8 max-w-none text-slate-800"
-            // 信頼できるエディタ出力 (将来的に sanitize 必須)
+            // 管理API (POST/PATCH /api/admin/contents) の書き込み時に
+            // sanitizeContentBody() でサニタイズ済みの HTML (RBAC + サニタイズの多層防御)
             dangerouslySetInnerHTML={{ __html: content.body ?? '' }}
           />
         </>

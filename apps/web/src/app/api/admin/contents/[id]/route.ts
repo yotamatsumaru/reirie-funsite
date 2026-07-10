@@ -9,6 +9,7 @@ import { UpdateContentSchema } from '@idol/shared';
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { sanitizeContentBody } from '@/lib/sanitize-html';
 
 export const runtime = 'nodejs';
 
@@ -55,7 +56,7 @@ export const PATCH = handle(
         ...(body.slug ? { slug: body.slug } : {}),
         ...(body.title !== undefined ? { title: body.title } : {}),
         ...(body.excerpt !== undefined ? { excerpt: body.excerpt } : {}),
-        ...(body.body !== undefined ? { body: body.body } : {}),
+        ...(body.body !== undefined ? { body: sanitizeContentBody(body.body) } : {}),
         ...(body.coverImageUrl !== undefined ? { coverImageUrl: body.coverImageUrl } : {}),
         ...(body.accessLevel ? { accessLevel: body.accessLevel } : {}),
         ...(body.status ? { status: body.status } : {}),

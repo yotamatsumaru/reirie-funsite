@@ -163,23 +163,119 @@ paths:
     post:
       tags: [Auth]
       summary: 新規会員登録
+      description: |
+        アカウントを作成し、6桁の認証コードをメールで送信する。
+        作成直後は `emailVerified` が未設定のため、`/api/auth/verify-email` でコードを
+        入力して認証を完了するまでログインできない。
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [email, password]
+              required:
+                [
+                  email,
+                  password,
+                  displayName,
+                  fullName,
+                  phone,
+                  birthDate,
+                  postalCode,
+                  prefecture,
+                  addressLine1,
+                ]
               properties:
                 email: { type: string, format: email }
                 password: { type: string, minLength: 8 }
                 displayName: { type: string, maxLength: 50 }
+                fullName: { type: string, maxLength: 100 }
+                phone: { type: string, maxLength: 20 }
+                birthDate: { type: string, format: date }
+                postalCode: { type: string, pattern: '^\d{3}-?\d{4}$' }
+                prefecture: { type: string }
+                addressLine1: { type: string, maxLength: 200 }
+                addressLine2: { type: string, maxLength: 200 }
+                marketingOptIn: { type: boolean }
       responses:
-        '200': { description: 登録成功 }
+        '200':
+          description: 登録成功 (認証コードを送信)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  userId: { type: string }
+                  email: { type: string, format: email }
+                  emailSent: { type: boolean }
         '422':
           description: バリデーションエラー
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
         '409': { description: メールアドレス重複 }
+
+  /api/auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: メール認証コードの確認
+      description: |
+        新規登録時にメールで送られた6桁の認証コードを入力し、`emailVerified` を設定する。
+        有効期限 (発行から15分) 切れ、または5回連続で誤ったコードを入力した場合は
+        `/api/auth/resend-verification-code` で再送が必要。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: '^\d{6}$', description: 6桁の数字コード }
+      responses:
+        '200':
+          description: 認証成功 (または既に認証済み)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string } }
+        '400':
+          description: コードが不正・期限切れ・入力回数超過
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: バリデーションエラー
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/auth/resend-verification-code:
+    post:
+      tags: [Auth]
+      summary: 認証コードの再送
+      description: |
+        認証コードを再発行してメールで再送する (有効期限15分)。
+        60秒以内の連続リクエストはクールダウンにより 429 を返す。
+        メールアドレスの存在有無を漏らさないよう、未登録アドレスの場合も 200 を返す。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '200':
+          description: 再送成功 (または対象ユーザーが存在しない/既に認証済み)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string } }
+        '429': { description: クールダウン中 (再送しすぎ) }
+        '422':
+          description: バリデーションエラー
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
   /api/auth/[...nextauth]:
     post:
@@ -188,6 +284,10 @@ paths:
       description: |
         実体は `/api/auth/callback/credentials` 等。
         通常は `next-auth/react` の `signIn('credentials', ...)` を使用。
+        メール未認証 (`emailVerified` が null) のユーザーはログインできず、
+        `code=EMAIL_NOT_VERIFIED` のエラーが返る。
+        また、ブルートフォース対策として同一アカウントへの連続ログイン失敗が
+        5回に達すると15分間ログインをブロックし、`code=ACCOUNT_LOCKED` のエラーが返る。
 
   # ─── Subscriptions ────────────────────────────────────────────────
   /api/subscriptions/checkout:
@@ -1047,6 +1147,9 @@ paths:
       description: |
         Unity / モバイルクライアント向けのログイン。成功すると access / refresh
         トークンを返す。以後 `Authorization: Bearer <accessToken>` で各 API を呼ぶ。
+        認証ロジック (パスワード検証・メール認証チェック・ブルートフォース対策の
+        アカウントロック) は Web ログイン (`/api/auth/[...nextauth]`) と共通。
+        メール未認証の場合は 403、アカウントロック中は 429 を返す。
       requestBody:
         required: true
         content:
@@ -1078,7 +1181,9 @@ paths:
                       role: { type: string }
                       plan: { type: string }
         '400': { description: 入力不正, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '401': { description: 認証失敗, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '401': { description: 認証失敗 (メールアドレスまたはパスワードが不正), content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: メール未認証, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '429': { description: アカウントロック中 (連続ログイン失敗によるブルートフォース対策), content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/v1/auth/token/refresh:
     post:

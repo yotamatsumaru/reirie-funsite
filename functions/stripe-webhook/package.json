@@ -16,7 +16,7 @@
     "@idol/db": "workspace:*",
     "@idol/shared": "workspace:*",
     "@prisma/client": "^5.22.0",
-    "stripe": "^17.4.0"
+    "stripe": "^22.3.1"
   },
   "devDependencies": {
     "@aws-sdk/client-ssm": "^3.682.0",
