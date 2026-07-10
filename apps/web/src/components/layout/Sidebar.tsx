@@ -73,7 +73,6 @@ const MEMBER_GROUP: NavGroup = {
     { href: '/me/card', label: '会員カード', icon: CreditCard },
     { href: '/me/points', label: 'ポイント履歴', icon: Repeat },
     { href: '/me/rewards', label: '景品交換', icon: Gift },
-    { href: '/me/games/acchi', label: 'あっち向いてホイ', icon: Gamepad2 },
     { href: '/me/dm', label: 'REIRIE への DM', icon: MessageCircle },
   ],
 };
