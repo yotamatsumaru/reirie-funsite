@@ -25,6 +25,11 @@ import { Download } from 'lucide-react';
 export const metadata: Metadata = { title: '売上管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
+// 集計対象として一度に読み込む決済件数の上限 (メモリ・応答時間の保護)。
+// 他の集計系ページ (super-admin/orders 等) と同様、DEMO_MODE でも動作するよう
+// 集計は JS 側で行う設計を保ったまま、件数だけ安全に上限を設ける。
+const FETCH_LIMIT = 10000;
+
 type PaymentKindKey = keyof typeof PAYMENT_KIND_LABELS;
 type PaymentStatusKey = keyof typeof PAYMENT_STATUS_LABELS;
 
@@ -53,14 +58,20 @@ export default async function SuperAdminSalesPage({
   const statusFilter = sp.status ?? '';
   const q = sp.q?.trim() ?? '';
 
-  const payments = (await prisma.payment.findMany({
-    include: {
-      user: { select: { id: true, email: true, displayName: true } },
-      order: { select: { orderNumber: true } },
-      subscription: { select: { planType: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })) as unknown as PaymentRow[];
+  const [payments, totalPaymentCount] = await Promise.all([
+    prisma.payment.findMany({
+      include: {
+        user: { select: { id: true, email: true, displayName: true } },
+        order: { select: { orderNumber: true } },
+        subscription: { select: { planType: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: FETCH_LIMIT,
+    }) as unknown as Promise<PaymentRow[]>,
+    prisma.payment.count({}),
+  ]);
+  // 件数が上限に達している場合、累計 KPI は「直近 FETCH_LIMIT 件」のみを反映した近似値になる。
+  const isTruncated = totalPaymentCount > payments.length;
 
   const filtered = payments.filter((p) => {
     if (kindFilter && p.kind !== kindFilter) return false;
@@ -146,6 +157,13 @@ export default async function SuperAdminSalesPage({
           CSV エクスポート
         </a>
       </header>
+
+      {isTruncated && (
+        <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          決済件数が {totalPaymentCount.toLocaleString()} 件と多いため、直近 {FETCH_LIMIT.toLocaleString()}{' '}
+          件のみを対象に集計しています。累計 KPI は近似値です (全件は CSV エクスポートで取得できます)。
+        </p>
+      )}
 
       {/* KPI */}
       <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
