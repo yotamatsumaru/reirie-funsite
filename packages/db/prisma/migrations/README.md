@@ -72,3 +72,27 @@ pnpm --filter @idol/db exec prisma db execute \
 # 実行後、Prisma に「このマイグレーションは適用済み」と記録させる (migrate deploy の対象から外す)
 pnpm --filter @idol/db exec prisma migrate resolve --applied 20260712180000_add_announcements
 ```
+
+## ユーザー管理機能拡張 (ログイン日時 / BAN理由 / 警告通知) マイグレーション
+
+`20260712200000_add_user_warning_and_ban_fields/migration.sql` は以下を追加する
+**新規カラム3つ + 新規テーブル1つの追加のみ**で、既存テーブルへの破壊的変更を含みません。
+
+- `users.last_login_at` (nullable): ログイン成功のたびに `authenticateCredentials()` が更新する
+  最終ログイン日時。Auth.js が `session: { strategy: 'jwt' }` のためログイン時にDB書き込みが
+  発生せず、この列がなければ「最終ログイン」を判定する手段がなかったため追加。
+- `users.banned_at` / `users.ban_reason` (両方 nullable): 運営 (SUPER_ADMIN) による BAN の日時・理由。
+  既存の `deletedAt` は自己都合の退会でも共用されるフィールドのため、「運営が BAN した」ことを
+  区別して記録するために追加。復元 (BAN解除) 時もこの2列はクリアせず履歴として保持する
+  (ゴミ箱 UI で直近の BAN 理由を確認できるようにするため)。
+- `user_warnings` テーブル (新規): 運営からファンへの警告通知 (メール送信のみ、サイト内表示なし)。
+  複数回発行可能で、削除せず履歴として全件保持する。
+
+適用方法は上記と同様 (`prisma:migrate:deploy` または `psql -f migration.sql` /
+`prisma db execute --file` → `prisma migrate resolve --applied 20260712200000_add_user_warning_and_ban_fields`)。
+
+### 検証済み事項
+
+ローカル PostgreSQL (citext / pgcrypto 拡張有効) に本マイグレーション単体を適用した上で、
+`prisma migrate diff --from-url <db> --to-schema-datamodel prisma/schema.prisma --script` の
+差分が空 (= 生成される実DBスキーマが `schema.prisma` の定義と完全一致) であることを確認済み。
