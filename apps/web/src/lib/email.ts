@@ -222,3 +222,63 @@ export async function sendAdminInvitationEmail(params: {
     text,
   });
 }
+
+/**
+ * お知らせ (Announcement) の一斉メール送信で使う1件分の送信。
+ *  - title / body: 管理者が入力したお知らせの内容をそのまま本文に使う
+ *  - body は改行込みのプレーンテキストを想定 (HTML版は改行を <br> に変換して表示)
+ *
+ * lib/bulk-email.ts から対象ユーザー分ループして呼び出される。
+ */
+export async function sendAnnouncementEmail(params: {
+  to: string;
+  displayName: string;
+  title: string;
+  body: string;
+  siteName?: string;
+}): Promise<void> {
+  const siteName = params.siteName ?? 'ReiRieRoom';
+  const name = params.displayName?.trim() || 'お客';
+
+  const text =
+    `${name} さん\n\n` +
+    `${params.title}\n\n` +
+    `${params.body}\n\n` +
+    `――――――――――\n${siteName} 運営事務局`;
+
+  const safeName = escapeHtml(name);
+  const safeTitle = escapeHtml(params.title);
+  const safeSite = escapeHtml(siteName);
+  // 本文は改行を <br> に変換して表示 (HTML エスケープ後に変換することで XSS を防ぐ)
+  const safeBody = escapeHtml(params.body).replace(/\n/g, '<br>');
+
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f1f7;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#2d2235;">
+  <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+    <div style="background:linear-gradient(135deg,#4a2d5c,#7c5295);border-radius:16px 16px 0 0;padding:28px 24px;text-align:center;">
+      <h1 style="margin:0;color:#fdf8ff;font-size:20px;letter-spacing:.05em;">${safeSite}</h1>
+      <p style="margin:6px 0 0;color:#e9d8f5;font-size:12px;">お知らせ</p>
+    </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:28px 24px;box-shadow:0 4px 20px rgba(74,45,92,.08);">
+      <p style="margin:0 0 16px;font-size:15px;">${safeName} さん</p>
+      <h2 style="margin:0 0 16px;font-size:17px;font-weight:bold;color:#4a2d5c;">${safeTitle}</h2>
+      <div style="margin:0 0 20px;font-size:14px;line-height:1.8;color:#3a2f45;">
+        ${safeBody}
+      </div>
+      <hr style="border:none;border-top:1px solid #efeaf4;margin:20px 0;">
+      <p style="margin:0;font-size:11px;color:#a99fb3;line-height:1.6;">
+        本メールは ${safeSite} からの重要なお知らせです。<br>
+        ${safeSite} 運営事務局
+      </p>
+    </div>
+  </div>
+</body></html>`;
+
+  await sendEmail({
+    to: params.to,
+    subject: `【${siteName}】${params.title}`,
+    text,
+    html,
+  });
+}

@@ -74,6 +74,11 @@ function applyDataToRow(
 ): Record<string, unknown> {
   if (!data) return row;
   for (const [k, v] of Object.entries(data)) {
+    // Prisma の実際の挙動と同様、値が undefined のフィールドは
+    // 「更新しない」として無視する (null は明示的な更新として扱う)。
+    // これを無視すると `{ ...partial, x: maybeUndefined }` のような
+    // 呼び出しパターンで既存値が undefined に上書きされてしまう。
+    if (v === undefined) continue;
     row[k] = resolveScalarValue(row[k], v);
   }
   return row;
