@@ -6,8 +6,10 @@
  *   2. 未設定 → バイト列を DB (CharacterImage.data) に保存し、
  *      /api/media/character-image/{id} 経由で配信する。
  *
- * slot (= ポーズ: idle/rock/scissors/paper/up/down/left/right) ごとに 1 件だけ
- * 保持する (再アップロード時は既存を置き換え)。
+ * slot (= ポーズ: idle/rock/scissors/paper/up/down/left/right) ごとに、
+ * variant (1〜CHARACTER_IMAGE_VARIANTS_PER_SLOT) の複数パターンを保持できる。
+ * 同一 (slot, variant) は 1 件だけ保持する (再アップロード時は既存を置き換え)。
+ * ゲーム表示時は各ポーズの登録済みパターンからランダムに 1 枚が選ばれる。
  */
 import { prisma } from '@idol/db';
 import crypto from 'node:crypto';
@@ -21,6 +23,7 @@ import { isAssetStorageConfigured, putAsset } from './s3';
 export type StoredCharacterImage = {
   id: string;
   slot: CharacterImageSlot;
+  variant: number;
   url: string;
   fileName: string | null;
   contentType: string | null;
@@ -30,23 +33,24 @@ export type StoredCharacterImage = {
 };
 
 /**
- * 指定スロット (ポーズ) の画像を保存 (既存があれば置き換え)。
+ * 指定スロット (ポーズ) + パターン番号の画像を保存 (既存があれば置き換え)。
  */
 export async function saveCharacterImage(params: {
   slot: CharacterImageSlot;
+  variant: number;
   bytes: Buffer;
   contentType: string;
   ext: string;
   fileName: string | null;
 }): Promise<StoredCharacterImage> {
-  const { slot, bytes, contentType, ext, fileName } = params;
+  const { slot, variant, bytes, contentType, ext, fileName } = params;
 
   if (isAssetStorageConfigured()) {
-    const key = `character-images/${slot}-${crypto.randomUUID()}.${ext}`;
+    const key = `character-images/${slot}-${variant}-${crypto.randomUUID()}.${ext}`;
     const url = await putAsset(key, bytes, contentType);
     const row = await prisma.characterImage.upsert({
-      where: { slot },
-      create: { slot, url, contentType, fileName, sizeBytes: bytes.byteLength, data: null },
+      where: { slot_variant: { slot, variant } },
+      create: { slot, variant, url, contentType, fileName, sizeBytes: bytes.byteLength, data: null },
       update: { url, contentType, fileName, sizeBytes: bytes.byteLength, data: null },
     });
     return { ...toStored(row), storage: 's3' };
@@ -54,9 +58,10 @@ export async function saveCharacterImage(params: {
 
   // DB 保存フォールバック: 先に upsert して id を確定させ、url を id ベースにする。
   const base = await prisma.characterImage.upsert({
-    where: { slot },
+    where: { slot_variant: { slot, variant } },
     create: {
       slot,
+      variant,
       url: '',
       contentType,
       fileName,
@@ -76,18 +81,22 @@ export async function saveCharacterImage(params: {
   return { ...toStored(row), storage: 'db' };
 }
 
-/** 指定スロット (ポーズ) の画像を削除。 */
-export async function deleteCharacterImage(slot: CharacterImageSlot): Promise<void> {
-  await prisma.characterImage.deleteMany({ where: { slot } });
+/** 指定スロット (ポーズ) + パターン番号の画像を削除。 */
+export async function deleteCharacterImage(
+  slot: CharacterImageSlot,
+  variant: number,
+): Promise<void> {
+  await prisma.characterImage.deleteMany({ where: { slot, variant } });
 }
 
-/** 管理画面一覧用: 全スロットのメタ情報 (バイト列は含めない)。 */
+/** 管理画面一覧用: 全スロット・全パターンのメタ情報 (バイト列は含めない)。 */
 export async function listCharacterImages(): Promise<StoredCharacterImage[]> {
   const rows = await prisma.characterImage.findMany({
     where: { slot: { in: [...CHARACTER_IMAGE_SLOTS] } },
     select: {
       id: true,
       slot: true,
+      variant: true,
       url: true,
       fileName: true,
       contentType: true,
@@ -95,6 +104,7 @@ export async function listCharacterImages(): Promise<StoredCharacterImage[]> {
       updatedAt: true,
       data: true,
     },
+    orderBy: [{ slot: 'asc' }, { variant: 'asc' }],
   });
   return rows
     .filter((r): r is typeof r & { slot: CharacterImageSlot } =>
@@ -103,6 +113,7 @@ export async function listCharacterImages(): Promise<StoredCharacterImage[]> {
     .map((r) => ({
       id: r.id,
       slot: r.slot,
+      variant: r.variant,
       url: r.url,
       fileName: r.fileName,
       contentType: r.contentType,
@@ -113,18 +124,22 @@ export async function listCharacterImages(): Promise<StoredCharacterImage[]> {
 }
 
 /**
- * slot (ポーズ) → URL のマップを返す (ゲーム画面に渡す用)。
+ * slot (ポーズ) → URL配列 のマップを返す (ゲーム画面に渡す用)。
+ * 各ポーズに登録されているパターンの URL を variant 昇順で配列にまとめる。
+ * ゲーム側 (CharacterAvatar) がこの配列からランダムに 1 枚を選ぶ。
  * 設定されているスロットのみ含む。
  */
 export async function getCharacterImageUrlMap(): Promise<CharacterImageUrlMap> {
   const rows = await prisma.characterImage.findMany({
     where: { slot: { in: [...CHARACTER_IMAGE_SLOTS] } },
-    select: { slot: true, url: true },
+    select: { slot: true, variant: true, url: true },
+    orderBy: [{ slot: 'asc' }, { variant: 'asc' }],
   });
   const map: CharacterImageUrlMap = {};
   for (const r of rows) {
     if ((CHARACTER_IMAGE_SLOTS as readonly string[]).includes(r.slot) && r.url) {
-      map[r.slot as CharacterImageSlot] = r.url;
+      const slot = r.slot as CharacterImageSlot;
+      (map[slot] ??= []).push(r.url);
     }
   }
   return map;
@@ -133,6 +148,7 @@ export async function getCharacterImageUrlMap(): Promise<CharacterImageUrlMap> {
 function toStored(row: {
   id: string;
   slot: string;
+  variant: number;
   url: string;
   fileName: string | null;
   contentType: string | null;
@@ -142,6 +158,7 @@ function toStored(row: {
   return {
     id: row.id,
     slot: row.slot as CharacterImageSlot,
+    variant: row.variant,
     url: row.url,
     fileName: row.fileName,
     contentType: row.contentType,

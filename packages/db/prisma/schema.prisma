@@ -1621,8 +1621,10 @@ model SiteImage {
 /// standalone + PM2 cluster + 再ビルドでも消えない単一の真実として DB を用いる。
 model CharacterImage {
   id          String   @id @default(uuid()) @db.Uuid
-  /// ポーズ ID (例: idle, rock, scissors, paper, up, down, left, right)。同一 slot は 1 件のみ。
-  slot        String   @unique
+  /// ポーズ ID (例: idle, rock, scissors, paper, up, down, left, right)。
+  slot        String
+  /// 同一ポーズ内のパターン番号 (1〜3)。ゲーム表示時はこの中からランダムに 1 枚選ばれる。
+  variant     Int      @default(1)
   url         String
   contentType String?  @map("content_type")
   /// 元ファイル名 (表示用)
@@ -1632,6 +1634,8 @@ model CharacterImage {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  /// ポーズ + パターン番号で一意 (再アップロードは同じ (slot, variant) を置き換え)。
+  @@unique([slot, variant])
   @@map("character_images")
 }
 
