@@ -47,6 +47,9 @@ export type SignUpInput = z.infer<typeof SignUpSchema>;
 export const SignInSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
+  // TOTP (Google Authenticator) 2段階認証コード。SUPER_ADMIN が totpEnabled の場合のみ必須。
+  // 6桁の数字コード、またはバックアップコード ("XXXX-XXXX-XX" 形式) のいずれかを許容する。
+  totpCode: z.string().min(1).optional(),
 });
 export type SignInInput = z.infer<typeof SignInSchema>;
 
@@ -101,3 +104,20 @@ export const WithdrawAccountSchema = z.object({
   password: z.string().min(1, 'パスワードを入力してください'),
 });
 export type WithdrawAccountInput = z.infer<typeof WithdrawAccountSchema>;
+
+// --- TOTP (Google Authenticator) 2段階認証: SUPER_ADMIN 限定 ---
+
+// セットアップ時の初回コード確認 (POST /api/super-admin/totp/verify)
+export const TotpVerifySchema = z.object({
+  code: z
+    .string()
+    .min(1, '確認コードを入力してください')
+    .regex(/^\d{6}$/, '確認コードは6桁の数字で入力してください'),
+});
+export type TotpVerifyInput = z.infer<typeof TotpVerifySchema>;
+
+// 無効化 (自己解除) — 誤操作防止のためパスワード再入力を必須にする
+export const TotpDisableSchema = z.object({
+  password: z.string().min(1, 'パスワードを入力してください'),
+});
+export type TotpDisableInput = z.infer<typeof TotpDisableSchema>;

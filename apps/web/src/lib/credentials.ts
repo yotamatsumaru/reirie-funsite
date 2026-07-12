@@ -24,6 +24,7 @@ import { verifyPassword } from './password';
 import { env } from './env';
 import { logAudit } from './audit';
 import { MAX_FAILED_LOGIN_ATTEMPTS, isLockedOut, lockoutExpiryDate } from './login-lockout';
+import { decryptTotpSecret, verifyTotpToken, consumeBackupCode } from './totp';
 
 export interface AuthenticatedUser {
   id: string;
@@ -38,17 +39,26 @@ export type AuthenticateCredentialsResult =
   | { ok: true; user: AuthenticatedUser }
   | { ok: false; reason: 'INVALID_CREDENTIALS' }
   | { ok: false; reason: 'EMAIL_NOT_VERIFIED' }
-  | { ok: false; reason: 'ACCOUNT_LOCKED' };
+  | { ok: false; reason: 'ACCOUNT_LOCKED' }
+  // TOTP 有効な SUPER_ADMIN が totpCode 未入力でログインを試みた場合。
+  // クライアント側でコード入力欄を表示するためのシグナル (パスワードは検証済み)。
+  | { ok: false; reason: 'TOTP_REQUIRED' }
+  // TOTP コード / バックアップコードが不正だった場合。
+  | { ok: false; reason: 'TOTP_INVALID' };
 
 /**
- * email / password を検証してユーザー情報を返す。
+ * email / password (+ 必要なら TOTP コード) を検証してユーザー情報を返す。
  * 失敗時は理由 (reason) を含む結果を返すため、呼び出し側は
  * ログイン画面向け (Auth.js) / API トークン発行向け それぞれに適した
  * エラー表現へマッピングできる。
+ *
+ * TOTP (2段階認証) は SUPER_ADMIN 限定機能。totpEnabled なユーザーは、
+ * パスワード検証後に totpCode (6桁コード or バックアップコード) の検証を追加で必須とする。
  */
 export async function authenticateCredentials(
   email: string,
   password: string,
+  totpCode?: string,
 ): Promise<AuthenticateCredentialsResult> {
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -156,6 +166,40 @@ export async function authenticateCredentials(
   // メール認証コードを入力していないユーザーはログインできない。
   if (!user.emailVerified) {
     return { ok: false, reason: 'EMAIL_NOT_VERIFIED' };
+  }
+
+  // --- TOTP (2段階認証) チェック: SUPER_ADMIN が有効化している場合のみ必須 ---
+  if (user.role === 'SUPER_ADMIN' && user.totpEnabled && user.totpSecret) {
+    if (!totpCode) {
+      return { ok: false, reason: 'TOTP_REQUIRED' };
+    }
+    const normalizedCode = totpCode.trim();
+    // 6桁数字ならTOTPコードとして、それ以外はバックアップコードとして検証する。
+    const isTotpFormat = /^\d{6}$/.test(normalizedCode);
+    let totpOk = false;
+    if (isTotpFormat) {
+      const secret = decryptTotpSecret(user.totpSecret);
+      totpOk = verifyTotpToken(secret, normalizedCode);
+    } else {
+      const { ok, remaining } = consumeBackupCode(normalizedCode, user.totpBackupCodes);
+      totpOk = ok;
+      if (ok) {
+        // バックアップコードは使い捨てのため、消費した分をDBから取り除く。
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { totpBackupCodes: remaining },
+        });
+        await logAudit({
+          userId: user.id,
+          action: 'auth.totp_backup_code_used',
+          metadata: { remainingCount: remaining.length },
+        });
+      }
+    }
+    if (!totpOk) {
+      await logAudit({ userId: user.id, action: 'auth.totp_failed' });
+      return { ok: false, reason: 'TOTP_INVALID' };
+    }
   }
 
   const plan: PlanTypeLiteral = user.subscriptions[0]
