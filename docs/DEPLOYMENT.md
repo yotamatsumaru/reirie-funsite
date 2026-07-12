@@ -22,6 +22,8 @@
 [Step 4] Stripe Webhook Lambda をビルド  ~3分
 [Step 5] CDK Deploy (各スタックを順次) ~45-60分
 [Step 6] デプロイ後の確認 / 接続    ~15分
+[Step 6.5/6.6] 独自ドメイン紐付け (Cloudflare or Route 53+CloudFront、任意) ~30-60分
+[Step 6.7] SES 送信ドメイン検証 + 本番アクセス申請 (一斉メール送信を行う場合) ~10分 + 承認待ち24-48h
 [Step 7] (任意) GitHub Actions OIDC 設定 ~20分
 ```
 
@@ -193,8 +195,18 @@ pnpm deploy:database
 # 3. Storage (~15分: CloudFront 作成が遅い)
 pnpm deploy:storage
 
-# 4. Email (~2分)
-pnpm deploy:email
+# 3.5 DNS (~1-5分。Route 53 Hosted Zone 作成は数秒だが、ACM 証明書の DNS 検証待ちで
+#     数分かかることがある。domainName を指定する場合のみ実行。
+#     独自ドメインで SES の DKIM を Route 53 で自動検証したい場合は、
+#     Email より先にこのステップを実行しておく)
+pnpm deploy:dns --context domainName=reirie.com
+# → 初回のみ: Output `NameServers` の値をお名前.com 等のネームサーバー設定に登録
+#   (反映まで数時間〜24時間かかることがある。詳細は Step 6.6 を参照)
+
+# 4. Email (~2分。domainName を指定していれば SES の DKIM/MAIL FROM レコードが
+#     Route 53 の Hosted Zone に自動作成される。ドメイン移管が済んでいない場合は
+#     レコードは作成されるが検証は Pending のままになる — ネームサーバー反映後に自動で Verified になる)
+pnpm deploy:email --context domainName=reirie.com --context sendingDomain=reirie.com
 
 # 5. Live (~3分: IVS Channel)
 pnpm deploy:live
@@ -594,6 +606,113 @@ dig reirie.com +short                  # CloudFront の Anycast IP が複数返�
     `proxy_buffer_size 128k` / `proxy_buffers 4 256k` / `proxy_busy_buffers_size 256k`
     を設定済み (このコミットで追加)。既存 EC2 に反映するには `setup-tls.sh` を再実行するか、
     `/etc/nginx/conf.d/app.conf` に直接同設定を追記して `nginx -t && systemctl reload nginx`
+
+---
+
+## Step 6.7. SES 送信ドメイン検証 + 本番アクセス申請 (一斉メール送信を行う場合)
+
+お知らせの一斉メール送信 (`apps/web/src/lib/bulk-email.ts`) や会員登録時の確認コードメール、
+Stripe 決済完了メールなどを実際に送るには、SES の **送信ドメイン検証** と
+**サンドボックス解除 (Production Access)** が必要。
+
+### 6.7-1. 送信ドメインの DKIM 検証
+
+**A. Route 53 を使っている場合 (Step 6.6 済み、推奨)**
+
+`*-dns` を先にデプロイしてから `*-email` を `domainName` / `sendingDomain` 付きで
+デプロイしていれば ([Step 5](#step-5-cdk-deploy) 参照)、DKIM (CNAME×3) と
+MAIL FROM (MX/TXT=SPF) のレコードが Route 53 Hosted Zone に自動作成されている。
+追加のDNS作業は不要で、以下で検証完了を待つだけ:
+
+```bash
+aws ses get-identity-verification-attributes --identities reirie.com \
+  --query 'VerificationAttributes."reirie.com".VerificationStatus' --output text
+# "Success" になれば検証完了 (ネームサーバー移管直後は Pending のことがある。反映まで最大24時間)
+
+aws ses get-identity-dkim-attributes --identities reirie.com \
+  --query 'DkimAttributes."reirie.com".DkimVerificationStatus' --output text
+# こちらも "Success" になっていることを確認
+```
+
+**B. Route 53 を使わない場合 (Cloudflare 等で DNS 管理、`domainName` 未指定)**
+
+`*-email` の CloudFormation イベントか、AWS Console → SES → Verified identities →
+対象ドメイン → DKIM タブに表示される 3件の CNAME レコードを、DNS 管理側 (Cloudflare 等) に
+手動で追加する。加えて MAIL FROM 用に `bounce.<domain>` の MX (`feedback-smtp.<region>.amazonses.com`,
+priority 10) と TXT (`v=spf1 include:amazonses.com ~all`) レコードも追加する
+(詳細な値は Console の MAIL FROM domain タブに表示される)。
+
+### 6.7-2. 送信元メールアドレスを SSM に登録 (未登録の場合)
+
+```bash
+aws ssm put-parameter --name "/idol-fansite/dev/ses/from-email" \
+  --type String --value "no-reply@reirie.com" --overwrite
+```
+
+`apps/web/src/lib/email.ts` はこの値 (`SES_FROM_EMAIL` 環境変数経由) を送信元として使う。
+
+### 6.7-3. SES サンドボックスモードの確認
+
+新規 SES アカウントは既定で **サンドボックスモード** であり、以下の制限がある:
+
+- 送信先メールアドレスも SES で検証済みでなければ送信できない (未検証の一般会員には送れない)
+- 送信レートが低く制限される (24時間あたりの送信数・秒間送信数に上限あり)
+
+```bash
+aws ses get-account --query 'ProductionAccessEnabled' --output text
+# false ならまだサンドボックス
+```
+
+### 6.7-4. 本番アクセス (Production Access) の申請
+
+サンドボックスモードのままでは一般会員へのメール送信ができないため、本番運用前に必ず申請する。
+
+1. AWS Console → **SES → Account dashboard** → 右上 **「Request production access」** をクリック
+2. 申請フォームに以下を入力:
+   - **Mail type**: `Transactional` (確認コード・お知らせ配信メールが中心の場合) または
+     `Marketing`（一斉お知らせを主目的とする場合。両方使う場合は `Transactional` を選び、
+     用途の説明欄でお知らせ配信についても触れる）
+   - **Website URL**: `https://reirie.com`
+   - **Use case description**: 具体例:
+     > 会員制ファンサイトです。(1) 新規登録時の本人確認 (6桁コード) メール、
+     > (2) 運営からのお知らせを opt-in 会員へ配信する一斉メール、
+     > (3) 決済完了・サブスクリプション関連の通知メールを送信します。
+     > すべて会員本人が登録したメールアドレス宛のみに送信し、
+     > お知らせ配信は marketingOptIn (配信同意) フラグで制御しています。
+   - **Additional contacts**: 運営の連絡先メールアドレス
+   - **Preferred contact language**: Japanese
+   - バウンス/クレーム対応: 「`*-email` スタックが作成する SNS Topic
+     (`idol-fansite-<env>-ses-bounce` / `-ses-complaint`) で監視し、
+     一定率を超えたら送信を停止する」旨を記載すると承認されやすい
+3. 申請後、AWS サポートからの回答を待つ (通常 24〜48時間)
+4. 承認されたら `aws ses get-account --query 'ProductionAccessEnabled'` が `true` になる
+
+### 6.7-5. Bounce / Complaint 通知の subscribe (推奨)
+
+```bash
+BOUNCE_TOPIC_ARN=$(aws cloudformation describe-stacks \
+  --stack-name idol-fansite-dev-email \
+  --query 'Stacks[0].Outputs[?OutputKey==`BounceTopicArn`].OutputValue' --output text)
+aws sns subscribe --topic-arn "$BOUNCE_TOPIC_ARN" --protocol email --notification-endpoint ops@reirie.com
+
+COMPLAINT_TOPIC_ARN=$(aws cloudformation describe-stacks \
+  --stack-name idol-fansite-dev-email \
+  --query 'Stacks[0].Outputs[?OutputKey==`ComplaintTopicArn`].OutputValue' --output text)
+aws sns subscribe --topic-arn "$COMPLAINT_TOPIC_ARN" --protocol email --notification-endpoint ops@reirie.com
+```
+
+購読確認メールのリンクをクリックして完了。以降、バウンス/クレーム発生時に通知が届く。
+
+### トラブルシューティング (SES)
+
+- 一斉送信 (`sendAnnouncementEmails`) が全件 `emailStatus: FAILED` になる
+  → サンドボックスモードのまま未検証の宛先に送っている可能性が高い。6.7-3/6.7-4 を確認
+- DKIM が `Pending` のまま変わらない
+  → Route 53 移管の場合、ネームサーバー反映 (最大24時間) 待ち。`dig txt reirie.com` 等で
+    まず該当ゾーンが正しく Route 53 を向いているか確認
+- 本番アクセス申請が Reject された
+  → Use case description が具体性不足なことが多い。誰に何を送るか・opt-in の仕組み・
+    バウンス対応方針を明記して再申請する
 
 ---
 
