@@ -326,6 +326,11 @@ server {
   client_max_body_size 50M;
   proxy_read_timeout 300s;
   proxy_connect_timeout 75s;
+  # Next.js のレスポンスヘッダー (Cookie/セッション情報等) が大きい場合に
+  # "upstream sent too big header" エラーになるのを防ぐためバッファを拡張
+  proxy_buffer_size 128k;
+  proxy_buffers 4 256k;
+  proxy_busy_buffers_size 256k;
 
   # HSTS: Cloudflare がエッジで TLS 終端し、オリジン (このnginx) からの
   # レスポンスヘッダーはブラウザまで転送されるため、ここで付与すれば
@@ -379,6 +384,11 @@ server {
   client_max_body_size 50M;
   proxy_read_timeout 300s;
   proxy_connect_timeout 75s;
+  # Next.js のレスポンスヘッダー (Cookie/セッション情報等) が大きい場合に
+  # "upstream sent too big header" エラーになるのを防ぐためバッファを拡張
+  proxy_buffer_size 128k;
+  proxy_buffers 4 256k;
+  proxy_busy_buffers_size 256k;
 
   # HSTS: Cloudflare がエッジで TLS 終端し (Flexible/Full 問わず)、
   # オリジン (このnginx) からのレスポンスヘッダーはブラウザまで転送されるため、
