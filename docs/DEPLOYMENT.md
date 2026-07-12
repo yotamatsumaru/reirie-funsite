@@ -587,6 +587,13 @@ dig reirie.com +short                  # CloudFront の Anycast IP が複数返�
   → CloudFront Function (`ForwardHostFunction`) が正しく関連付けられているか、
     nginx の `X-Forwarded-Host` 転送 (`deploy/user-data.sh`) が反映されているか、
     `AUTH_TRUST_HOST=true` が EC2 の `.env.production` に設定されているかを確認
+- nginx の error.log に `upstream sent too big header while reading response header
+  from upstream` が出て 502 になる
+  → Next.js のレスポンスヘッダー (Cookie/セッション情報等) が nginx のデフォルトの
+    proxy buffer サイズを超えている。`deploy/user-data.sh` / `deploy/setup-tls.sh` は
+    `proxy_buffer_size 128k` / `proxy_buffers 4 256k` / `proxy_busy_buffers_size 256k`
+    を設定済み (このコミットで追加)。既存 EC2 に反映するには `setup-tls.sh` を再実行するか、
+    `/etc/nginx/conf.d/app.conf` に直接同設定を追記して `nginx -t && systemctl reload nginx`
 
 ---
 
