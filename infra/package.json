@@ -18,6 +18,8 @@
     "deploy:webhook": "cdk deploy '*-webhook' --require-approval never",
     "deploy:ec2": "cdk deploy '*-ec2' --require-approval never",
     "deploy:monitoring": "cdk deploy '*-monitoring' --require-approval never",
+    "deploy:dns": "cdk deploy '*-dns' --require-approval never",
+    "deploy:site-cdn": "cdk deploy '*-site-cdn' --require-approval never",
     "destroy": "cdk destroy --all --force",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint'",

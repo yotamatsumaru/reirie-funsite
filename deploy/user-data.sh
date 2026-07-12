@@ -296,6 +296,17 @@ upstream nextjs_upstream {
   keepalive 32;
 }
 
+# CloudFront 経由の場合、CloudFront Function (viewer-request) が元の
+# ビューワードメイン (reirie.com / www.reirie.com) を X-Forwarded-Host に
+# コピーしてから、オリジンへの Host ヘッダーをオリジンのホスト名
+# (origin-app.<domain>) に書き換えて転送してくる。
+# X-Forwarded-Host が無い場合 (CloudFront を経由しない直アクセス等) は
+# $host にフォールバックする。
+map $http_x_forwarded_host $proxied_host {
+  default $http_x_forwarded_host;
+  ''      $host;
+}
+
 # 80 は 443 へ常時リダイレクト (Cloudflare Full/Strict 用)
 server {
   listen 80 default_server;
@@ -335,6 +346,7 @@ server {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $proxied_host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -348,6 +360,18 @@ upstream nextjs_upstream {
   server 127.0.0.1:3000;
   keepalive 32;
 }
+
+# CloudFront 経由の場合、CloudFront Function (viewer-request) が元の
+# ビューワードメイン (reirie.com / www.reirie.com) を X-Forwarded-Host に
+# コピーしてから、オリジンへの Host ヘッダーをオリジンのホスト名
+# (origin-app.<domain>) に書き換えて転送してくる。
+# X-Forwarded-Host が無い場合 (CloudFront を経由しない直アクセス等) は
+# $host にフォールバックする。
+map $http_x_forwarded_host $proxied_host {
+  default $http_x_forwarded_host;
+  ''      $host;
+}
+
 server {
   listen 80 default_server;
   server_name _;
@@ -375,6 +399,7 @@ server {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $proxied_host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
