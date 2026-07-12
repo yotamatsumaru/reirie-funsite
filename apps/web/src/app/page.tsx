@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { PLAN_LABELS, PLAN_PRICES, PLAN_BILLING_INTERVAL } from '@idol/shared';
 import { formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
-import { listAnnouncements } from '@/lib/demo-store';
+import { listAnnouncements } from '@/lib/announcements';
 import { getSiteImageUrl } from '@/lib/site-image';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ function formatDate(d: Date | null): string {
 
 export default async function HomePage() {
   // 最新お知らせ 3 件 (ALL 公開のみ — 未ログインユーザーも見られるもの)
-  const latestNotices = listAnnouncements()
+  const latestNotices = (await listAnnouncements())
     .filter((a) => a.status === 'PUBLISHED' && a.audience === 'ALL')
     .slice(0, 3);
 

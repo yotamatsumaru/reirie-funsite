@@ -5,23 +5,26 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { auth } from '@/auth';
-import { getAnnouncement } from '@/lib/demo-store';
+import { getAnnouncement } from '@/lib/announcements';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
 export const dynamic = 'force-dynamic';
 
-const AUDIENCE_LABELS = {
+const AUDIENCE_LABELS: Record<'ALL' | 'MEMBERS' | 'PREMIUM', string> = {
   ALL: '全員',
   MEMBERS: '会員',
   PREMIUM: 'PREMIUM',
-} as const;
+};
 
-const AUDIENCE_TONES = {
+const AUDIENCE_TONES: Record<
+  'ALL' | 'MEMBERS' | 'PREMIUM',
+  'gray' | 'brand' | 'success' | 'warning' | 'danger' | 'info'
+> = {
   ALL: 'info',
   MEMBERS: 'brand',
   PREMIUM: 'warning',
-} as const;
+};
 
 function formatDateTime(d: Date | null): string {
   if (!d) return '';
@@ -40,7 +43,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const a = getAnnouncement(id);
+  const a = await getAnnouncement(id);
   if (!a) return { title: 'お知らせ' };
   return {
     title: a.title,
@@ -54,7 +57,7 @@ export default async function NoticeDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const a = getAnnouncement(id);
+  const a = await getAnnouncement(id);
 
   if (!a || a.status !== 'PUBLISHED') {
     notFound();

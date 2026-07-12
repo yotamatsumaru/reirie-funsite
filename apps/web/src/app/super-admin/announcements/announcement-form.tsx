@@ -16,6 +16,7 @@ export function AnnouncementForm() {
   const [body, setBody] = useState('');
   const [audience, setAudience] = useState<Audience>('ALL');
   const [status, setStatus] = useState<Status>('DRAFT');
+  const [sendEmail, setSendEmail] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,6 +37,7 @@ export function AnnouncementForm() {
           body: body.trim(),
           audience,
           status,
+          sendEmail,
         }),
       });
       if (!res.ok) {
@@ -49,6 +51,7 @@ export function AnnouncementForm() {
       setBody('');
       setAudience('ALL');
       setStatus('DRAFT');
+      setSendEmail(false);
       setSuccess(true);
       router.refresh();
     });
@@ -120,6 +123,26 @@ export function AnnouncementForm() {
             <option value="PUBLISHED">すぐに公開</option>
           </select>
         </div>
+      </div>
+
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+        <label className="flex items-start gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={sendEmail}
+            onChange={(e) => setSendEmail(e.target.checked)}
+            disabled={pending}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+          />
+          <span>
+            <span className="font-medium">配信対象の会員にメールも送信する</span>
+            <br />
+            <span className="text-xs text-slate-500">
+              「すぐに公開」を選んだ場合のみ、保存と同時に配信対象へ一斉メールを送信します
+              (下書き保存中はメールは送信されません)。
+            </span>
+          </span>
+        </label>
       </div>
 
       {error && (

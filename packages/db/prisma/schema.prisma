@@ -325,6 +325,7 @@ model User {
   videoViewLogs   VideoViewLog[]
   contentComments ContentComment[]
   auditLogs       AuditLog[]
+  announcements   Announcement[]
 
   // Admin Invitation (管理者メール招待)
   adminInvitationsSent     AdminInvitation[] @relation("AdminInvitationInvitedBy")
@@ -1589,4 +1590,63 @@ model CharacterImage {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("character_images")
+}
+
+// =====================================================================
+// Announcements (お知らせ配信 — サイト内表示 + 一斉メール送信)
+// =====================================================================
+
+enum AnnouncementAudience {
+  ALL // 全ユーザー (未登録含む、公開ページに表示)
+  MEMBERS // 会員のみ (ログインユーザー全体)
+  PREMIUM // PREMIUM プラン会員のみ
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// メール一斉送信の進行状況。
+/// PUBLISHED かつ sendEmail=true の場合のみメール送信が発生する。
+enum AnnouncementEmailStatus {
+  NOT_REQUESTED // メール配信を希望しない (サイト内表示のみ)
+  PENDING // 配信対象を確定し送信待ち (キュー投入直後)
+  SENDING // 送信処理中 (バッチをまたいで送信中)
+  COMPLETED // 全対象への送信 (成功/失敗判定含む) が完了
+  FAILED // 送信処理自体が異常終了した (リトライ要)
+}
+
+model Announcement {
+  id      String                 @id @default(uuid()) @db.Uuid
+  title   String
+  body    String
+  audience AnnouncementAudience  @default(ALL)
+  status  AnnouncementStatus     @default(DRAFT)
+
+  // --- メール一斉送信 ---
+  /// 公開時にメールも送信するか (サイト内表示のみにしたい場合は false)
+  sendEmail          Boolean                 @default(false) @map("send_email")
+  emailStatus         AnnouncementEmailStatus @default(NOT_REQUESTED) @map("email_status")
+  /// 送信対象として確定した人数 (キュー投入時にスナップショット)
+  emailRecipientCount Int?                    @map("email_recipient_count")
+  /// 送信に成功した人数 (完了後に確定)
+  emailSentCount      Int?                    @map("email_sent_count")
+  /// 送信に失敗した人数
+  emailFailedCount    Int?                    @map("email_failed_count")
+  emailStartedAt      DateTime?               @map("email_started_at")
+  emailCompletedAt    DateTime?               @map("email_completed_at")
+  /// 直近のエラー内容 (FAILED 時の調査用)
+  emailError          String?                 @map("email_error")
+
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  authorId String? @map("author_id") @db.Uuid
+  author   User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt])
+  @@index([emailStatus])
+  @@map("announcements")
 }

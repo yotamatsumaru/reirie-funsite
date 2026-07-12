@@ -10,7 +10,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { auth } from '@/auth';
-import { listAnnouncements } from '@/lib/demo-store';
+import { listAnnouncements } from '@/lib/announcements';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -20,17 +20,20 @@ export const metadata: Metadata = {
 };
 export const dynamic = 'force-dynamic';
 
-const AUDIENCE_LABELS = {
+const AUDIENCE_LABELS: Record<'ALL' | 'MEMBERS' | 'PREMIUM', string> = {
   ALL: '全員',
   MEMBERS: '会員',
   PREMIUM: 'PREMIUM',
-} as const;
+};
 
-const AUDIENCE_TONES = {
+const AUDIENCE_TONES: Record<
+  'ALL' | 'MEMBERS' | 'PREMIUM',
+  'gray' | 'brand' | 'success' | 'warning' | 'danger' | 'info'
+> = {
   ALL: 'info',
   MEMBERS: 'brand',
   PREMIUM: 'warning',
-} as const;
+};
 
 function formatDate(d: Date | null): string {
   if (!d) return '';
@@ -47,7 +50,7 @@ export default async function NoticesIndexPage() {
   const isLoggedIn = !!session?.user?.id;
 
   // PUBLISHED のみ、新しい順
-  const all = listAnnouncements().filter((a) => a.status === 'PUBLISHED');
+  const all = (await listAnnouncements()).filter((a) => a.status === 'PUBLISHED');
 
   // 閲覧可否のフィルタリング
   const visible = all.filter((a) => {

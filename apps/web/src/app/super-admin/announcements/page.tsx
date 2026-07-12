@@ -8,7 +8,7 @@
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { listAnnouncements } from '@/lib/demo-store';
+import { listAnnouncements } from '@/lib/announcements';
 import { requireSuperAdmin } from '@/auth';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementRowActions } from './announcement-row-actions';
@@ -31,6 +31,27 @@ const AUDIENCE_TONES: Record<
   PREMIUM: 'warning',
 };
 
+type EmailStatus = 'NOT_REQUESTED' | 'PENDING' | 'SENDING' | 'COMPLETED' | 'FAILED';
+
+const EMAIL_STATUS_LABELS: Record<EmailStatus, string> = {
+  NOT_REQUESTED: 'メール送信なし',
+  PENDING: '送信待ち',
+  SENDING: '送信中',
+  COMPLETED: '送信完了',
+  FAILED: '送信失敗',
+};
+
+const EMAIL_STATUS_TONES: Record<
+  EmailStatus,
+  'gray' | 'brand' | 'success' | 'warning' | 'danger' | 'info'
+> = {
+  NOT_REQUESTED: 'gray',
+  PENDING: 'warning',
+  SENDING: 'info',
+  COMPLETED: 'success',
+  FAILED: 'danger',
+};
+
 function formatDateTime(d: Date | null): string {
   if (!d) return '—';
   return new Intl.DateTimeFormat('ja-JP', {
@@ -45,7 +66,7 @@ function formatDateTime(d: Date | null): string {
 export default async function SuperAdminAnnouncementsPage() {
   await requireSuperAdmin();
 
-  const all = listAnnouncements();
+  const all = await listAnnouncements();
   const published = all.filter((a) => a.status === 'PUBLISHED');
   const drafts = all.filter((a) => a.status === 'DRAFT');
 
@@ -134,6 +155,11 @@ export default async function SuperAdminAnnouncementsPage() {
                         <Badge tone={AUDIENCE_TONES[a.audience]}>
                           {AUDIENCE_LABELS[a.audience]}
                         </Badge>
+                        {a.sendEmail && (
+                          <Badge tone={EMAIL_STATUS_TONES[a.emailStatus]}>
+                            ✉️ {EMAIL_STATUS_LABELS[a.emailStatus]}
+                          </Badge>
+                        )}
                         <p className="text-base font-semibold text-slate-900">
                           {a.title}
                         </p>
@@ -154,6 +180,26 @@ export default async function SuperAdminAnnouncementsPage() {
                           </span>
                         )}
                       </div>
+                      {a.sendEmail && a.emailStatus !== 'NOT_REQUESTED' && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          配信対象: {a.emailRecipientCount ?? '—'} 件
+                          {(a.emailStatus === 'COMPLETED' || a.emailStatus === 'SENDING') && (
+                            <>
+                              {' '}
+                              / 成功: {a.emailSentCount ?? 0} 件
+                              {(a.emailFailedCount ?? 0) > 0 && (
+                                <span className="text-rose-600">
+                                  {' '}
+                                  / 失敗: {a.emailFailedCount} 件
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {a.emailStatus === 'FAILED' && a.emailError && (
+                            <span className="text-rose-600"> / エラー: {a.emailError}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     <div className="shrink-0">
                       <AnnouncementRowActions
