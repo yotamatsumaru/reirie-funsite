@@ -8,17 +8,19 @@
  * の表示画像を、コード変更・再デプロイ不要で差し替えられるようにする。
  *
  * form fields (POST):
- *   slot: string (必須, CHARACTER_IMAGE_SLOTS のいずれか)
- *   file: File   (必須, 画像)
+ *   slot: string    (必須, CHARACTER_IMAGE_SLOTS のいずれか)
+ *   variant: number (任意, 1〜CHARACTER_IMAGE_VARIANTS_PER_SLOT。未指定は 1)
+ *   file: File      (必須, 画像)
  *
  * query/body (DELETE):
- *   ?slot=... または JSON { slot }
+ *   ?slot=...&variant=... または JSON { slot, variant }
  */
 import { NextResponse } from 'next/server';
 import {
   ALLOWED_CHARACTER_IMAGE_TYPES,
   MAX_CHARACTER_IMAGE_BYTES,
   isCharacterImageSlot,
+  isCharacterImageVariant,
 } from '@idol/shared';
 import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
@@ -48,6 +50,13 @@ export const POST = handle(async (req: Request) => {
     throw errors.badRequest('ポーズ (slot) が不正です');
   }
 
+  // variant (パターン番号)。未指定は 1 として扱う (後方互換)。
+  const variantRaw = form.get('variant');
+  const variant = variantRaw == null || variantRaw === '' ? 1 : Number(variantRaw);
+  if (!isCharacterImageVariant(variant)) {
+    throw errors.badRequest('パターン番号 (variant) が不正です');
+  }
+
   const file = form.get('file');
   if (!(file instanceof File)) throw errors.badRequest('画像ファイル (file) が必要です');
 
@@ -67,6 +76,7 @@ export const POST = handle(async (req: Request) => {
 
   const stored = await saveCharacterImage({
     slot,
+    variant,
     bytes,
     contentType: file.type,
     ext,
@@ -76,8 +86,8 @@ export const POST = handle(async (req: Request) => {
   await logAudit({
     userId: session.user.id,
     action: 'setting.character_image_upload',
-    resource: `character-image:${slot}`,
-    metadata: { slot, storage: stored.storage, size: file.size, contentType: file.type },
+    resource: `character-image:${slot}:${variant}`,
+    metadata: { slot, variant, storage: stored.storage, size: file.size, contentType: file.type },
   });
 
   return NextResponse.json({ ok: true, item: stored }, { status: 201 });
@@ -88,21 +98,30 @@ export const DELETE = handle(async (req: Request) => {
 
   const url = new URL(req.url);
   let slot = url.searchParams.get('slot');
+  let variantRaw: string | number | null = url.searchParams.get('variant');
   if (!slot) {
     const body = await req.json().catch(() => null);
     if (body && typeof body.slot === 'string') slot = body.slot;
+    if (body && (typeof body.variant === 'number' || typeof body.variant === 'string')) {
+      variantRaw = body.variant;
+    }
   }
   if (!slot || !isCharacterImageSlot(slot)) {
     throw errors.badRequest('ポーズ (slot) が不正です');
   }
+  // variant 未指定は 1 として扱う (後方互換)。
+  const variant = variantRaw == null || variantRaw === '' ? 1 : Number(variantRaw);
+  if (!isCharacterImageVariant(variant)) {
+    throw errors.badRequest('パターン番号 (variant) が不正です');
+  }
 
-  await deleteCharacterImage(slot);
+  await deleteCharacterImage(slot, variant);
 
   await logAudit({
     userId: session.user.id,
     action: 'setting.character_image_delete',
-    resource: `character-image:${slot}`,
-    metadata: { slot },
+    resource: `character-image:${slot}:${variant}`,
+    metadata: { slot, variant },
   });
 
   return NextResponse.json({ ok: true });

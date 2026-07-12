@@ -3,15 +3,9 @@
  */
 import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { getAcchiWinSettings, getAcchiRewardBonusSettings } from '@/lib/app-setting';
-import { listGameAudio } from '@/lib/game-audio';
-import { listCharacterImages } from '@/lib/character-image';
-import { AcchiSettingsClient } from './acchi-settings-client';
-import { AcchiRewardBonusClient } from './acchi-reward-bonus-client';
-import { GameAudioClient, type GameAudioItem } from './game-audio-client';
-import { CharacterImageClient, type CharacterImageItem } from './character-image-client';
 
 export const metadata: Metadata = { title: 'ゲーム経済 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -43,41 +37,13 @@ type Item = { id: string; slug: string; name: string; priceJpy: number };
 type Character = { id: string; name: string; slug: string };
 
 export default async function SuperAdminGamePage() {
-  const [
-    purchases,
-    progress,
-    scenarios,
-    items,
-    characters,
-    acchiSettings,
-    acchiRewardBonusSettings,
-    gameAudio,
-    characterImages,
-  ] = await Promise.all([
+  const [purchases, progress, scenarios, items, characters] = await Promise.all([
     prisma.playerPurchase.findMany({}),
     prisma.playerProgress.findMany({}),
     prisma.gameScenario.findMany({}),
     prisma.gameItem.findMany({}),
     prisma.gameCharacter.findMany({}),
-    getAcchiWinSettings(),
-    getAcchiRewardBonusSettings(),
-    listGameAudio(),
-    listCharacterImages(),
   ]);
-  const gameAudioItems: GameAudioItem[] = gameAudio.map((a) => ({
-    slot: a.slot,
-    url: a.url,
-    fileName: a.fileName,
-    sizeBytes: a.sizeBytes,
-    updatedAt: a.updatedAt.toISOString(),
-  }));
-  const characterImageItems: CharacterImageItem[] = characterImages.map((a) => ({
-    slot: a.slot,
-    url: a.url,
-    fileName: a.fileName,
-    sizeBytes: a.sizeBytes,
-    updatedAt: a.updatedAt.toISOString(),
-  }));
   const purchasesT = purchases as unknown as Purchase[];
   const progressT = progress as unknown as Progress[];
   const scenariosT = scenarios as unknown as Scenario[];
@@ -139,11 +105,19 @@ export default async function SuperAdminGamePage() {
 
   return (
     <main>
-      <header className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ゲーム経済</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          恋愛 ADV の DLC 売上・アイテム消費・プレイヤー統計
-        </p>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ゲーム経済</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            恋愛 ADV の DLC 売上・アイテム消費・プレイヤー統計
+          </p>
+        </div>
+        <Link
+          href="/super-admin/game-settings"
+          className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          ゲーム設定を開く →
+        </Link>
       </header>
 
       {/* KPI */}
@@ -154,18 +128,6 @@ export default async function SuperAdminGamePage() {
         <Kpi label="購入者数" value={`${uniqueBuyers}名`} sub="ユニーク" accent="rose" />
         <Kpi label="プレイヤー" value={`${activePlayers}名`} sub="進捗あり" accent="amber" />
       </section>
-
-      {/* あっち向いてホイ 勝率設定 */}
-      <AcchiSettingsClient initial={acchiSettings} />
-
-      {/* あっち向いてホイ 勝利特典ポイントボーナス設定 */}
-      <AcchiRewardBonusClient initial={acchiRewardBonusSettings} />
-
-      {/* あっち向いてホイ キャラボイス アップロード */}
-      <GameAudioClient initial={gameAudioItems} />
-
-      {/* あっち向いてホイ キャラクター画像 アップロード */}
-      <CharacterImageClient initial={characterImageItems} />
 
       {/* シナリオ別 */}
       <Card className="mt-6">

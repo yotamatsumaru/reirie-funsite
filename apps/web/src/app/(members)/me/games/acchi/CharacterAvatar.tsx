@@ -16,7 +16,7 @@
  *   up / down / left / right   … あっち向いてホイの横顔
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CharacterImageUrlMap } from '@idol/shared';
 import {
   CHARACTER_IMAGES_ENABLED,
@@ -38,13 +38,24 @@ const FACE_DIRS = new Set<CharacterPose>(['up', 'down', 'left', 'right']);
 
 export function CharacterAvatar({ pose, imageUrls, bob = true, className = '' }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
+
+  // 管理画面で 1 ポーズにつき最大 3 パターンの画像を登録できる。
+  // pose が変わるたびに、その中からランダムで 1 枚を選ぶ。
+  // (pose 依存の useMemo なので、同じ pose の間は同じ画像が保たれ、
+  //  ポーズが切り替わるたびに選び直される。)
+  const dbImageUrl = useMemo(() => {
+    const urls = imageUrls?.[pose];
+    if (!urls || urls.length === 0) return undefined;
+    return urls[Math.floor(Math.random() * urls.length)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pose, imageUrls]);
+
   // pose が変わったら画像エラー状態をリセット
   useEffect(() => {
     setImageFailed(false);
   }, [pose]);
 
   // 優先度: 1) 管理画面アップロード画像 (DB) → 2) 静的ファイル (CHARACTER_IMAGES_ENABLED) → 3) SVG プレースホルダー
-  const dbImageUrl = imageUrls?.[pose];
   const resolvedImageSrc = !imageFailed
     ? dbImageUrl ?? (CHARACTER_IMAGES_ENABLED ? characterImageUrl(pose) : null)
     : null;

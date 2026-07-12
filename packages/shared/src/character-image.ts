@@ -40,6 +40,28 @@ export function isCharacterImageSlot(v: unknown): v is CharacterImageSlot {
   return typeof v === 'string' && (CHARACTER_IMAGE_SLOTS as readonly string[]).includes(v);
 }
 
+/**
+ * 1 つのポーズ (slot) につき登録できる画像パターンの最大数。
+ * ゲーム表示時は、そのポーズに登録されているパターンからランダムに 1 枚が選ばれる。
+ */
+export const CHARACTER_IMAGE_VARIANTS_PER_SLOT = 3;
+
+/** 登録可能なパターン番号の一覧 (例: [1, 2, 3])。 */
+export const CHARACTER_IMAGE_VARIANTS: number[] = Array.from(
+  { length: CHARACTER_IMAGE_VARIANTS_PER_SLOT },
+  (_, i) => i + 1,
+);
+
+/** variant が有効なパターン番号 (1〜CHARACTER_IMAGE_VARIANTS_PER_SLOT) か。 */
+export function isCharacterImageVariant(v: unknown): v is number {
+  return (
+    typeof v === 'number' &&
+    Number.isInteger(v) &&
+    v >= 1 &&
+    v <= CHARACTER_IMAGE_VARIANTS_PER_SLOT
+  );
+}
+
 /** 各スロットのメタ情報 (管理画面表示用)。 */
 export type CharacterImageSlotMeta = {
   slot: CharacterImageSlot;
@@ -92,8 +114,12 @@ export const CHARACTER_IMAGE_SLOT_META: Record<CharacterImageSlot, CharacterImag
   },
 };
 
-/** slot → 公開URL のマップ (未設定スロットは欠落)。 */
-export type CharacterImageUrlMap = Partial<Record<CharacterImageSlot, string>>;
+/**
+ * slot → 公開URL のマップ (未設定スロットは欠落)。
+ * 1 ポーズにつき最大 CHARACTER_IMAGE_VARIANTS_PER_SLOT 枚の URL を配列で保持し、
+ * ゲーム表示時にこの中からランダムに 1 枚が選ばれる。
+ */
+export type CharacterImageUrlMap = Partial<Record<CharacterImageSlot, string[]>>;
 
 /** アップロード可能な画像の MIME → 拡張子。 */
 export const ALLOWED_CHARACTER_IMAGE_TYPES: Record<string, string> = {
