@@ -2,7 +2,7 @@
  * AWS SES ベースの簡易メール送信ヘルパ
  */
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
-import { env } from './env';
+import { env, isPlaceholderSesFrom } from './env';
 
 let _ses: SESClient | null = null;
 function ses(): SESClient {
@@ -20,6 +20,15 @@ export async function sendEmail(params: {
     // eslint-disable-next-line no-console
     console.log('[email][dev]', params);
     return;
+  }
+  // 送信元が未設定 / 検証されていないダミー (no-reply@example.com など) のままだと
+  // SES は必ず MessageRejected を返す。原因が分かりにくいため、送信前に明確なエラーを出す。
+  if (isPlaceholderSesFrom()) {
+    throw new Error(
+      '[email] SES_FROM_EMAIL が未設定、または検証されていないダミーアドレス ' +
+        `(${env.ses.fromEmail}) のままです。` +
+        'AWS SES で検証済みの送信元アドレス (またはドメイン) を SES_FROM_EMAIL に設定してください。',
+    );
   }
   await ses().send(
     new SendEmailCommand({

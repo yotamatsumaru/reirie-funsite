@@ -7,6 +7,12 @@ function optional(name: string): string | undefined {
 }
 
 const INSECURE_DEFAULT_SECRET = 'dev-insecure-secret-change-me';
+/**
+ * SES 送信元アドレスの開発用デフォルト値 (SES 未検証のダミードメイン)。
+ * 本番でこの値のまま送信すると SES が MessageRejected を返すため、
+ * isPlaceholderSesFrom() で検出して起動時に警告し、送信前ガードで明確なエラーを出す。
+ */
+const INSECURE_DEFAULT_SES_FROM = 'no-reply@example.com';
 const isProductionEnv = process.env.NODE_ENV === 'production';
 
 export const env = {
@@ -98,7 +104,7 @@ export const env = {
   },
 
   ses: {
-    fromEmail: optional('SES_FROM_EMAIL') ?? 'no-reply@example.com',
+    fromEmail: optional('SES_FROM_EMAIL') ?? INSECURE_DEFAULT_SES_FROM,
   },
 
   lawson: {
@@ -115,6 +121,17 @@ export const env = {
     secret: optional('CRON_SECRET') ?? '',
   },
 };
+
+/**
+ * SES 送信元アドレスが未設定 / 開発用ダミー (no-reply@example.com など
+ * 検証されていない example.com ドメイン) のままかどうかを判定する。
+ * true の場合、本番で SES 送信すると必ず MessageRejected になる。
+ * メール送信前のガード (lib/email.ts) と起動時警告で利用する。
+ */
+export function isPlaceholderSesFrom(): boolean {
+  const v = optional('SES_FROM_EMAIL');
+  return !v || v === INSECURE_DEFAULT_SES_FROM || /@example\.com$/i.test(v);
+}
 
 /**
  * 本番環境で開発用デフォルトシークレットのまま起動していないかを検証する。
