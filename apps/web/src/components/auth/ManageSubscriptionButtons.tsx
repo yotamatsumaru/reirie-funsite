@@ -10,16 +10,25 @@ export function ManageSubscriptionButtons({ hasActiveSub }: { hasActiveSub: bool
   const subscribe = async (plan: 'STANDARD' | 'PREMIUM', interval: 'MONTH' | 'YEAR') => {
     setLoading(`${plan}-${interval}`);
     try {
+      // API (CreateCheckoutSessionSchema) は plan / interval / successUrl / cancelUrl を要求する。
+      // フィールド名や successUrl/cancelUrl が欠けると「入力値が不正です」になるため注意。
+      const baseUrl = window.location.origin;
       const res = await fetch('/api/subscriptions/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ planType: plan, billingInterval: interval }),
+        body: JSON.stringify({
+          plan,
+          interval,
+          successUrl: `${baseUrl}/me?subscribed=1`,
+          cancelUrl: `${baseUrl}/me?canceled=1`,
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error?.message ?? 'チェックアウトに失敗しました');
       }
       const j = await res.json();
+      if (!j.url) throw new Error('Stripe URL が返ってきませんでした');
       window.location.href = j.url;
     } catch (e) {
       toast.error((e as Error).message);
