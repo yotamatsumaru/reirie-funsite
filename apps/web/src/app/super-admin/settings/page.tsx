@@ -5,6 +5,7 @@
  * デモモードでは demo-store にメモリ保存。
  */
 import type { Metadata } from 'next';
+import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { listSettings } from '@/lib/demo-store';
@@ -15,6 +16,7 @@ import { isStripeTestCredentialsUsable } from '@idol/shared';
 import { SettingRow } from './setting-row';
 import { SiteImageClient, type SiteImageItem } from './site-image-client';
 import { StripeModeClient } from './stripe-mode-client';
+import { TotpSetupClient } from './totp-setup-client';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -41,13 +43,24 @@ const CATEGORY_META: Record<
 };
 
 export default async function SuperAdminSettingsPage() {
-  await requireSuperAdmin();
+  const session = await requireSuperAdmin();
 
   const settings = listSettings();
   const siteImages = await listSiteImages();
   const stripeMode = await getStripeMode();
   const stripeTestCredentials = await getStripeTestCredentials();
   const stripeTestCredentialsUsable = isStripeTestCredentialsUsable(stripeTestCredentials);
+
+  // TOTP (2段階認証) 現在の状態 — SUPER_ADMIN 自身の設定なので session.user.id で取得
+  const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const totpStatus = {
+    enabled: !!currentUser?.totpEnabled,
+    pendingSetup: !currentUser?.totpEnabled && !!currentUser?.totpSecret,
+    verifiedAt: currentUser?.totpVerifiedAt?.toISOString() ?? null,
+    backupCodesRemaining: Array.isArray(currentUser?.totpBackupCodes)
+      ? currentUser.totpBackupCodes.length
+      : 0,
+  };
   const siteImageItems: SiteImageItem[] = siteImages.map((img) => ({
     slot: img.slot,
     url: img.url,
@@ -118,6 +131,9 @@ export default async function SuperAdminSettingsPage() {
         initialCredentials={stripeTestCredentials}
         initialUsable={stripeTestCredentialsUsable}
       />
+
+      {/* TOTP (Google Authenticator) 2段階認証 — SUPER_ADMIN 限定 */}
+      <TotpSetupClient initialStatus={totpStatus} />
 
       {/* カテゴリ別 */}
       {(['system', 'features', 'pricing'] as const).map((category) => {
