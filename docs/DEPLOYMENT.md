@@ -284,13 +284,21 @@ aws ssm send-command \
 
 ### 6-3. DB マイグレーション確認
 
-user-data.sh の中で `pnpm --filter @idol/db prisma:migrate:deploy` が実行されています。失敗していたら EC2 上で再実行:
+user-data.sh の中で `pnpm --filter @idol/db prisma:migrate:deploy` が実行されています
+(通常運用では `main` への push で GitHub Actions → SSM 経由の `deploy/deploy.sh` が同じコマンドを
+自動実行するため、追加のお知らせ配信 (`announcements` テーブル) 等の新規マイグレーションも
+デプロイ時に自動適用される)。失敗していたら EC2 上で再実行:
 
 ```bash
 # EC2 上
 cd /home/ec2-user/app
 pnpm --filter @idol/db prisma:migrate:deploy
 ```
+
+> `_prisma_migrations` 管理テーブルが本番RDSにまだ存在しない (過去に `db push` 運用だった) 場合、
+> `migrate deploy` は最初の未適用マイグレーションから順に再生しようとしてエラーになることがある。
+> 個別マイグレーションを安全に反映する手順は `packages/db/prisma/migrations/README.md` を参照
+> (SQL直接実行 + `prisma migrate resolve --applied`)。
 
 ### 6-4. ブラウザで確認
 
