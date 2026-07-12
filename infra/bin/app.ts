@@ -12,6 +12,8 @@
  *    6. WebhookStack        (depends on Network, Database)
  *    7. Ec2Stack            (depends on Network, Database, Storage, Email)
  *    8. MonitoringStack     (depends on Ec2, Database, Webhook)
+ *    9. DnsStack            (独立, us-east-1固定。domainName が context で指定された場合のみ作成)
+ *   10. SiteCdnStack        (depends on Ec2Stack, DnsStack。domainName 指定時のみ作成)
  */
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -24,6 +26,8 @@ import { LiveStack } from '../lib/live-stack';
 import { WebhookStack } from '../lib/webhook-stack';
 import { Ec2Stack } from '../lib/ec2-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
+import { DnsStack } from '../lib/dns-stack';
+import { SiteCdnStack } from '../lib/site-cdn-stack';
 
 const app = new cdk.App();
 const config = loadConfig(app);
@@ -137,6 +141,38 @@ const monitoring = new MonitoringStack(app, `${stackPrefix}-monitoring`, {
 monitoring.addDependency(ec2Stack);
 monitoring.addDependency(database);
 monitoring.addDependency(webhook);
+
+// 9-10. DNS + Site CDN (domainName が context で指定された場合のみ作成)
+// 例: cdk deploy '*-dns' '*-site-cdn' --context domainName=reirie.com
+if (config.domainName) {
+  // ACM 証明書は CloudFront にアタッチするため必ず us-east-1 でなければならない。
+  // メインの env.region (ap-northeast-1) とは別リージョンにスタックを作成し、
+  // crossRegionReferences で SiteCdnStack (ap-northeast-1) から参照する。
+  const usEast1Env: cdk.Environment = {
+    account: config.account ?? process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-east-1',
+  };
+  const dns = new DnsStack(app, `${stackPrefix}-dns`, {
+    env: usEast1Env,
+    crossRegionReferences: true,
+    config,
+    domainName: config.domainName,
+    description: 'Route 53 Hosted Zone + ACM Certificate (us-east-1, for CloudFront)',
+  });
+
+  const siteCdn = new SiteCdnStack(app, `${stackPrefix}-site-cdn`, {
+    env,
+    crossRegionReferences: true,
+    config,
+    domainName: config.domainName,
+    hostedZone: dns.hostedZone,
+    certificate: dns.certificate,
+    originIp: ec2Stack.elasticIp.ref,
+    description: 'CloudFront distribution (main domain) + Route 53 ALIAS records',
+  });
+  siteCdn.addDependency(dns);
+  siteCdn.addDependency(ec2Stack);
+}
 
 // 共通タグ (アプリ全体)
 cdk.Tags.of(app).add('Application', config.appName);

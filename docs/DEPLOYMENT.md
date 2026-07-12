@@ -436,6 +436,160 @@ curl -I http://reirie.com/           # 301 → https://reirie.com/ (Cloudflare �
 
 ---
 
+## Step 6.6. ドメイン紐付け (Route 53 + CloudFront、Cloudflare の代替構成)
+
+`reirie.com` は **お名前.com で購入・所有を継続** しつつ、DNS 管理だけを Route 53 に
+委譲し、CloudFront ディストリビューション経由で EC2 (EIP) をオリジンとして配信する構成。
+Step 6.5 (Cloudflare) の代わりにこちらを使う場合の手順。CDK 側の実装
+(`infra/lib/dns-stack.ts` / `infra/lib/site-cdn-stack.ts` / `infra/bin/app.ts`) は
+実装済みで、`config.domainName` (= `cdk.json` の context か `--context domainName=...`)
+が指定されたときだけ `*-dns` / `*-site-cdn` スタックが作られる。
+
+### なぜ Route 53 が必要か (お名前.com の制約)
+
+お名前.com の DNS は **ALIAS/ANAME レコードに対応していない**。CloudFront や CDK の
+`RecordTarget.fromAlias()` が生成する CloudFront ドメイン (`dxxxxxxxxxxxxx.cloudfront.net`)
+は、ルートドメイン (apex, `reirie.com` 自体) に対して **CNAME を張れない** ため、
+お名前.com のネームサーバーのままではルートドメインを CloudFront に紐付けられない。
+Route 53 の ALIAS レコードはこの制約を回避できる AWS 独自機能のため、DNS 管理のみを
+Route 53 に移行する。**ドメインの購入・更新契約自体はお名前.com のまま変更不要。**
+
+### アーキテクチャ概要
+
+```
+ブラウザ
+  │ https://reirie.com/ , https://www.reirie.com/
+  ▼
+CloudFront (SiteCdnStack, ACM証明書 us-east-1)
+  │ Host ヘッダーを origin-app.reirie.com に書き換えて転送
+  │ CloudFront Function (viewer-request) が元の Host を
+  │ X-Forwarded-Host ヘッダーにコピーしてから転送
+  ▼
+Route 53 内部 A レコード: origin-app.reirie.com → EC2 EIP (52.196.151.93)
+  ▼
+EC2 (nginx) : X-Forwarded-Host を受け取り Next.js (Auth.js trustHost) に橋渡し
+```
+
+### 6.6-1. Route 53 Hosted Zone + ACM 証明書を作成 (DnsStack, us-east-1)
+
+```bash
+cd infra
+pnpm install   # 初回のみ
+
+# us-east-1 も CDK Bootstrap が必要 (ACM 証明書は CloudFront 用に us-east-1 固定のため)
+npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1
+
+npx cdk deploy 'idol-fansite-dev-dns' --context domainName=reirie.com --require-approval never
+```
+
+- Output `NameServers` (カンマ区切り4件、例: `ns-xxx.awsdns-xx.com, ...`) をメモする
+- Output `CertificateArn` / `HostedZoneId` も後続の確認用にメモ (Output は CloudFormation
+  コンソール、または `aws cloudformation describe-stacks --stack-name idol-fansite-dev-dns` でも確認可能)
+
+> ⚠️ この時点では ACM 証明書はまだ **Pending validation** のままで良い
+> (Route 53 に DNS 検証レコードが自動作成されるが、ネームサーバーがまだ
+> お名前.com を向いているため外部から解決できず、検証は完了しない)。
+
+### 6.6-2. お名前.com でネームサーバーを Route 53 に変更
+
+1. お名前.com Navi にログイン → **ドメイン設定** → **ネームサーバーの変更**
+2. 対象ドメイン `reirie.com` を選択 → **その他のネームサーバーを使う**
+3. 6.6-1 で取得した Route 53 の **4つのネームサーバー** をすべて入力
+   (お名前.com は4つ入力欄があるので、Route 53 が返す4件をそのまま入れる)
+4. 設定確認 → 反映 (反映まで数分〜24時間程度かかる場合がある。DNS TTL に依存)
+
+反映確認:
+
+```bash
+dig NS reirie.com +short
+# → Route 53 の4つのネームサーバーが返ってくれば OK
+```
+
+反映されると、Route 53 が自動で作った ACM の DNS 検証レコードが外部から解決できるようになり、
+数分〜数十分で ACM 証明書のステータスが **Issued** に変わる (ACM コンソール、または
+`aws acm describe-certificate --certificate-arn <ARN> --region us-east-1 --query 'Certificate.Status'` で確認)。
+
+### 6.6-3. CloudFront ディストリビューションを作成 (SiteCdnStack)
+
+ACM 証明書が **Issued** になったことを確認してから実行する
+(Pending のまま `*-site-cdn` を deploy すると CloudFront の作成でエラーになる):
+
+```bash
+npx cdk deploy 'idol-fansite-dev-site-cdn' --context domainName=reirie.com --require-approval never
+```
+
+- Output `DistributionDomainName` (例: `dxxxxxxxxxxxxx.cloudfront.net`) をメモ
+- Output `OriginHostname` (`origin-app.reirie.com`) — CloudFront が EC2 に接続する際に使う内部ホスト名。
+  このスタックが Route 53 に A レコードを作成済みなので追加作業は不要
+- 同時に `reirie.com` / `www.reirie.com` → CloudFront への ALIAS (A) レコードも Route 53 に作成される
+
+このコマンドは `crossRegionReferences: true` により us-east-1 (`*-dns`) の証明書/ホストゾーンを
+ap-northeast-1 (`*-site-cdn`) から自動で参照する。証明書 ARN を手動でコピーする必要はない。
+
+### 6.6-4. EC2 (nginx) 側で `origin-app.reirie.com` 宛のリクエストを受け付けられるか確認
+
+- CloudFront は EC2 のオリジンに対して **HTTPS (443)** で接続する設定
+  (`OriginProtocolPolicy.HTTPS_ONLY`) になっているため、EC2 側に有効な TLS 証明書が
+  443 で listen されている必要がある。Step 6.5-3〜6.5-5 (Cloudflare Origin CA 証明書) を
+  実施していない場合は、**Let's Encrypt など何らかの証明書で 443 を有効化しておくこと**。
+  Cloudflare を併用しない構成 (CloudFront のみ) の場合、`origin-app.reirie.com` に対する
+  証明書としては自己署名証明書でも良い場合がある
+  (CloudFront のオリジン検証を `originSslProtocols` のみに絞れば CA 検証は行われないため。
+  ただし将来的に検証を厳格化する場合は Let's Encrypt 等の正規証明書を推奨)。
+- nginx は `X-Forwarded-Host` ヘッダーを Next.js アプリへ橋渡しする設定が
+  `deploy/user-data.sh` / `deploy/setup-tls.sh` に実装済み (このコミットで追加)。
+  既存 EC2 に反映する場合は Step 6.5-5 と同様に `setup-tls.sh` を実行するか、
+  UserData を変更してインスタンスを再作成する。
+
+### 6.6-5. APP_BASE_URL とAuth.js の trustHost を確認
+
+```bash
+aws ssm put-parameter \
+  --name "/idol-fansite/dev/app/base-url" \
+  --type String \
+  --value "https://reirie.com" \
+  --overwrite
+
+aws ssm send-command \
+  --document-name "AWS-RunShellScript" \
+  --targets "Key=tag:Application,Values=idol-fansite" \
+  --parameters commands='["sudo -u ec2-user APP_BRANCH=main bash /home/ec2-user/app/deploy/deploy.sh"]'
+```
+
+`apps/web/src/auth.ts` の `trustHost` は `AUTH_TRUST_HOST=true` (本番) で有効化されており、
+CloudFront Function が転送する `X-Forwarded-Host` (`reirie.com` / `www.reirie.com`) を
+Auth.js がそのまま信頼してコールバック URL 等を組み立てる。EC2 直アクセス時など
+`X-Forwarded-Host` が無い場合は nginx が `$host` にフォールバックする。
+
+### 6.6-6. 動作確認
+
+```bash
+curl -I https://reirie.com/            # 200 OK, CloudFront 経由 (x-cache ヘッダ等で確認可能)
+curl -I https://www.reirie.com/        # 200 OK
+curl -I http://reirie.com/             # 301 → https://reirie.com/ (CloudFront の REDIRECT_TO_HTTPS)
+dig reirie.com +short                  # CloudFront の Anycast IP が複数返る
+```
+
+- ブラウザで `https://reirie.com/` にアクセスし、鍵アイコン (ACM 証明書) を確認 ✅
+- CloudFront のキャッシュ挙動: `/_next/static/*` は `CACHING_OPTIMIZED` (長期キャッシュ)、
+  それ以外は `CACHING_DISABLED` (毎回オリジンへ、Cookie ベースのログイン状態を反映するため) ✅
+- デプロイ直後は CloudFront の初回配信反映まで **15〜30分程度** かかる場合がある
+
+### トラブルシューティング (Route 53 / CloudFront)
+
+- `cdk deploy '*-site-cdn'` が ACM 証明書エラーで失敗する
+  → 6.6-2 のネームサーバー反映が完了していない、または ACM 証明書がまだ `Pending validation`。
+    `aws acm describe-certificate ... --query 'Certificate.Status'` で `ISSUED` になるまで待つ
+- CloudFront が `502/504` を返す
+  → オリジン (`origin-app.reirie.com` = EC2 EIP) の 443 が閉じている、または nginx が
+    落ちている。`HTTPS_ONLY` 設定のため EC2 側で 443 (TLS) が必須 (80 のみでは動かない)
+- ログイン後にリダイレクトが `origin-app.reirie.com` になってしまう
+  → CloudFront Function (`ForwardHostFunction`) が正しく関連付けられているか、
+    nginx の `X-Forwarded-Host` 転送 (`deploy/user-data.sh`) が反映されているか、
+    `AUTH_TRUST_HOST=true` が EC2 の `.env.production` に設定されているかを確認
+
+---
+
 ## Step 7. (任意) GitHub Actions による自動デプロイの有効化
 
 main に push したら自動デプロイされる設定。

@@ -14,6 +14,8 @@
 | 6 | `*-webhook` | Stripe Webhook Lambda, Function URL, VPC内配置, SSM 参照 | network, database |
 | 7 | `*-ec2` | EC2 (Amazon Linux 2023) + EIP + IAM Role + UserData | network, database, storage, email |
 | 8 | `*-monitoring` | CloudWatch Dashboard, Alarms (EC2/RDS/Lambda), SNS Topic | ec2, database, webhook |
+| 9 | `*-dns` | Route 53 Public Hosted Zone + ACM 証明書 (us-east-1固定, DNS検証) | - (`domainName` context 指定時のみ作成) |
+| 10 | `*-site-cdn` | CloudFront (メインドメイン, EC2オリジン) + Route 53 ALIAS/A レコード | dns, ec2 (`domainName` context 指定時のみ作成) |
 
 ## 環境
 
@@ -25,7 +27,7 @@ context (`cdk.json` or `--context`) で切替:
 | `envName` | `dev` / `stg` / `prod` |
 | `region` | `ap-northeast-1` |
 | `account` | AWS Account ID |
-| `domainName` | `example.com` (Cloudflare 管理) |
+| `domainName` | `reirie.com` — 指定すると `*-dns` / `*-site-cdn` (Route 53 + CloudFront) スタックが追加で作られる。未指定なら DNS/CDN は Cloudflare 側で手動管理 (docs/DEPLOYMENT.md Step 6.5) |
 | `sendingDomain` | SES 送信元ドメイン |
 | `cloudfrontPublicKeyPem` | VOD signed URL 用の公開鍵 (PEM) |
 | `ivsPlaybackPublicKeyPem` | IVS Playback signed URL 用 EC 公開鍵 (PEM) |
@@ -97,6 +99,13 @@ pnpm run deploy:webhook
 pnpm run deploy:ec2
 pnpm run deploy:monitoring
 
+# domainName を context で指定した場合のみ (Route 53 + CloudFront でドメイン紐付け)
+# 事前に us-east-1 も cdk bootstrap しておくこと (ACM 証明書が us-east-1 固定のため)
+# 詳細手順は docs/DEPLOYMENT.md の Step 6.6 を参照
+pnpm run deploy:dns --context domainName=reirie.com
+# → お名前.com 側でネームサーバーを Route 53 に変更し、ACM 証明書が Issued になるまで待つ
+pnpm run deploy:site-cdn --context domainName=reirie.com
+
 # 2回目以降は一括
 pnpm run deploy
 ```
@@ -109,7 +118,10 @@ pnpm run deploy
 4. **SES**: `sendingDomain` の DKIM CNAME を Cloudflare に追加し検証完了
 5. **Cloudflare Full/Strict HTTPS**: Origin CA 証明書を発行 → `/<app>/<env>/tls/cert-pem` `/tls/key-pem` に SSM 登録 →
    EC2 上で `deploy/setup-tls.sh` を実行 (443 を有効化)。詳細手順は `docs/DEPLOYMENT.md` の Step 6.5 を参照
-6. **EC2**: SSM Session Manager で接続し `pm2 status` を確認
+6. **(Cloudflare の代わりに Route 53 + CloudFront を使う場合)**: `domainName` context を指定して
+   `*-dns` / `*-site-cdn` をデプロイし、お名前.com のネームサーバーを Route 53 に変更。
+   詳細手順は `docs/DEPLOYMENT.md` の Step 6.6 を参照
+7. **EC2**: SSM Session Manager で接続し `pm2 status` を確認
 
 ```bash
 # SSM Session Manager で EC2 に接続
@@ -133,6 +145,10 @@ RDS は `RemovalPolicy.SNAPSHOT` でスナップショット保管。
 
 - **VPC 構成**: NAT × 2 (prod) で AZ 障害耐性。dev は NAT × 1 でコスト最小化。
 - **Stripe Webhook 分離**: EC2 障害時も Webhook を取りこぼさないよう Lambda 化 (Q3.B 採用)。
-- **Cloudflare 連携**: ドメイン/SSL は Cloudflare で完結。CDK は IP/ドメインを Output に出すのみ。
+- **Cloudflare 連携**: ドメイン/SSL は Cloudflare で完結 (Step 6.5)。CDK は IP/ドメインを Output に出すのみ。
+- **Route 53 + CloudFront 連携 (代替構成)**: `domainName` context 指定時のみ `*-dns` (us-east-1, ACM証明書)
+  / `*-site-cdn` (メインリージョン, CloudFront) を作成。`crossRegionReferences: true` で
+  us-east-1 の証明書/HostedZone を ap-northeast-1 側から参照。お名前.com は ALIAS(ANAME) 非対応のため、
+  apex ドメインを CloudFront に紐付けるには Route 53 への DNS 移管が必要 (Step 6.6)。
 - **Secrets 管理**: 機密値は **すべて SSM SecureString**。CDK code には埋め込まない。
 - **リージョン**: 全リソース `ap-northeast-1`。CloudFront のメトリクスのみ `us-east-1` 経由で取得。
