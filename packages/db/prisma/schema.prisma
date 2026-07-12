@@ -312,6 +312,14 @@ model User {
   // 連続失敗回数が MAX_FAILED_LOGIN_ATTEMPTS に達すると lockedUntil を設定しログインを一時ブロックする。
   failedLoginAttempts  Int       @default(0) @map("failed_login_attempts")
   lockedUntil          DateTime? @map("locked_until")
+  // TOTP (Google Authenticator 等) による2段階認証。SUPER_ADMIN 限定機能。
+  //  - totpSecret は AES-256-GCM で暗号化して保存 (平文Base32を直接保存しない)
+  //  - totpEnabled が true になるまでは未確定 (セットアップ中の仮登録状態)
+  //  - totpBackupCodes はワンタイムのリカバリコード (scrypt ハッシュ済み) の配列。1つ使うたびに配列から取り除く
+  totpSecret           String?   @map("totp_secret")
+  totpEnabled          Boolean   @default(false) @map("totp_enabled")
+  totpVerifiedAt       DateTime? @map("totp_verified_at")
+  totpBackupCodes      String[]  @default([]) @map("totp_backup_codes")
   deletedAt            DateTime? @map("deleted_at")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")

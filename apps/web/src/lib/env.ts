@@ -32,6 +32,16 @@ export const env = {
   },
 
   /**
+   * TOTP (Google Authenticator 等) の2段階認証で使う、シークレット暗号化用の鍵。
+   * 未設定時は AUTH_SECRET を流用する (別管理にしたい場合は TOTP_ENCRYPTION_KEY を設定)。
+   * AES-256-GCM の鍵として scrypt で 32byte に正規化して使う (lib/totp.ts)。
+   */
+  totp: {
+    encryptionKey:
+      optional('TOTP_ENCRYPTION_KEY') ?? optional('AUTH_SECRET') ?? INSECURE_DEFAULT_SECRET,
+  },
+
+  /**
    * モバイル / ネイティブ (Unity 等) 向け API トークン設定。
    * Web の Cookie セッションとは別に、Bearer トークンで同じ API を叩けるようにする。
    * 署名鍵は AUTH_SECRET を流用 (別管理にしたい場合は API_TOKEN_SECRET を設定)。

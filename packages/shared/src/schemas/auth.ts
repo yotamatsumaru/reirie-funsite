@@ -47,6 +47,9 @@ export type SignUpInput = z.infer<typeof SignUpSchema>;
 export const SignInSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
+  // TOTP (Google Authenticator) 2段階認証コード。SUPER_ADMIN が totpEnabled の場合のみ必須。
+  // 6桁の数字コード、またはバックアップコード ("XXXX-XXXX-XX" 形式) のいずれかを許容する。
+  totpCode: z.string().min(1).optional(),
 });
 export type SignInInput = z.infer<typeof SignInSchema>;
 

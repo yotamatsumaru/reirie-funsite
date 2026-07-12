@@ -24,7 +24,11 @@ export const POST = handle(async (req: Request) => {
     throw errors.badRequest('メールアドレスとパスワードを正しく指定してください');
   }
 
-  const result = await authenticateCredentials(parsed.data.email, parsed.data.password);
+  const result = await authenticateCredentials(
+    parsed.data.email,
+    parsed.data.password,
+    parsed.data.totpCode,
+  );
   if (!result.ok) {
     if (result.reason === 'ACCOUNT_LOCKED') {
       throw errors.rateLimited(
@@ -33,6 +37,12 @@ export const POST = handle(async (req: Request) => {
     }
     if (result.reason === 'EMAIL_NOT_VERIFIED') {
       throw errors.forbidden('メール認証が完了していません。認証コードを入力してください。');
+    }
+    if (result.reason === 'TOTP_REQUIRED') {
+      throw errors.forbidden('2段階認証コードを入力してください。');
+    }
+    if (result.reason === 'TOTP_INVALID') {
+      throw errors.unauthorized('2段階認証コードが正しくありません');
     }
     // 認証失敗はアカウントの存在を漏らさないため一律 401
     throw errors.unauthorized('メールアドレスまたはパスワードが正しくありません');

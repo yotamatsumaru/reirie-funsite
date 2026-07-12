@@ -57,6 +57,8 @@ interface AppJWT {
 const CredentialsSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
+  // TOTP (Google Authenticator) 2段階認証コード。SUPER_ADMIN が有効化している場合のみ必須。
+  totpCode: z.string().min(1).optional(),
 });
 
 /** メール未認証でログインを試みた場合に、クライアントへ区別可能なエラーコードを渡す */
@@ -67,6 +69,16 @@ class EmailNotVerifiedError extends CredentialsSignin {
 /** ブルートフォース対策でアカウントが一時ロックされている場合に返すエラー */
 class AccountLockedError extends CredentialsSignin {
   code = 'ACCOUNT_LOCKED';
+}
+
+/** TOTP 有効な SUPER_ADMIN が totpCode 未入力でログインを試みた場合 (パスワードは検証済み) */
+class TotpRequiredError extends CredentialsSignin {
+  code = 'TOTP_REQUIRED';
+}
+
+/** TOTP コード / バックアップコードが不正だった場合 */
+class TotpInvalidError extends CredentialsSignin {
+  code = 'TOTP_INVALID';
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -89,6 +101,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         email: { label: 'メールアドレス', type: 'email' },
         password: { label: 'パスワード', type: 'password' },
+        totpCode: { label: '2段階認証コード', type: 'text' },
       },
       authorize: async (raw) => {
         const parsed = CredentialsSchema.safeParse(raw);
@@ -137,12 +150,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           };
         }
 
-        // 認証ロジック (パスワード検証・メール認証チェック・ログインロックアウト) は
+        // 認証ロジック (パスワード検証・メール認証チェック・ログインロックアウト・TOTP) は
         // /api/v1/auth/token (モバイル/API向け) と共通化されている (lib/credentials.ts)。
-        const result = await authenticateCredentials(parsed.data.email, parsed.data.password);
+        const result = await authenticateCredentials(
+          parsed.data.email,
+          parsed.data.password,
+          parsed.data.totpCode,
+        );
         if (!result.ok) {
           if (result.reason === 'ACCOUNT_LOCKED') throw new AccountLockedError();
           if (result.reason === 'EMAIL_NOT_VERIFIED') throw new EmailNotVerifiedError();
+          if (result.reason === 'TOTP_REQUIRED') throw new TotpRequiredError();
+          if (result.reason === 'TOTP_INVALID') throw new TotpInvalidError();
           return null;
         }
 
