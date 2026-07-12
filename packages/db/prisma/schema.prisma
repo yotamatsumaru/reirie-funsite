@@ -320,6 +320,17 @@ model User {
   totpEnabled          Boolean   @default(false) @map("totp_enabled")
   totpVerifiedAt       DateTime? @map("totp_verified_at")
   totpBackupCodes      String[]  @default([]) @map("totp_backup_codes")
+  // 直近ログイン成功時刻。ログイン成功のたびに更新する (authenticateCredentials 内)。
+  // Auth.js は session strategy=jwt のためログイン時にDB書き込みが発生せず、
+  // この列がなければ「最終ログイン」を判定する手段がないため追加。
+  lastLoginAt          DateTime? @map("last_login_at")
+  // BAN (運営による強制退会) された場合の日時 / 理由。
+  // deletedAt はユーザー自己都合の退会でも使われる共通フィールドのため、
+  // 「運営が BAN した」ことを区別して記録するためにこの2列を追加する。
+  // 復元 (BAN解除) 時には bannedAt/banReason は null に戻さずそのまま履歴として残す
+  // (直近の BAN 理由をゴミ箱 UI で確認できるようにするため)。
+  bannedAt             DateTime? @map("banned_at")
+  banReason            String?   @map("ban_reason")
   deletedAt            DateTime? @map("deleted_at")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
@@ -368,6 +379,11 @@ model User {
 
   // Direct Message (REIRIE への DM)
   directMessages DirectMessage[]
+
+  // 運営からの警告通知 (このユーザーが受け取った警告)
+  warningsReceived UserWarning[] @relation("UserWarningTarget")
+  // 運営側で警告を発行した SUPER_ADMIN (発行者としての履歴)
+  warningsIssued   UserWarning[] @relation("UserWarningIssuedBy")
 
   @@index([email])
   @@map("users")
@@ -1520,6 +1536,25 @@ model DirectMessage {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@map("direct_messages")
+}
+
+/// 運営 (SUPER_ADMIN) からファンへの警告通知。
+/// BAN の前段階、あるいは注意喚起として送るもので、メール通知のみ (サイト内表示は行わない)。
+/// 複数回発行可能で、履歴として全件保持する (削除しない)。
+model UserWarning {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  reason     String // 管理者が入力する警告理由・本文 (メール本文にも使用)
+  issuedById String   @map("issued_by_id") @db.Uuid
+  emailSent  Boolean  @default(false) @map("email_sent")
+  emailError String?  @map("email_error")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User @relation("UserWarningTarget", fields: [userId], references: [id], onDelete: Cascade)
+  issuedBy User @relation("UserWarningIssuedBy", fields: [issuedById], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("user_warnings")
 }
 
 /// 永続アプリ設定 (key-value)。

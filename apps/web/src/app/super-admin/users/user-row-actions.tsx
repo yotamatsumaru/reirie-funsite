@@ -7,6 +7,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { UserRoleLiteral } from '@idol/shared';
 
 export function UserRowActions({
@@ -58,9 +59,13 @@ export function UserRowActions({
   }
 
   function handleBan() {
-    if (!confirm('このユーザーを BAN (退会扱い) しますか？')) return;
+    const reason = window.prompt(
+      'このユーザーを BAN (退会扱い) します。理由を入力してください（ゴミ箱で確認できます）',
+      '',
+    );
+    if (reason === null) return; // キャンセル
     startTransition(async () => {
-      const ok = await callApi({ banned: true });
+      const ok = await callApi({ banned: true, banReason: reason.trim() });
       if (ok) router.refresh();
     });
   }
@@ -75,6 +80,13 @@ export function UserRowActions({
 
   return (
     <div className="flex items-center justify-end gap-2">
+      <Link
+        href={`/super-admin/users/${userId}`}
+        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        詳細
+      </Link>
+
       {showRoleSelect && (
         <select
           defaultValue={currentRole}

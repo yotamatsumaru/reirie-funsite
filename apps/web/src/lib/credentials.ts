@@ -202,6 +202,15 @@ export async function authenticateCredentials(
     }
   }
 
+  // --- 最終ログイン日時を更新 ---
+  // パスワード検証・メール認証・(必要なら) TOTP まで全て通過した後、つまり
+  // 「ログインが確定した」時点で更新する。Super Admin 管理画面の
+  // 「最終ログイン」表示に使用する。
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
+
   const plan: PlanTypeLiteral = user.subscriptions[0]
     ? (user.subscriptions[0].planType as PlanTypeLiteral)
     : 'FREE';

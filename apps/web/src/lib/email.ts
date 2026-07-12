@@ -282,3 +282,64 @@ export async function sendAnnouncementEmail(params: {
     html,
   });
 }
+
+/**
+ * 運営 (SUPER_ADMIN) からファンへの警告通知メール。
+ *  - reason: 管理者が入力した警告理由・本文 (そのまま本文に使う)
+ *  - サイト内表示は行わず、メール通知のみ (super-admin/users/[id]/warning から呼び出す)
+ */
+export async function sendWarningEmail(params: {
+  to: string;
+  displayName: string;
+  reason: string;
+  siteName?: string;
+}): Promise<void> {
+  const siteName = params.siteName ?? 'ReiRieRoom';
+  const name = params.displayName?.trim() || 'お客';
+
+  const text =
+    `${name} さん\n\n` +
+    `${siteName} 運営事務局より、下記の内容についてご注意・ご確認をお願いいたします。\n\n` +
+    `${params.reason}\n\n` +
+    `今後も規約に沿ったご利用をお願いいたします。ご不明点がございましたらサポート窓口へご連絡ください。\n\n` +
+    `――――――――――\n${siteName} 運営事務局`;
+
+  const safeName = escapeHtml(name);
+  const safeSite = escapeHtml(siteName);
+  const safeReason = escapeHtml(params.reason).replace(/\n/g, '<br>');
+
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f1f7;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#2d2235;">
+  <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+    <div style="background:linear-gradient(135deg,#8a2d2d,#c9704f);border-radius:16px 16px 0 0;padding:28px 24px;text-align:center;">
+      <h1 style="margin:0;color:#fdf8ff;font-size:20px;letter-spacing:.05em;">${safeSite}</h1>
+      <p style="margin:6px 0 0;color:#f5dcd8;font-size:12px;">運営からの警告通知</p>
+    </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:28px 24px;box-shadow:0 4px 20px rgba(74,45,92,.08);">
+      <p style="margin:0 0 16px;font-size:15px;">${safeName} さん</p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.8;color:#3a2f45;">
+        ${safeSite} 運営事務局より、下記の内容についてご注意・ご確認をお願いいたします。
+      </p>
+      <div style="margin:0 0 20px;padding:16px;background:#fdf3f0;border-left:4px solid #c9704f;border-radius:4px;font-size:14px;line-height:1.8;color:#3a2f45;">
+        ${safeReason}
+      </div>
+      <p style="margin:0 0 16px;font-size:13px;line-height:1.8;color:#3a2f45;">
+        今後も規約に沿ったご利用をお願いいたします。ご不明点がございましたらサポート窓口へご連絡ください。
+      </p>
+      <hr style="border:none;border-top:1px solid #efeaf4;margin:20px 0;">
+      <p style="margin:0;font-size:11px;color:#a99fb3;line-height:1.6;">
+        本メールは ${safeSite} からの重要なお知らせです。<br>
+        ${safeSite} 運営事務局
+      </p>
+    </div>
+  </div>
+</body></html>`;
+
+  await sendEmail({
+    to: params.to,
+    subject: `【${siteName}】重要なお知らせ（運営より）`,
+    text,
+    html,
+  });
+}
