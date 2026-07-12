@@ -58,7 +58,11 @@ export function VerifyEmailClient() {
       });
       const data = await res.json().catch(() => ({}));
       setStatus(res.ok ? 'idle' : 'error');
-      setMessage(data?.message ?? (res.ok ? '認証コードを再送しました' : '再送に失敗しました'));
+      setMessage(
+        res.ok
+          ? (data?.message ?? '認証コードを再送しました')
+          : (data?.error?.message ?? '再送に失敗しました'),
+      );
     } catch {
       setStatus('error');
       setMessage('通信エラーが発生しました。時間をおいて再度お試しください。');
