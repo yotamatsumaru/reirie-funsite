@@ -667,7 +667,8 @@ aws ssm put-parameter --name "/idol-fansite/dev/ses/from-email" \
 - 送信レートが低く制限される (24時間あたりの送信数・秒間送信数に上限あり)
 
 ```bash
-aws ses get-account --query 'ProductionAccessEnabled' --output text
+# 注意: get-account は aws ses (v1) には存在しない。aws sesv2 を使うこと。
+aws sesv2 get-account --query 'ProductionAccessEnabled' --output text
 # false ならまだサンドボックス
 ```
 
@@ -693,7 +694,7 @@ aws ses get-account --query 'ProductionAccessEnabled' --output text
      (`idol-fansite-<env>-ses-bounce` / `-ses-complaint`) で監視し、
      一定率を超えたら送信を停止する」旨を記載すると承認されやすい
 3. 申請後、AWS サポートからの回答を待つ (通常 24〜48時間)
-4. 承認されたら `aws ses get-account --query 'ProductionAccessEnabled'` が `true` になる
+4. 承認されたら `aws sesv2 get-account --query 'ProductionAccessEnabled'` が `true` になる
 
 ### 6.7-5. Bounce / Complaint 通知の subscribe (推奨)
 
