@@ -104,10 +104,12 @@ pnpm run deploy
 ### 4. デプロイ後の手動作業
 
 1. **Stripe Dashboard**: Webhook エンドポイントを `*-webhook` の Function URL に設定し、`whsec_*` を SSM に再保存
-2. **Cloudflare DNS**: `*-ec2` の Output `PublicIp` を A レコードに設定
+2. **Cloudflare DNS**: `*-ec2` の Output `PublicIp` を A レコードに設定 (Proxied/オレンジ雲)
 3. **Cloudflare DNS**: `*-storage` の `VideoDistributionDomain` / `AssetDistributionDomain` を CNAME に設定
 4. **SES**: `sendingDomain` の DKIM CNAME を Cloudflare に追加し検証完了
-5. **EC2**: SSM Session Manager で接続し `pm2 status` を確認
+5. **Cloudflare Full/Strict HTTPS**: Origin CA 証明書を発行 → `/<app>/<env>/tls/cert-pem` `/tls/key-pem` に SSM 登録 →
+   EC2 上で `deploy/setup-tls.sh` を実行 (443 を有効化)。詳細手順は `docs/DEPLOYMENT.md` の Step 6.5 を参照
+6. **EC2**: SSM Session Manager で接続し `pm2 status` を確認
 
 ```bash
 # SSM Session Manager で EC2 に接続

@@ -148,6 +148,10 @@ LAWSON_API_KEY=$(ssm_get "${SSM_BASE}/lawson/api-key")
 LAWSON_PARTNER_ID=$(ssm_get "${SSM_BASE}/lawson/partner-id")
 APP_BASE_URL=$(ssm_get "${SSM_BASE}/app/base-url")
 
+# Cloudflare Origin CA 証明書 (Full/Strict モード用。未登録なら空文字のまま = HTTP のみで起動)
+TLS_CERT_PEM=$(ssm_get "${SSM_BASE}/tls/cert-pem")
+TLS_KEY_PEM=$(ssm_get "${SSM_BASE}/tls/key-pem")
+
 # ---- 5.5. アプリのチェックアウト (env 書き込み前に必須) ----
 # git clone は "空でない既存ディレクトリ" に対して fatal で失敗するため、
 # 一旦 temp ディレクトリ (同一 FS) に clone してから cp -a で $APP_DIR に展開する。
@@ -272,7 +276,74 @@ else
 fi
 
 # ---- 7. nginx をリバースプロキシとして起動 (3000 -> 80/443) ----
-cat > /etc/nginx/conf.d/app.conf <<'NGINXEOF'
+# Cloudflare Origin CA 証明書が SSM に登録されていれば Full/Strict (443 で TLS 終端) を有効化。
+# 未登録の場合は 80 のみで起動 (Cloudflare Flexible モード相当)。
+if [ -n "$TLS_CERT_PEM" ] && [ -n "$TLS_KEY_PEM" ]; then
+  mkdir -p /etc/nginx/ssl
+  printf '%s\n' "$TLS_CERT_PEM" > /etc/nginx/ssl/cloudflare-origin.pem
+  printf '%s\n' "$TLS_KEY_PEM" > /etc/nginx/ssl/cloudflare-origin.key
+  chmod 600 /etc/nginx/ssl/cloudflare-origin.key
+  TLS_ENABLED=1
+else
+  TLS_ENABLED=0
+  echo "[user-data] TLS cert not found in SSM (${SSM_BASE}/tls/cert-pem) - starting HTTP-only (Cloudflare Flexible mode)."
+fi
+
+if [ "$TLS_ENABLED" = "1" ]; then
+  cat > /etc/nginx/conf.d/app.conf <<'NGINXEOF'
+upstream nextjs_upstream {
+  server 127.0.0.1:3000;
+  keepalive 32;
+}
+
+# 80 は 443 へ常時リダイレクト (Cloudflare Full/Strict 用)
+server {
+  listen 80 default_server;
+  server_name _;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl default_server;
+  http2 on;
+  server_name _;
+
+  ssl_certificate     /etc/nginx/ssl/cloudflare-origin.pem;
+  ssl_certificate_key /etc/nginx/ssl/cloudflare-origin.key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+
+  client_max_body_size 50M;
+  proxy_read_timeout 300s;
+  proxy_connect_timeout 75s;
+
+  # HSTS: Cloudflare がエッジで TLS 終端し、オリジン (このnginx) からの
+  # レスポンスヘッダーはブラウザまで転送されるため、ここで付与すれば
+  # 「ブラウザ<->Cloudflareエッジ」の接続に対して正しく機能する。
+  # preload は一度 HSTS 対象になると長期間 HTTP へ後戻りできなくなるため、
+  # Cloudflare 側で「常時HTTPS化」が確実に有効になったことを確認した上で有効化すること。
+  add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+  location /_next/static/ {
+    proxy_pass http://nextjs_upstream;
+    proxy_cache_valid 200 1y;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+  }
+
+  location / {
+    proxy_pass http://nextjs_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+  }
+}
+NGINXEOF
+else
+  cat > /etc/nginx/conf.d/app.conf <<'NGINXEOF'
 upstream nextjs_upstream {
   server 127.0.0.1:3000;
   keepalive 32;
@@ -311,7 +382,9 @@ server {
   }
 }
 NGINXEOF
+fi
 
+nginx -t
 systemctl enable nginx
 systemctl restart nginx
 
