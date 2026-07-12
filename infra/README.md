@@ -9,12 +9,12 @@
 | 1 | `*-network` | VPC, Subnets (public/private/isolated), NAT, SG (EC2/RDS/Lambda), S3 GW Endpoint | - |
 | 2 | `*-database` | RDS PostgreSQL 15, パラメータグループ, Secrets Manager (admin) | network |
 | 3 | `*-storage` | S3 (videos/assets/media-output), CloudFront × 2, OAC, signed URL Key Group | - |
-| 4 | `*-email` | SES Configuration Set, IAM ManagedPolicy, SNS (Bounce/Complaint) | - |
+| 3.5 | `*-dns` | Route 53 Public Hosted Zone + ACM 証明書 (us-east-1固定, DNS検証) | - (`domainName` context 指定時のみ作成。email より先に作成) |
+| 4 | `*-email` | SES Configuration Set, IAM ManagedPolicy, SNS (Bounce/Complaint) | `domainName` 指定時は dns (DKIM/MAIL FROM レコード自動作成のため) |
 | 5 | `*-live` | IVS Channel (PRIVATE), Recording Configuration, Playback Key Pair | storage |
 | 6 | `*-webhook` | Stripe Webhook Lambda, Function URL, VPC内配置, SSM 参照 | network, database |
 | 7 | `*-ec2` | EC2 (Amazon Linux 2023) + EIP + IAM Role + UserData | network, database, storage, email |
 | 8 | `*-monitoring` | CloudWatch Dashboard, Alarms (EC2/RDS/Lambda), SNS Topic | ec2, database, webhook |
-| 9 | `*-dns` | Route 53 Public Hosted Zone + ACM 証明書 (us-east-1固定, DNS検証) | - (`domainName` context 指定時のみ作成) |
 | 10 | `*-site-cdn` | CloudFront (メインドメイン, EC2オリジン) + Route 53 ALIAS/A レコード | dns, ec2 (`domainName` context 指定時のみ作成) |
 
 ## 環境
@@ -27,8 +27,8 @@ context (`cdk.json` or `--context`) で切替:
 | `envName` | `dev` / `stg` / `prod` |
 | `region` | `ap-northeast-1` |
 | `account` | AWS Account ID |
-| `domainName` | `reirie.com` — 指定すると `*-dns` / `*-site-cdn` (Route 53 + CloudFront) スタックが追加で作られる。未指定なら DNS/CDN は Cloudflare 側で手動管理 (docs/DEPLOYMENT.md Step 6.5) |
-| `sendingDomain` | SES 送信元ドメイン |
+| `domainName` | `reirie.com` — 指定すると `*-dns` / `*-site-cdn` (Route 53 + CloudFront) スタックが追加で作られる。未指定なら DNS/CDN は Cloudflare 側で手動管理 (docs/DEPLOYMENT.md Step 6.5)。**`sendingDomain` と同じドメインを指定すると SES の DKIM/MAIL FROM レコードが Route 53 に自動作成される** |
+| `sendingDomain` | SES 送信元ドメイン。`domainName` と同じ値にすると DKIM 検証が自動化される (下記参照) |
 | `cloudfrontPublicKeyPem` | VOD signed URL 用の公開鍵 (PEM) |
 | `ivsPlaybackPublicKeyPem` | IVS Playback signed URL 用 EC 公開鍵 (PEM) |
 | `alertEmail` | アラート通知先 |
@@ -93,20 +93,25 @@ cd infra
 pnpm run deploy:network
 pnpm run deploy:database     # 5-10分
 pnpm run deploy:storage      # CloudFront 作成で10-15分
-pnpm run deploy:email
+
+# --- SES の DKIM を Route 53 で自動検証したい場合はここで先に *-dns を作る ---
+# (domainName を指定すると、*-email が hostedZone を参照して DKIM/MAIL FROM の
+#  CNAME/MX/TXT レコードを自動作成する。事前に us-east-1 も cdk bootstrap しておくこと)
+pnpm run deploy:dns --context domainName=reirie.com
+# → お名前.com 側でネームサーバーを Route 53 に変更し、ACM 証明書が Issued になるまで待つ
+#   (反映されるまで *-email の DKIM 検証も Pending のままになる)
+
+pnpm run deploy:email --context domainName=reirie.com --context sendingDomain=reirie.com
 pnpm run deploy:live
 pnpm run deploy:webhook
 pnpm run deploy:ec2
 pnpm run deploy:monitoring
 
 # domainName を context で指定した場合のみ (Route 53 + CloudFront でドメイン紐付け)
-# 事前に us-east-1 も cdk bootstrap しておくこと (ACM 証明書が us-east-1 固定のため)
 # 詳細手順は docs/DEPLOYMENT.md の Step 6.6 を参照
-pnpm run deploy:dns --context domainName=reirie.com
-# → お名前.com 側でネームサーバーを Route 53 に変更し、ACM 証明書が Issued になるまで待つ
 pnpm run deploy:site-cdn --context domainName=reirie.com
 
-# 2回目以降は一括
+# 2回目以降は一括 (domainName / sendingDomain は cdk.json の context に固定しておくと楽)
 pnpm run deploy
 ```
 
@@ -115,7 +120,11 @@ pnpm run deploy
 1. **Stripe Dashboard**: Webhook エンドポイントを `*-webhook` の Function URL に設定し、`whsec_*` を SSM に再保存
 2. **Cloudflare DNS**: `*-ec2` の Output `PublicIp` を A レコードに設定 (Proxied/オレンジ雲)
 3. **Cloudflare DNS**: `*-storage` の `VideoDistributionDomain` / `AssetDistributionDomain` を CNAME に設定
-4. **SES**: `sendingDomain` の DKIM CNAME を Cloudflare に追加し検証完了
+4. **SES**: `domainName` context を指定して `*-dns` → `*-email` の順でデプロイした場合、
+   DKIM/MAIL FROM レコードは Route 53 に自動作成されるため追加作業は不要
+   (AWS Console → SES → Verified identities で `Verified` になるまで待つのみ)。
+   Route 53 を使わない場合は `sendingDomain` の DKIM CNAME を Cloudflare 等に手動で追加。
+   検証完了後は SES 本番アクセス申請 (Production Access) が必要 (docs/DEPLOYMENT.md 参照)
 5. **Cloudflare Full/Strict HTTPS**: Origin CA 証明書を発行 → `/<app>/<env>/tls/cert-pem` `/tls/key-pem` に SSM 登録 →
    EC2 上で `deploy/setup-tls.sh` を実行 (443 を有効化)。詳細手順は `docs/DEPLOYMENT.md` の Step 6.5 を参照
 6. **(Cloudflare の代わりに Route 53 + CloudFront を使う場合)**: `domainName` context を指定して
@@ -150,5 +159,10 @@ RDS は `RemovalPolicy.SNAPSHOT` でスナップショット保管。
   / `*-site-cdn` (メインリージョン, CloudFront) を作成。`crossRegionReferences: true` で
   us-east-1 の証明書/HostedZone を ap-northeast-1 側から参照。お名前.com は ALIAS(ANAME) 非対応のため、
   apex ドメインを CloudFront に紐付けるには Route 53 への DNS 移管が必要 (Step 6.6)。
+- **SES DKIM 自動検証**: `*-dns` を `*-email` より先に作成し、`domainName` context を
+  `*-email` にも渡すと `Identity.publicHostedZone(hostedZone)` が使われ、DKIM (CNAME×3) と
+  MAIL FROM (MX/TXT=SPF) レコードが Route 53 Hosted Zone に自動作成される
+  (`crossRegionReferences: true` で us-east-1 の HostedZone を参照)。`domainName` 未指定時は
+  従来通り `Identity.domain(sendingDomain)` にフォールバックし、DKIM CNAME は手動設定が必要 (Step 6.7)。
 - **Secrets 管理**: 機密値は **すべて SSM SecureString**。CDK code には埋め込まない。
 - **リージョン**: 全リソース `ap-northeast-1`。CloudFront のメトリクスのみ `us-east-1` 経由で取得。

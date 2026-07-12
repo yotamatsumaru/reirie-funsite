@@ -7,12 +7,14 @@
  *    1. NetworkStack
  *    2. DatabaseStack       (depends on Network)
  *    3. StorageStack        (independent)
- *    4. EmailStack          (independent)
+ *    3.5 DnsStack           (独立, us-east-1固定。domainName が context で指定された場合のみ、
+ *                            EmailStack より先に作成し hostedZone を渡す)
+ *    4. EmailStack          (domainName 指定時は DnsStack.hostedZone を渡し DKIM を自動設定。
+ *                            未指定時は従来通り手動DKIM設定が必要な domain identity のみ)
  *    5. LiveStack           (depends on Storage)
  *    6. WebhookStack        (depends on Network, Database)
  *    7. Ec2Stack            (depends on Network, Database, Storage, Email)
  *    8. MonitoringStack     (depends on Ec2, Database, Webhook)
- *    9. DnsStack            (独立, us-east-1固定。domainName が context で指定された場合のみ作成)
  *   10. SiteCdnStack        (depends on Ec2Stack, DnsStack。domainName 指定時のみ作成)
  */
 import 'source-map-support/register';
@@ -67,14 +69,43 @@ const storage = new StorageStack(app, `${stackPrefix}-storage`, {
   description: 'S3 buckets + CloudFront distributions',
 });
 
+// 3.5 DNS (Route 53 Hosted Zone + ACM 証明書, us-east-1固定)
+// domainName が context で指定された場合のみ作成。EmailStack より先に作ることで
+// hostedZone を EmailStack に渡し、SES の DKIM/MAIL FROM レコードを自動作成できる。
+// ACM 証明書は CloudFront にアタッチするため必ず us-east-1 でなければならない。
+// メインの env.region (ap-northeast-1) とは別リージョンにスタックを作成し、
+// crossRegionReferences で参照する。
+let dns: DnsStack | undefined;
+const usEast1Env: cdk.Environment = {
+  account: config.account ?? process.env.CDK_DEFAULT_ACCOUNT,
+  region: 'us-east-1',
+};
+if (config.domainName) {
+  dns = new DnsStack(app, `${stackPrefix}-dns`, {
+    env: usEast1Env,
+    crossRegionReferences: true,
+    config,
+    domainName: config.domainName,
+    description: 'Route 53 Hosted Zone + ACM Certificate (us-east-1, for CloudFront)',
+  });
+}
+
 // 4. Email (SES)
+// dns が作成されていれば hostedZone を渡し、DKIM/MAIL FROM レコードを Route 53 に自動作成する。
+// (hostedZone のリージョンは us-east-1 だが SES の Identity 自体はメインリージョンに置けるため、
+//  crossRegionReferences 経由での参照渡しになる)
 const sendingDomain = app.node.tryGetContext('sendingDomain') as string | undefined;
 const email = new EmailStack(app, `${stackPrefix}-email`, {
   env,
+  crossRegionReferences: true,
   config,
   sendingDomain,
+  hostedZone: dns?.hostedZone,
   description: 'SES configuration set + sending policy',
 });
+if (dns) {
+  email.addDependency(dns);
+}
 
 // 5. Live (IVS)
 const ivsPlaybackPublicKeyPem = app.node.tryGetContext('ivsPlaybackPublicKeyPem') as
@@ -142,24 +173,10 @@ monitoring.addDependency(ec2Stack);
 monitoring.addDependency(database);
 monitoring.addDependency(webhook);
 
-// 9-10. DNS + Site CDN (domainName が context で指定された場合のみ作成)
+// 10. Site CDN (domainName が context で指定された場合のみ作成)
+// dns は上の 3.5 で (domainName 指定時のみ) 既に作成済みなのでそれを再利用する。
 // 例: cdk deploy '*-dns' '*-site-cdn' --context domainName=reirie.com
-if (config.domainName) {
-  // ACM 証明書は CloudFront にアタッチするため必ず us-east-1 でなければならない。
-  // メインの env.region (ap-northeast-1) とは別リージョンにスタックを作成し、
-  // crossRegionReferences で SiteCdnStack (ap-northeast-1) から参照する。
-  const usEast1Env: cdk.Environment = {
-    account: config.account ?? process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
-  };
-  const dns = new DnsStack(app, `${stackPrefix}-dns`, {
-    env: usEast1Env,
-    crossRegionReferences: true,
-    config,
-    domainName: config.domainName,
-    description: 'Route 53 Hosted Zone + ACM Certificate (us-east-1, for CloudFront)',
-  });
-
+if (config.domainName && dns) {
   const siteCdn = new SiteCdnStack(app, `${stackPrefix}-site-cdn`, {
     env,
     crossRegionReferences: true,
