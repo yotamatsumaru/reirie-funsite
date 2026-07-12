@@ -4,7 +4,7 @@ CREATE TYPE "AnnouncementStatus" AS ENUM ('DRAFT', 'PUBLISHED');
 CREATE TYPE "AnnouncementEmailStatus" AS ENUM ('NOT_REQUESTED', 'PENDING', 'SENDING', 'COMPLETED', 'FAILED');
 
 CREATE TABLE "announcements" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "id" UUID NOT NULL,
     "title" TEXT NOT NULL,
     "body" TEXT NOT NULL,
     "audience" "AnnouncementAudience" NOT NULL DEFAULT 'ALL',
