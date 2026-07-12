@@ -163,6 +163,26 @@ export const ORDER_STATUS_LABELS = {
   REFUNDED: '返金済み',
 } as const;
 
+/**
+ * Payment.kind (決済の種別) の日本語表示ラベル。
+ *  - SUBSCRIPTION:   月額/年額サブスクリプション課金
+ *  - ONE_TIME_ORDER: EC (グッズ) の単発注文決済
+ *  - TICKET_FEE:     1on1コール/特典会などのチケット代
+ */
+export const PAYMENT_KIND_LABELS = {
+  SUBSCRIPTION: 'サブスク',
+  ONE_TIME_ORDER: 'EC注文',
+  TICKET_FEE: 'チケット代',
+} as const;
+
+/** Payment.status (決済の状態) の日本語表示ラベル */
+export const PAYMENT_STATUS_LABELS = {
+  PENDING: '処理中',
+  SUCCEEDED: '成功',
+  FAILED: '失敗',
+  REFUNDED: '返金済み',
+} as const;
+
 export const TAX_RATE = 0.1; // 10%
 export const SHIPPING_FEE_DEFAULT = 600; // 円
 export const FREE_SHIPPING_THRESHOLD = 8000; // 円

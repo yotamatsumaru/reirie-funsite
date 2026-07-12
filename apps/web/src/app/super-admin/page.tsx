@@ -40,7 +40,7 @@ type Sub = {
 
 type Ord = {
   id: string;
-  total: number;
+  totalAmount: number;
   status: string;
   createdAt: Date;
 };
@@ -82,7 +82,7 @@ export default async function SuperAdminDashboardPage() {
   const paidOrders = ordersTyped.filter((o) =>
     ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'].includes(o.status),
   );
-  const totalRevenue = paidOrders.reduce((acc, o) => acc + o.total, 0);
+  const totalRevenue = paidOrders.reduce((acc, o) => acc + o.totalAmount, 0);
 
   // プラン別の内訳
   const planCount: Record<string, number> = { FREE: 0, STANDARD: 0, PREMIUM: 0 };

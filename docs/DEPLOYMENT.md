@@ -149,6 +149,10 @@ aws ssm put-parameter --name "/$APP/$ENV/stripe/price/premium-yearly"   --type S
 
 # SES 送信元 (送信ドメインを SES で検証してから)
 # aws ssm put-parameter --name "/$APP/$ENV/ses/from-email" --type String --value "no-reply@your-domain.com"
+
+# Cloudflare Origin CA 証明書 (独自ドメイン + Full/Strict HTTPS を有効化するとき。詳細は Step 6.5)
+# aws ssm put-parameter --name "/$APP/$ENV/tls/cert-pem" --type SecureString --value "$(cat origin-cert.pem)"
+# aws ssm put-parameter --name "/$APP/$ENV/tls/key-pem"  --type SecureString --value "$(cat origin-key.pem)"
 ```
 
 **登録結果の確認:**
@@ -285,6 +289,150 @@ http://<PublicIp>/
 - `/` トップページが表示される ✅
 - `/signin` でメールアドレス入力可能 ✅
 - (本番DBではデモログインは無効、Stripe Test の本物アカウント作成が必要)
+
+---
+
+## Step 6.5. ドメイン紐付け (Cloudflare + Full/Strict HTTPS)
+
+`reirie.com` を EC2 (`52.196.151.93` 等の EIP) に紐付け、Cloudflare Full/Strict で
+エンドツーエンド HTTPS を有効化する手順。**この Step はすべて AWS コンソール /
+Cloudflare ダッシュボードでの操作**であり、リポジトリの `deploy/user-data.sh` /
+`deploy/setup-tls.sh` が Cloudflare Origin CA 証明書を検知して自動で 443 を
+有効化する仕組みは実装済み (このコミットで追加)。
+
+### 6.5-1. ドメインを Cloudflare に追加 (ネームサーバー移管)
+
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/) にログイン → **Add a site** → `reirie.com` を入力
+2. Cloudflare が提示する既存 DNS レコードのスキャン結果を確認 (見落としがあれば後で手動追加)
+3. プラン選択 (Free で可)
+4. Cloudflare が指定する **2つのネームサーバー** (例: `xxx.ns.cloudflare.com`, `yyy.ns.cloudflare.com`) を確認
+5. ドメイン登録会社 (お名前.com / Route53 / Google Domains 等、`reirie.com` を購入した会社) の管理画面にログインし、
+   ネームサーバーを Cloudflare 指定の2つに変更
+6. 反映待ち (数分〜24時間、通常は1時間以内)。Cloudflare Dashboard 上で
+   ステータスが **Active** になれば完了
+
+### 6.5-2. DNS レコード追加 (Cloudflare Dashboard > DNS > Records)
+
+| Type | Name | Content | Proxy status |
+|---|---|---|---|
+| A | `@` (reirie.com) | `52.196.151.93` (EC2 の EIP) | 🟠 Proxied |
+| A | `www` | `52.196.151.93` | 🟠 Proxied |
+| CNAME | `assets` (任意) | `*-storage` スタックの `AssetDistributionDomain` | 🟠 Proxied |
+| CNAME | `videos` (任意) | `*-storage` スタックの `VideoDistributionDomain` | 🟠 Proxied |
+
+> **Proxied (オレンジ雲) にすること。** Grey cloud (DNS only) だと Cloudflare の
+> TLS 終端・CDN・WAF が効かず、オリジン IP がそのまま露出する。
+
+### 6.5-3. Cloudflare Origin CA 証明書を発行 (Full/Strict 用)
+
+1. Cloudflare Dashboard → 対象ドメイン → **SSL/TLS** → **Origin Server** タブ
+2. **Create Certificate** をクリック
+3. Key type: `RSA (2048)` (デフォルトで可)
+4. Hostnames: `reirie.com`, `*.reirie.com` (ワイルドカードで一括カバー)
+5. Certificate Validity: `15 years` (デフォルト)
+6. **Create** すると **Origin Certificate (PEM)** と **Private Key (PEM)** が表示される
+   → **この画面を閉じると秘密鍵は再表示できないので、必ずこの場でコピーして保存すること**
+
+### 6.5-4. 証明書を SSM Parameter Store に登録
+
+```bash
+# ローカルに一時保存した PEM から登録 (values はダッシュボードでコピーした内容をそのまま貼る)
+aws ssm put-parameter \
+  --name "/idol-fansite/dev/tls/cert-pem" \
+  --type SecureString \
+  --value "$(cat origin-cert.pem)" \
+  --overwrite
+
+aws ssm put-parameter \
+  --name "/idol-fansite/dev/tls/key-pem" \
+  --type SecureString \
+  --value "$(cat origin-key.pem)" \
+  --overwrite
+
+# 登録確認 (値は SecureString なので --output text では見えない。存在確認のみ)
+aws ssm get-parameters-by-path --path "/idol-fansite/dev/tls" --query "Parameters[].Name"
+```
+
+### 6.5-5. EC2 上で証明書を反映 (再起動不要)
+
+SSM Session Manager で EC2 に接続し、リポジトリに追加済みの `deploy/setup-tls.sh` を実行:
+
+```bash
+INSTANCE_ID=$(aws cloudformation describe-stacks \
+  --stack-name idol-fansite-dev-ec2 \
+  --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' --output text)
+
+aws ssm send-command \
+  --document-name "AWS-RunShellScript" \
+  --targets "Key=tag:Application,Values=idol-fansite" \
+  --parameters commands='["cd /home/ec2-user/app && git pull --ff-only && sudo APP_NAME=idol-fansite ENV_NAME=dev AWS_REGION=ap-northeast-1 bash deploy/setup-tls.sh"]'
+```
+
+または SSM Session Manager で直接ログインして:
+
+```bash
+aws ssm start-session --target "$INSTANCE_ID"
+sudo -i
+cd /home/ec2-user/app && git pull --ff-only
+APP_NAME=idol-fansite ENV_NAME=dev AWS_REGION=ap-northeast-1 bash deploy/setup-tls.sh
+```
+
+実行後、nginx が `listen 443 ssl` で起動し、80 は 443 への 301 リダイレクトになる。
+`nginx -t` の構文チェックに失敗した場合は自動で反映されないため、エラーメッセージを確認すること。
+
+> 📝 補足: EC2 を **新規に作り直す場合** (`userDataCausesReplacement` により UserData 変更時は
+> インスタンスが再作成される) は、事前に Step 6.5-4 で SSM に証明書を登録しておけば
+> `deploy/user-data.sh` が起動時に自動検出して最初から 443 で立ち上がる。
+> `setup-tls.sh` は「既存インスタンスに後から証明書を反映する」ためのショートカット。
+
+### 6.5-6. Cloudflare SSL/TLS モードを Full (strict) に設定
+
+1. Cloudflare Dashboard → **SSL/TLS** → **Overview**
+2. 暗号化モードを **Full (strict)** に設定
+   (オリジンが Cloudflare Origin CA 証明書を提示しているため `strict` で検証可能)
+3. **Edge Certificates** タブ → **Always Use HTTPS** を ON
+   (Cloudflare が HTTP アクセスを自動で HTTPS にリダイレクト)
+
+### 6.5-7. APP_BASE_URL をドメインに書き換え
+
+```bash
+aws ssm put-parameter \
+  --name "/idol-fansite/dev/app/base-url" \
+  --type String \
+  --value "https://reirie.com" \
+  --overwrite
+
+# .env.production を再生成 + PM2 再起動 (AUTH_URL / NEXT_PUBLIC_APP_BASE_URL もここで更新される)
+aws ssm send-command \
+  --document-name "AWS-RunShellScript" \
+  --targets "Key=tag:Application,Values=idol-fansite" \
+  --parameters commands='["sudo -u ec2-user APP_BRANCH=main bash /home/ec2-user/app/deploy/deploy.sh"]'
+```
+
+> ⚠️ `AUTH_URL` (Auth.js) がドメインと不一致だと、Cookie の Secure 属性やコールバック URL の
+> 検証で問題が起きる場合がある。必ず `https://reirie.com` (末尾スラッシュなし) に統一すること。
+
+### 6.5-8. 動作確認
+
+```bash
+curl -I https://reirie.com/          # 200 OK, Strict-Transport-Security ヘッダを確認
+curl -I http://reirie.com/           # 301 → https://reirie.com/ (Cloudflare が返す)
+```
+
+- ブラウザで `https://reirie.com/` にアクセスし、鍵アイコン (有効な証明書) を確認 ✅
+- `https://reirie.com/signin` でログインフローが正常に動くか確認 (特に Stripe Checkout の
+  リダイレクト URL がドメインベースになっているか) ✅
+- Stripe Webhook の Endpoint URL もドメインが変わる場合は Stripe Dashboard 側で更新が必要
+  (今回は Lambda Function URL 経由のため対象外)
+
+### トラブルシューティング: Cloudflare が 521/522 を返す
+
+- `521 Web Server Is Down`: オリジン (EC2) の 443 が閉じている、または nginx が起動していない
+  → `sudo systemctl status nginx` / `sudo nginx -t` で確認
+- `522 Connection Timed Out`: セキュリティグループで 443 が閉じている、または EIP が変わった
+  → `infra/lib/network-stack.ts` の `ec2SecurityGroup` で 443 が ingress 許可されているか確認 (デフォルトで許可済み)
+- 証明書エラー (`ERR_SSL_VERSION_OR_CIPHER_MISMATCH` 等): Cloudflare SSL/TLS モードが
+  `Full (strict)` なのに、オリジンに正しい証明書が乗っていない → Step 6.5-3〜6.5-5 を再実施
 
 ---
 
