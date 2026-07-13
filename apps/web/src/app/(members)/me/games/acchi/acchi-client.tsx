@@ -226,6 +226,10 @@ export function AcchiGameClient({
   // (サーバー側の advisory lock で最終的な超過付与は防げるが、そもそも
   //  余計なリクエストを投げない = UX / 負荷の両面で望ましい)
   const submittingRef = useRef(false);
+  // 「もう一度」「会員カードに戻る」押下後、またね音声を鳴らし切るまでの遷移待ちフラグ。
+  // 二重押しを防ぎ、ボタンを無効化 (disabled) して連打で音が途切れないようにする。
+  const transitioningRef = useRef(false);
+  const [transitioning, setTransitioning] = useState(false);
 
   const canPlay = remaining > 0;
 
@@ -435,10 +439,13 @@ export function AcchiGameClient({
     }
   }
 
-  function playAgain() {
-    // もう一度 → またね音声を鳴らしてから「タップしてスタート」画面に戻す。
-    sound.play('tap');
-    sound.play('voiceBye');
+  async function playAgain() {
+    // もう一度 → またね音声を「鳴らし切ってから」スタート画面に戻す。
+    // 遷移中フラグ (transitioningRef) で二重押しを防止し、音声が途切れないようにする。
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
+    setTransitioning(true);
+    await sound.playToEnd('voiceBye');
     setHand(null);
     setOutcome(null);
     setRound2Token(null);
@@ -450,6 +457,8 @@ export function AcchiGameClient({
     setImageVariant(pickImageVariant());
     // スタート画面に戻す (最初のタップで開始音声を鳴らすフローを再現)。
     setPhase('start');
+    transitioningRef.current = false;
+    setTransitioning(false);
   }
 
   async function endGame() {
@@ -457,6 +466,9 @@ export function AcchiGameClient({
     // router.push を即実行するとページ遷移で音声が途切れるため、
     // playToEnd の Promise (再生終了 or 保険タイムアウトで解決) を待ってから遷移する。
     // ミュート / 未アップロード / 再生ブロック時は即解決するので固まらない。
+    if (transitioningRef.current) return;
+    transitioningRef.current = true;
+    setTransitioning(true);
     await sound.playToEnd('voiceBye');
     router.push('/me/card');
   }
@@ -614,6 +626,7 @@ export function AcchiGameClient({
           promoActive={promoActive}
           onAgain={playAgain}
           onBack={endGame}
+          busy={transitioning}
           characterImageUrls={characterImageUrls}
           imageVariant={imageVariant}
         />
@@ -767,6 +780,7 @@ function ResultCard({
   promoActive,
   onAgain,
   onBack,
+  busy,
   characterImageUrls,
   imageVariant,
 }: {
@@ -775,6 +789,8 @@ function ResultCard({
   promoActive: boolean;
   onAgain: () => void;
   onBack: () => void;
+  /** またね音声の再生待ち中か (true の間はボタンを無効化して連打/音切れを防ぐ)。 */
+  busy: boolean;
   characterImageUrls?: CharacterImageUrlMap;
   imageVariant: number;
 }) {
@@ -853,14 +869,14 @@ function ResultCard({
 
       <div className="mt-5 flex flex-col gap-2">
         {canPlay ? (
-          <Button onClick={onAgain} variant="primary" size="lg">
+          <Button onClick={onAgain} variant="primary" size="lg" disabled={busy}>
             もう一度遊ぶ
           </Button>
         ) : (
           <p className="text-sm font-medium text-slate-500">本日のプレイは終了しました。また明日！</p>
         )}
-        <Button onClick={onBack} variant="secondary" size="md">
-          会員カードに戻る
+        <Button onClick={onBack} variant="secondary" size="md" disabled={busy}>
+          {busy ? '…' : '会員カードに戻る'}
         </Button>
       </div>
     </div>
