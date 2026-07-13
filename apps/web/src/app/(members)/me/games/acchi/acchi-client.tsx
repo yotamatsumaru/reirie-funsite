@@ -248,7 +248,7 @@ export function AcchiGameClient({
   //        方向一致 (プレイヤー勝ち) → win + voiceWin → 「結果を確認」ボタン待ち → 結果へ
   //        方向不一致 (プレイヤー負け) → lose + voiceLose → 「結果を確認」ボタン待ち → 結果へ
   // 4. 結果 (result): 勝利時のみポイント音 (point)。
-  //      もう一度 → またね音声 (voiceBye) → スタート画面へ
+  //      もう一度 → もう一戦を促す音声 (voiceAgain) → スタート画面へ
   //      終了     → またね音声 (voiceBye) → 会員カードへ
 
   // ラウンド1 の試行を 1 つずつ演出する。
@@ -440,12 +440,13 @@ export function AcchiGameClient({
   }
 
   async function playAgain() {
-    // もう一度 → またね音声を「鳴らし切ってから」スタート画面に戻す。
+    // もう一度 → 「もう一戦を促す」音声 (voiceAgain) を「鳴らし切ってから」スタート画面に戻す。
     // 遷移中フラグ (transitioningRef) で二重押しを防止し、音声が途切れないようにする。
+    // voiceAgain が未アップロードなら playToEnd は即解決するので、そのまま次へ進む。
     if (transitioningRef.current) return;
     transitioningRef.current = true;
     setTransitioning(true);
-    await sound.playToEnd('voiceBye');
+    await sound.playToEnd('voiceAgain');
     setHand(null);
     setOutcome(null);
     setRound2Token(null);

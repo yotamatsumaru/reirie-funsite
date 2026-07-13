@@ -15,6 +15,7 @@ export const ACCHI_VOICE_SLOTS = [
   'voiceWin',
   'voiceLose',
   'voiceDraw',
+  'voiceAgain',
   'voiceBye',
 ] as const;
 
@@ -67,10 +68,16 @@ export const ACCHI_VOICE_SLOT_META: Record<AcchiVoiceSlot, AcchiVoiceSlotMeta> =
     timing: 'じゃんけんがあいこでもう一回のとき',
     scriptExample: 'あれ、同じだ！もう一回っ！',
   },
+  voiceAgain: {
+    slot: 'voiceAgain',
+    label: 'もう一度 (継続)',
+    timing: '「もう一度遊ぶ」ボタンを押して続けて遊ぶとき',
+    scriptExample: 'もう一回やろっ！次は負けないよ〜！',
+  },
   voiceBye: {
     slot: 'voiceBye',
     label: 'またね (終了)',
-    timing: 'もう一度 / 終了ボタンを押してゲームを離れるとき',
+    timing: '「会員カードに戻る」ボタンを押してゲームを離れるとき',
     scriptExample: 'またね〜！また遊んでね♪',
   },
 };
