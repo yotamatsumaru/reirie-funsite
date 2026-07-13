@@ -4,8 +4,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { prisma } from '@idol/db';
-import { ACCHI_MAX_PLAYS_PER_DAY, ACCHI_WIN_REWARD } from '@idol/shared';
+import {
+  ACCHI_MAX_PLAYS_PER_DAY,
+  ACCHI_WIN_REWARD,
+  gameThumbnailSlot,
+} from '@idol/shared';
 import { auth } from '@/auth';
+import { getSiteImageUrlMap } from '@/lib/site-image';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -44,6 +49,9 @@ export default async function GameTopPage() {
   const isAuthenticated = !!session?.user?.id;
   const isPremium = session?.user?.plan === 'PREMIUM';
 
+  // ミニゲームのサムネイル画像 (管理画面でアップロード)。未設定なら絵文字表示。
+  const siteImageMap = await getSiteImageUrlMap();
+
   const characters = await prisma.gameCharacter.findMany({
     where: { status: 'PUBLISHED' },
     orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -75,17 +83,31 @@ export default async function GameTopPage() {
             const href = g.requiresAuth && !isAuthenticated
               ? `/signin?next=${encodeURIComponent(g.href)}`
               : g.href;
+            const thumbnailUrl = (siteImageMap as Record<string, string | undefined>)[
+              gameThumbnailSlot(g.slug)
+            ];
             return (
               <Link key={g.slug} href={href} className="group block">
                 <Card className="h-full overflow-hidden transition-shadow hover:shadow-lg">
-                  <div
-                    className="flex aspect-[16/9] items-center justify-center text-6xl"
-                    style={{ backgroundColor: g.themeColor }}
-                  >
-                    <span className="transition-transform duration-500 group-hover:scale-110">
-                      {g.emoji}
-                    </span>
-                  </div>
+                  {thumbnailUrl ? (
+                    <div className="aspect-[16/9] overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={thumbnailUrl}
+                        alt={g.title}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="flex aspect-[16/9] items-center justify-center text-6xl"
+                      style={{ backgroundColor: g.themeColor }}
+                    >
+                      <span className="transition-transform duration-500 group-hover:scale-110">
+                        {g.emoji}
+                      </span>
+                    </div>
+                  )}
                   <CardBody>
                     <p className="text-base font-bold text-slate-900 sm:text-lg">{g.title}</p>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-600">{g.description}</p>

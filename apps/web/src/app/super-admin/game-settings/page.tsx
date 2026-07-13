@@ -1,68 +1,52 @@
 /**
- * /super-admin/game-settings — ゲーム設定
+ * /super-admin/game-settings — ゲーム設定 (インデックス)
  *
- * あっちむいてPUI等のゲームの「設定」を集約する専用ページ。
- * 売上・統計を扱う「ゲーム経済」(/super-admin/game) とは役割を分離している:
- *   - ゲーム経済 … DLC 売上 / アイテム集計 / プレイヤー統計 (数値の閲覧)
- *   - ゲーム設定 … 勝率 / 特典ポイントボーナス / キャラボイス / キャラクター画像 (挙動の設定)
+ * ゲームごとに設定ページを分離するためのハブ。
+ * 各ゲームの詳細設定 (勝率 / 特典ボーナス / キャラボイス / キャラ画像 / サムネイル) は
+ * /super-admin/game-settings/<slug> に置く。
+ * 売上・統計を扱う「ゲーム経済」(/super-admin/game) とは役割を分離している。
  */
 import type { Metadata } from 'next';
-import { getAcchiWinSettings, getAcchiRewardBonusSettings } from '@/lib/app-setting';
-import { listGameAudio } from '@/lib/game-audio';
-import { listCharacterImages } from '@/lib/character-image';
-import { AcchiSettingsClient } from './acchi-settings-client';
-import { AcchiRewardBonusClient } from './acchi-reward-bonus-client';
-import { GameAudioClient, type GameAudioItem } from './game-audio-client';
-import { CharacterImageClient, type CharacterImageItem } from './character-image-client';
+import Link from 'next/link';
+import { Card, CardBody } from '@/components/ui/Card';
+import { GAME_SETTINGS_GAMES } from './games';
 
 export const metadata: Metadata = { title: 'ゲーム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
-export default async function SuperAdminGameSettingsPage() {
-  const [acchiSettings, acchiRewardBonusSettings, gameAudio, characterImages] = await Promise.all([
-    getAcchiWinSettings(),
-    getAcchiRewardBonusSettings(),
-    listGameAudio(),
-    listCharacterImages(),
-  ]);
-
-  const gameAudioItems: GameAudioItem[] = gameAudio.map((a) => ({
-    slot: a.slot,
-    url: a.url,
-    fileName: a.fileName,
-    sizeBytes: a.sizeBytes,
-    updatedAt: a.updatedAt.toISOString(),
-  }));
-  const characterImageItems: CharacterImageItem[] = characterImages.map((a) => ({
-    slot: a.slot,
-    variant: a.variant,
-    url: a.url,
-    fileName: a.fileName,
-    sizeBytes: a.sizeBytes,
-    updatedAt: a.updatedAt.toISOString(),
-  }));
-
+export default function SuperAdminGameSettingsIndexPage() {
   return (
     <main>
       <header className="mb-5">
         <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ゲーム設定</h1>
         <p className="mt-1 text-sm text-slate-500">
-          あっちむいてPUIの勝率・特典ボーナス・キャラボイス・キャラクター画像などの設定。
-          売上・統計は「ゲーム経済」で確認できます。
+          設定したいゲームを選んでください。ゲームごとに勝率・特典ボーナス・キャラボイス・
+          キャラクター画像・サムネイルなどを設定できます。売上・統計は「ゲーム経済」で確認できます。
         </p>
       </header>
 
-      {/* あっちむいてPUI 勝率設定 */}
-      <AcchiSettingsClient initial={acchiSettings} />
-
-      {/* あっちむいてPUI 勝利特典ポイントボーナス設定 */}
-      <AcchiRewardBonusClient initial={acchiRewardBonusSettings} />
-
-      {/* あっちむいてPUI キャラボイス アップロード */}
-      <GameAudioClient initial={gameAudioItems} />
-
-      {/* あっちむいてPUI キャラクター画像 アップロード (1ポーズ最大3パターン) */}
-      <CharacterImageClient initial={characterImageItems} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {GAME_SETTINGS_GAMES.map((g) => (
+          <Link
+            key={g.slug}
+            href={`/super-admin/game-settings/${g.slug}`}
+            className="group block"
+          >
+            <Card className="h-full transition-shadow hover:shadow-lg">
+              <CardBody>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{g.emoji}</span>
+                  <p className="text-base font-bold text-slate-900">{g.title}</p>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{g.description}</p>
+                <p className="mt-3 text-xs font-semibold text-twilight-amethyst group-hover:underline">
+                  設定を開く →
+                </p>
+              </CardBody>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </main>
   );
 }

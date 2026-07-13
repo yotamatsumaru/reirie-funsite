@@ -16,8 +16,8 @@
  *   up / down / left / right   … あっち向いてホイの横顔
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import type { CharacterImageUrlMap } from '@idol/shared';
+import { useEffect, useState } from 'react';
+import { pickCharacterImageUrl, type CharacterImageUrlMap } from '@idol/shared';
 import {
   CHARACTER_IMAGES_ENABLED,
   CHARACTER_NAME,
@@ -29,6 +29,13 @@ type Props = {
   pose: CharacterPose;
   /** 管理画面でアップロードされたポーズ別画像 URL マップ (DB 駆動、任意)。 */
   imageUrls?: CharacterImageUrlMap;
+  /**
+   * このプレイで使用するキャラ画像のパターン番号 (1〜N)。
+   * プレイ開始時に一度だけランダムに決め、全ポーズで同じ番号を優先的に使うことで
+   * 「途中で別パターンの画像が混ざる」のを防ぎ、統一感を出す。
+   * 当該ポーズにこの番号が未登録なら、登録済みの最小番号にフォールバックする。
+   */
+  variant?: number;
   /** 待機中のふわふわ揺れアニメを有効にするか。 */
   bob?: boolean;
   className?: string;
@@ -36,19 +43,19 @@ type Props = {
 
 const FACE_DIRS = new Set<CharacterPose>(['up', 'down', 'left', 'right']);
 
-export function CharacterAvatar({ pose, imageUrls, bob = true, className = '' }: Props) {
+export function CharacterAvatar({
+  pose,
+  imageUrls,
+  variant = 1,
+  bob = true,
+  className = '',
+}: Props) {
   const [imageFailed, setImageFailed] = useState(false);
 
-  // 管理画面で 1 ポーズにつき最大 3 パターンの画像を登録できる。
-  // pose が変わるたびに、その中からランダムで 1 枚を選ぶ。
-  // (pose 依存の useMemo なので、同じ pose の間は同じ画像が保たれ、
-  //  ポーズが切り替わるたびに選び直される。)
-  const dbImageUrl = useMemo(() => {
-    const urls = imageUrls?.[pose];
-    if (!urls || urls.length === 0) return undefined;
-    return urls[Math.floor(Math.random() * urls.length)];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pose, imageUrls]);
+  // このプレイで選ばれたパターン番号 (variant) を全ポーズで優先的に使う。
+  // 当該ポーズに当該パターンが無ければ、登録済みの最小番号にフォールバックする。
+  // → プレイ内でパターンが揃い、「最初にパターン1が出たら以降もパターン1」を実現。
+  const dbImageUrl = pickCharacterImageUrl(imageUrls?.[pose], variant);
 
   // pose が変わったら画像エラー状態をリセット
   useEffect(() => {

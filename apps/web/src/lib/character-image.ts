@@ -124,10 +124,10 @@ export async function listCharacterImages(): Promise<StoredCharacterImage[]> {
 }
 
 /**
- * slot (ポーズ) → URL配列 のマップを返す (ゲーム画面に渡す用)。
- * 各ポーズに登録されているパターンの URL を variant 昇順で配列にまとめる。
- * ゲーム側 (CharacterAvatar) がこの配列からランダムに 1 枚を選ぶ。
- * 設定されているスロットのみ含む。
+ * slot (ポーズ) → (パターン番号 → URL) のマップを返す (ゲーム画面に渡す用)。
+ * 各ポーズに登録されているパターンを variant 番号をキーにしてまとめる。
+ * ゲーム側 (CharacterAvatar) はプレイ開始時に選んだパターン番号を全ポーズで
+ * 優先的に使う (統一感のため)。設定されているスロット/パターンのみ含む。
  */
 export async function getCharacterImageUrlMap(): Promise<CharacterImageUrlMap> {
   const rows = await prisma.characterImage.findMany({
@@ -139,7 +139,7 @@ export async function getCharacterImageUrlMap(): Promise<CharacterImageUrlMap> {
   for (const r of rows) {
     if ((CHARACTER_IMAGE_SLOTS as readonly string[]).includes(r.slot) && r.url) {
       const slot = r.slot as CharacterImageSlot;
-      (map[slot] ??= []).push(r.url);
+      (map[slot] ??= {})[r.variant] = r.url;
     }
   }
   return map;
