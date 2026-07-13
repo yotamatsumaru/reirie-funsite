@@ -16,33 +16,46 @@ export default async function MeRewardsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me/rewards');
 
+  // カタログ取得はテーブル未整備 (マイグレーション未適用) 等で失敗しうる。
+  // その場合でもページ全体をクラッシュ (真っ黒画面) させず、
+  // 「交換できる景品はありません」表示にフォールバックする。
   const [user, items] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        rewardPoints: true,
-        fullName: true,
-        phone: true,
-        postalCode: true,
-        prefecture: true,
-        addressLine1: true,
-        addressLine2: true,
-      },
-    }),
-    prisma.rewardCatalogItem.findMany({
-      where: { status: 'PUBLISHED' },
-      orderBy: [{ sortOrder: 'asc' }, { pointCost: 'asc' }],
-      select: {
-        id: true,
-        slug: true,
-        kind: true,
-        name: true,
-        description: true,
-        imageUrl: true,
-        pointCost: true,
-        stock: true,
-      },
-    }),
+    prisma.user
+      .findUnique({
+        where: { id: session.user.id },
+        select: {
+          rewardPoints: true,
+          fullName: true,
+          phone: true,
+          postalCode: true,
+          prefecture: true,
+          addressLine1: true,
+          addressLine2: true,
+        },
+      })
+      .catch((e) => {
+        console.error('[me/rewards] failed to load user', e);
+        return null;
+      }),
+    prisma.rewardCatalogItem
+      .findMany({
+        where: { status: 'PUBLISHED' },
+        orderBy: [{ sortOrder: 'asc' }, { pointCost: 'asc' }],
+        select: {
+          id: true,
+          slug: true,
+          kind: true,
+          name: true,
+          description: true,
+          imageUrl: true,
+          pointCost: true,
+          stock: true,
+        },
+      })
+      .catch((e) => {
+        console.error('[me/rewards] failed to load catalog', e);
+        return [] as Awaited<ReturnType<typeof prisma.rewardCatalogItem.findMany>>;
+      }),
   ]);
 
   const balance = user?.rewardPoints ?? 0;
