@@ -120,14 +120,13 @@ const DIR_LABEL: Record<AcchiDirection, string> = {
   RIGHT: '右',
 };
 
-type Phase = 'janken' | 'direction' | 'reveal' | 'result';
+type Phase = 'start' | 'janken' | 'direction' | 'reveal' | 'result';
 
 /** ラウンド1 演出のサブフェーズ: 試行を1つずつ見せる → (進めば) ラウンド2 を見せる */
 type RevealSubPhase = 'round1' | 'round2';
 
-/** 各演出ステップの表示時間 (ms) */
-const REVEAL_STEP_MS = 900;
-const REVEAL_ROUND2_MS = 1100;
+/** あいこ (やり直し) の 1 試行を見せる時間 (ms)。あいこだけは自動で次へ進む。 */
+const DRAW_STEP_MS = 900;
 
 export function AcchiGameClient({
   initial,
@@ -143,13 +142,21 @@ export function AcchiGameClient({
   const sound = useAcchiSound(voiceUrls);
   const [remaining, setRemaining] = useState(initial.remaining);
   const [balance, setBalance] = useState(initial.balance);
-  const [phase, setPhase] = useState<Phase>('janken');
+  // 最初は「タップしてスタート」画面。ここでの最初のタップで voiceStart を鳴らし、
+  // 以降のボイスも自動再生ブロックされないようにする (ブラウザの自動再生ポリシー対策)。
+  const [phase, setPhase] = useState<Phase>('start');
   const [hand, setHand] = useState<JankenHand | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<PlayResponse | null>(null);
   const [revealIndex, setRevealIndex] = useState(0);
   const [revealSubPhase, setRevealSubPhase] = useState<RevealSubPhase>('round1');
+  // reveal フェーズで「決着/結果を表示し、ユーザーの操作 (ボタン) 待ち」の状態か。
+  // これが true の間は自動では次へ進まず、ボタンを押して進める。
+  //  - round1 で決着 (勝ち/負け) を表示 → ボタン待ち
+  //  - round2 で結果を表示 → ボタン待ち
+  // (あいこのやり直し表示だけは自動で次の試行へ進むので、これは使わない)
+  const [awaitingAction, setAwaitingAction] = useState(false);
 
   // このプレイで使うキャラ画像のパターン番号。プレイごとに 1 度だけ抽選し、
   // 全ポーズで同じ番号を優先的に使う (= 途中でパターンが混ざらない)。
@@ -180,59 +187,61 @@ export function AcchiGameClient({
 
   const canPlay = remaining > 0;
 
-  // ミニゲームを開いた最初のユーザー操作でゲーム開始ボイスを鳴らすためのフラグ。
-  // 自動再生ポリシー対策として、最初のタップ (手を選ぶ操作) の延長で再生する。
-  const [startVoicePlayed, setStartVoicePlayed] = useState(false);
-
   // === 音声フロー ===
-  // 1. ミニゲームを開く → ゲーム開始音声 (voiceStart)  ※最初の操作で再生
-  // 2. じゃんけん → 結果表示 → じゃんけんの勝敗音声
-  //      あいこ → もう一回 (voiceDraw)
-  //      負け   → 終了 (lose + voiceLose)
-  //      勝ち   → 勝ち音声 (win + voiceWin) → あっちむいてPU (voiceAcchi) で方向対決へ
-  // 3. 方向選択 → 結果表示 → REIRIE の勝敗音声
-  //      方向一致 = プレイヤーの勝ち → REIRIE 負け (win + voiceWin)
-  //      方向不一致 = プレイヤーの負け → REIRIE 勝ち (lose + voiceLose)
-  // 4. もう一度 / 終了 → またね音声 (voiceBye) → ホーム or 最初の画面へ
+  // 0. サムネから来る → 「タップしてスタート」画面。最初のタップで開始音声 (voiceStart)
+  //    を鳴らしてから じゃんけん画面へ (自動再生ポリシー対策)。
+  // 1. じゃんけん → 手をタップ (tap のみ)。
+  // 2. 方向選択 → 方向をタップ (tap) → API 送信 → 演出へ。
+  // 3. 演出 (reveal):
+  //      あいこ  → もう一回 (draw + voiceDraw)。自動で次の試行へ。
+  //      じゃんけん決着を表示:
+  //        負け  → 負け音声 (lose + voiceLose) → 「結果を確認」ボタン待ち → 結果へ
+  //        勝ち  → 勝ち音声 (win + voiceWin) → 「あっちむいてPUIに挑戦」ボタン待ち
+  //                 → ボタンで voiceAcchi を鳴らして 方向対決 (round2) へ
+  //      方向対決の結果を表示:
+  //        方向一致 (プレイヤー勝ち) → win + voiceWin → 「結果を確認」ボタン待ち → 結果へ
+  //        方向不一致 (プレイヤー負け) → lose + voiceLose → 「結果を確認」ボタン待ち → 結果へ
+  // 4. 結果 (result): 勝利時のみポイント音 (point)。
+  //      もう一度 → またね音声 (voiceBye) → スタート画面へ
+  //      終了     → またね音声 (voiceBye) → 会員カードへ
 
-  // ラウンド1 の試行を 1 つずつ演出し、決着に応じて勝敗音声を鳴らしてから
-  // ラウンド2 演出 or 結果表示へ進める。
+  // ラウンド1 の試行を 1 つずつ演出する。
+  //  - あいこ (やり直し) の試行だけは自動で次へ進める。
+  //  - 決着した試行 (勝ち/負け) は勝敗音声を鳴らして「ボタン待ち」状態にする。
   useEffect(() => {
     if (phase !== 'reveal' || !outcome) return;
+    if (revealSubPhase !== 'round1') return;
 
-    if (revealSubPhase === 'round1') {
-      const attempts = outcome.round1.attempts;
-      const attempt = attempts[revealIndex];
-      const isLast = revealIndex === attempts.length - 1;
+    const attempts = outcome.round1.attempts;
+    const attempt = attempts[revealIndex];
+    const isLast = revealIndex === attempts.length - 1;
 
-      if (!isLast) {
-        // あいこ (やり直し) → もう一回の音声
-        sound.play('draw');
-        sound.play('voiceDraw');
-        const t = setTimeout(() => setRevealIndex((i) => i + 1), REVEAL_STEP_MS);
-        return () => clearTimeout(t);
-      }
-
-      // 決着した試行 = じゃんけんの結果を表示し、勝敗音声を鳴らす。
-      if (attempt.outcome === 'LOSE') {
-        // じゃんけんで負け → 負け音声 → その場で結果表示へ (ラウンド2 なし)
-        sound.play('lose');
-        sound.play('voiceLose');
-        const t = setTimeout(() => setPhase('result'), REVEAL_STEP_MS);
-        return () => clearTimeout(t);
-      }
-      // じゃんけんで勝ち → 勝ち音声 → あっちむいてPU の掛け声 → 方向対決へ
-      sound.play('win');
-      sound.play('voiceWin');
-      const tAcchi = setTimeout(() => sound.play('voiceAcchi'), REVEAL_STEP_MS);
-      const t = setTimeout(() => setRevealSubPhase('round2'), REVEAL_STEP_MS);
-      return () => {
-        clearTimeout(tAcchi);
-        clearTimeout(t);
-      };
+    if (!isLast) {
+      // あいこ (やり直し) → もう一回の音声 → 自動で次の試行へ。
+      sound.play('draw');
+      sound.play('voiceDraw');
+      const t = setTimeout(() => setRevealIndex((i) => i + 1), DRAW_STEP_MS);
+      return () => clearTimeout(t);
     }
 
-    // ラウンド2 (方向) の演出 → 一致/不一致に応じて REIRIE の勝敗音声を鳴らす。
+    // 決着した試行 = じゃんけんの結果をしっかり表示し、勝敗音声を鳴らして
+    // ユーザーのボタン操作を待つ (自動では進めない)。
+    if (attempt.outcome === 'LOSE') {
+      sound.play('lose');
+      sound.play('voiceLose');
+    } else {
+      sound.play('win');
+      sound.play('voiceWin');
+    }
+    setAwaitingAction(true);
+  }, [phase, outcome, revealIndex, revealSubPhase, sound]);
+
+  // ラウンド2 (方向) の演出に入ったら、一致/不一致の勝敗音声を鳴らして
+  // 「結果を確認」ボタン待ちにする。
+  useEffect(() => {
+    if (phase !== 'reveal' || !outcome) return;
+    if (revealSubPhase !== 'round2') return;
+
     const matched = outcome.round2?.matched ?? false;
     if (matched) {
       // 方向一致 = プレイヤーの勝ち = REIRIE の負け
@@ -243,9 +252,8 @@ export function AcchiGameClient({
       sound.play('lose');
       sound.play('voiceLose');
     }
-    const t = setTimeout(() => setPhase('result'), REVEAL_ROUND2_MS);
-    return () => clearTimeout(t);
-  }, [phase, outcome, revealIndex, revealSubPhase, sound]);
+    setAwaitingAction(true);
+  }, [phase, outcome, revealSubPhase, sound]);
 
   // 結果フェーズに入ったら、勝利報酬のポイント獲得音のみ鳴らす。
   // 勝敗ボイス/効果音は reveal フェーズで既に再生済み。
@@ -257,18 +265,40 @@ export function AcchiGameClient({
     }
   }, [phase, outcome, sound]);
 
+  // 「タップしてスタート」= 最初のユーザー操作。ここで開始音声を鳴らし、
+  // 以降のボイスが自動再生ブロックされないようにしてから じゃんけん画面へ。
+  function startGame() {
+    if (!canPlay) return;
+    sound.play('tap');
+    sound.play('voiceStart');
+    setError(null);
+    setPhase('janken');
+  }
+
   function selectHand(h: JankenHand) {
     if (!canPlay || loading) return;
-    // ミニゲームを開いてから最初の操作 = ゲーム開始音声を鳴らす。
-    // (自動再生ブロック対策として、最初のユーザー操作の延長で再生する)
+    // 開始音声は start 画面で再生済み。ここではタップ音のみ。
     sound.play('tap');
-    if (!startVoicePlayed) {
-      sound.play('voiceStart');
-      setStartVoicePlayed(true);
-    }
     setHand(h);
     setError(null);
     setPhase('direction');
+  }
+
+  // reveal (round1 で決着=勝ち) → 「あっちむいてPUIに挑戦」ボタン。
+  // ここで掛け声 (voiceAcchi) を鳴らしてから 方向対決 (round2) の演出へ。
+  function goToRound2() {
+    sound.play('tap');
+    sound.play('voiceAcchi');
+    setAwaitingAction(false);
+    setRevealSubPhase('round2');
+  }
+
+  // reveal (round1 で決着=負け / round2 の結果表示後) → 「結果を確認」ボタン。
+  // 結果画面へ進む。
+  function goToResult() {
+    sound.play('tap');
+    setAwaitingAction(false);
+    setPhase('result');
   }
 
   async function selectDirection(dir: AcchiDirection) {
@@ -296,6 +326,7 @@ export function AcchiGameClient({
       setBalance(data.balance);
       setRevealIndex(0);
       setRevealSubPhase('round1');
+      setAwaitingAction(false);
       setPhase('reveal');
     } catch (e) {
       setError((e as Error).message);
@@ -306,7 +337,7 @@ export function AcchiGameClient({
   }
 
   function playAgain() {
-    // もう一度 → またね音声を鳴らしてから最初の画面 (じゃんけん) に戻す。
+    // もう一度 → またね音声を鳴らしてから「タップしてスタート」画面に戻す。
     sound.play('tap');
     sound.play('voiceBye');
     setHand(null);
@@ -314,11 +345,11 @@ export function AcchiGameClient({
     setError(null);
     setRevealIndex(0);
     setRevealSubPhase('round1');
-    // 次のプレイでも開始音声が鳴るように、開始フラグを戻す。
-    setStartVoicePlayed(false);
+    setAwaitingAction(false);
     // 次のプレイのパターン番号を抽選し直す (プレイごとに見た目が変わる)。
     setImageVariant(pickImageVariant());
-    setPhase('janken');
+    // スタート画面に戻す (最初のタップで開始音声を鳴らすフローを再現)。
+    setPhase('start');
   }
 
   function endGame() {
@@ -368,6 +399,26 @@ export function AcchiGameClient({
           <p className="mt-1 text-sm text-amber-800">
             また明日 {initial.maxPerDay} 回チャレンジできます。お楽しみに！
           </p>
+        </div>
+      ) : null}
+
+      {/* スタート画面 (タップしてスタート) — 最初のタップで開始音声を鳴らす */}
+      {phase === 'start' && canPlay ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          {/* キャラクター (待機で揺れる) */}
+          <div className="animate-acchi-swing">
+            <CharacterAvatar pose="idle" imageUrls={characterImageUrls} variant={imageVariant} bob />
+          </div>
+          <p className="mb-1 mt-2 text-lg font-bold text-slate-800">
+            {CHARACTER_NAME} とあっちむいてPUI！
+          </p>
+          <p className="mb-6 text-sm text-slate-500">
+            じゃんけんに勝って、方向を当てたらキミの勝ち！勝てば{' '}
+            <span className="font-bold text-amber-600">{initial.winReward}pt</span> ゲット！
+          </p>
+          <Button onClick={startGame} variant="primary" size="lg">
+            タップしてスタート
+          </Button>
         </div>
       ) : null}
 
@@ -431,6 +482,9 @@ export function AcchiGameClient({
           outcome={outcome}
           revealIndex={revealIndex}
           revealSubPhase={revealSubPhase}
+          awaitingAction={awaitingAction}
+          onChallenge={goToRound2}
+          onConfirmResult={goToResult}
           characterImageUrls={characterImageUrls}
           imageVariant={imageVariant}
         />
@@ -484,12 +538,21 @@ function RevealCard({
   outcome,
   revealIndex,
   revealSubPhase,
+  awaitingAction,
+  onChallenge,
+  onConfirmResult,
   characterImageUrls,
   imageVariant,
 }: {
   outcome: PlayResponse;
   revealIndex: number;
   revealSubPhase: RevealSubPhase;
+  /** 決着/結果を表示し、ユーザーのボタン操作待ちか。 */
+  awaitingAction: boolean;
+  /** 「あっちむいてPUIに挑戦」ボタン (round1 勝ち時)。 */
+  onChallenge: () => void;
+  /** 「結果を確認」ボタン (round1 負け / round2 結果表示後)。 */
+  onConfirmResult: () => void;
   characterImageUrls?: CharacterImageUrlMap;
   imageVariant: number;
 }) {
@@ -498,6 +561,9 @@ function RevealCard({
   const isLastAttempt = revealIndex === attempts.length - 1;
 
   if (revealSubPhase === 'round1') {
+    // 決着した試行 (最後の試行) で勝ったか。
+    const decisiveWin = isLastAttempt && attempt.outcome === 'WIN';
+    const decisiveLose = isLastAttempt && attempt.outcome === 'LOSE';
     const label = !isLastAttempt
       ? 'あいこ！もう一回っ！'
       : attempt.outcome === 'WIN'
@@ -520,13 +586,31 @@ function RevealCard({
           </div>
         </div>
         <p className="mt-4 text-xl font-bold text-slate-800">{label}</p>
+
+        {/* 決着=勝ち → 「あっちむいてPUIに挑戦」ボタンで方向対決へ */}
+        {decisiveWin && awaitingAction ? (
+          <div className="mt-5">
+            <p className="mb-3 text-sm text-slate-500">方向対決に進めるよ！</p>
+            <Button onClick={onChallenge} variant="primary" size="lg">
+              あっちむいてPUIに挑戦！
+            </Button>
+          </div>
+        ) : null}
+
+        {/* 決着=負け → 「結果を確認」ボタンで結果へ */}
+        {decisiveLose && awaitingAction ? (
+          <div className="mt-5">
+            <p className="mb-3 text-xs text-slate-400">じゃんけんで負けてしまった…</p>
+            <Button onClick={onConfirmResult} variant="secondary" size="lg">
+              結果を確認
+            </Button>
+          </div>
+        ) : null}
+
+        {/* あいこ (自動で次へ) */}
         {!isLastAttempt ? (
           <p className="mt-1 text-xs text-slate-400">もう一度じゃんけん…</p>
-        ) : attempt.outcome === 'WIN' ? (
-          <p className="mt-1 text-xs text-slate-400">方向対決に進むよ！</p>
-        ) : (
-          <p className="mt-1 text-xs text-slate-400">ここで終了…</p>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -547,6 +631,15 @@ function RevealCard({
       <p className="mt-2 text-xl font-bold text-slate-800">
         {round2.matched ? '方向が一致…！' : '方向が外れた…！'}
       </p>
+
+      {/* round2 結果表示後 → 「結果を確認」ボタンで結果画面へ */}
+      {awaitingAction ? (
+        <div className="mt-5">
+          <Button onClick={onConfirmResult} variant="primary" size="lg">
+            結果を確認
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
