@@ -38,6 +38,7 @@ import {
   recordAcchiPlay,
   buyAcchiExtraPlay,
   PROMO_UNLIMITED_REMAINING,
+  safeGetPromoUntil,
 } from '@/lib/points';
 import {
   resolveAcchiPlay,
@@ -71,36 +72,39 @@ import {
 async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
   // プロモ/デモアカウントは勝率を PREMIUM 相当に固定する
   // (リリースイベントの配信で「よく勝つ」デモができるように)。
-  const [user, sub] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { promoUntil: true } }),
+  const [promoUntil, sub] = await Promise.all([
+    // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
+    safeGetPromoUntil(prisma, userId),
     prisma.subscription.findFirst({
       where: { userId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
       orderBy: { createdAt: 'desc' },
       select: { planType: true },
     }),
   ]);
-  if (isPromoActive(user?.promoUntil ?? null)) return PROMO_EFFECTIVE_PLAN;
+  if (isPromoActive(promoUntil)) return PROMO_EFFECTIVE_PLAN;
   return (sub?.planType as PlanTypeLiteral | undefined) ?? 'FREE';
 }
 
 export async function handleAcchiGet(req: Request): Promise<Response> {
   const principal = await requireApiPrincipal(req);
 
-  const [playedToday, purchasedExtra, user, rewardBonusSettings, rewardPointGrantedToday] =
+  const [playedToday, purchasedExtra, user, rewardBonusSettings, rewardPointGrantedToday, promoUntil] =
     await Promise.all([
       getAcchiPlayCountToday(principal.userId),
       getAcchiExtraPlaysToday(principal.userId),
       prisma.user.findUnique({
         where: { id: principal.userId },
-        select: { points: true, rewardPoints: true, promoUntil: true },
+        select: { points: true, rewardPoints: true },
       }),
       getAcchiRewardBonusSettings(),
       getAcchiRewardBonusGrantedToday(principal.userId),
+      // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
+      safeGetPromoUntil(prisma, principal.userId),
     ]);
 
   // プロモ/デモアカウントは回数無制限。remaining は大きな値を返し、
   // promoActive フラグを立てて UI 側で「∞」表示にする。
-  const promoActive = isPromoActive(user?.promoUntil ?? null);
+  const promoActive = isPromoActive(promoUntil);
   const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + purchasedExtra;
   return NextResponse.json({
     date: jstDateKey(),
