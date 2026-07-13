@@ -452,10 +452,12 @@ export function AcchiGameClient({
     setPhase('start');
   }
 
-  function endGame() {
-    // 終了 → またね音声を鳴らしてからホーム (会員カード) に戻る。
-    sound.play('tap');
-    sound.play('voiceBye');
+  async function endGame() {
+    // 終了 → またね音声を「鳴らし切ってから」ホーム (会員カード) に戻る。
+    // router.push を即実行するとページ遷移で音声が途切れるため、
+    // playToEnd の Promise (再生終了 or 保険タイムアウトで解決) を待ってから遷移する。
+    // ミュート / 未アップロード / 再生ブロック時は即解決するので固まらない。
+    await sound.playToEnd('voiceBye');
     router.push('/me/card');
   }
 

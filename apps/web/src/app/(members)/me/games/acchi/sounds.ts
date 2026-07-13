@@ -12,8 +12,12 @@
  */
 import type { AcchiVoiceSlot, AcchiVoiceUrlMap } from '@idol/shared';
 
-/** 効果音を鳴らすか (ファイルは配置済み)。 */
-export const SE_ENABLED = true;
+/**
+ * 効果音 (SE) を鳴らすか。
+ * false の場合、アップロードしたボイス (voice-*) のみを再生し、
+ * 組み込みの効果音 (se-*.mp3) は一切鳴らさない。
+ */
+export const SE_ENABLED = false;
 
 /** サウンド 1 件の定義。 */
 export type SoundDef = {
