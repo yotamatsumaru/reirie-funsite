@@ -289,15 +289,22 @@ model User {
   // ADMIN に付与する領域別の管理権限 (CONTENT / MERCH / GAME / CALL)。
   // SUPER_ADMIN は常に全権限を持つため参照しない。
   adminCapabilities    String[]  @default([]) @map("admin_capabilities")
-  // プロモーション / デモ配信用アカウントの有効期限。
+  // プロモーション / デモ配信用アカウントの有効期限 (DB カラム: promo_until)。
   //  - null            … 通常アカウント (プロモ特典なし)
   //  - 未来の日時       … プロモ有効中。ミニゲームの回数制限を撤廃し、勝率を
   //                       PREMIUM 相当に固定する (リリースイベントの配信などで
   //                       「何度でも勝ってみせる」デモができる)。
   //  - 過去の日時       … プロモ期限切れ (通常アカウントに戻る)。
   // 「無期限」にしたい場合は十分先の日時 (例: 2099-12-31) を入れる。
-  // 本番 DB のまま特定アカウントだけ挙動を変えられ、期限切れ or null 化で元に戻せる。
-  promoUntil           DateTime? @map("promo_until")
+  //
+  // 【重要】このカラムは「後付けマイグレーション」であり、本番 DB では未適用の
+  // 期間が長く存在し得る。Prisma のモデルフィールドにすると、生成された Client が
+  // User の全 SELECT / RETURNING に promo_until を含めてしまい、カラム未適用の DB では
+  // select を明示しない全ての user.findUnique/update/create が
+  // 「column promo_until does not exist」で 500 になる (= あっちむいてPUI のサーバーエラー)。
+  // → 事故を根絶するため、あえて Prisma モデルには載せず、読み書きは生 SQL
+  //   (safeGetPromoUntil / safeSetPromoUntil) 経由に限定する。カラム未適用でも安全。
+  //   マイグレーション 20260713000000_add_user_promo_until 適用後に自動で機能する。
   marketingOptIn       Boolean   @default(false) @map("marketing_opt_in")
   // 会員番号 (RR-000123 形式)。登録順の連番を MemberCounter で採番する。
   // 既存ユーザーへは backfill スクリプトで付与するため nullable。

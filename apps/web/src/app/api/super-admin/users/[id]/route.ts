@@ -16,6 +16,7 @@ import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { USER_ROLES } from '@idol/shared';
+import { safeGetPromoUntil, safeSetPromoUntil } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
@@ -60,7 +61,12 @@ export const PATCH = handle(
       }
     }
 
-    const target = await prisma.user.findUnique({ where: { id } });
+    // promo_until は Prisma モデルに載せていない (カラム未適用の DB で全 user 操作が
+    // 壊れるのを防ぐため) ので、select を明示して取得する。
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, role: true, deletedAt: true },
+    });
     if (!target) throw errors.notFound('ユーザーが見つかりません');
 
     const updateData: Record<string, unknown> = {};
@@ -87,27 +93,47 @@ export const PATCH = handle(
       auditMeta.restored = true;
     }
     // プロモ/デモアカウントの付与・解除。
+    // promo_until は Prisma モデル外 (生 SQL) のため、prisma.user.update ではなく
+    // safeSetPromoUntil で別途書き込む。カラム未適用なら false が返る。
     let promoChanged = false;
+    let promoNext: Date | null = null;
+    let promoMigrationMissing = false;
     if (promoUntil !== undefined) {
       const next = promoUntil ? new Date(promoUntil) : null;
-      const prev = target.promoUntil ? new Date(target.promoUntil) : null;
+      const prev = await safeGetPromoUntil(prisma, id);
       const prevIso = prev ? prev.toISOString() : null;
       const nextIso = next ? next.toISOString() : null;
       if (prevIso !== nextIso) {
-        updateData.promoUntil = next;
+        promoNext = next;
         auditMeta.promoUntil = { from: prevIso, to: nextIso };
         promoChanged = true;
       }
     }
 
-    if (Object.keys(updateData).length === 0) {
+    if (Object.keys(updateData).length === 0 && !promoChanged) {
       return NextResponse.json({ ok: true, noChange: true });
     }
 
-    const updated = await prisma.user.update({
-      where: { id },
-      data: updateData,
-    });
+    // 通常フィールド (role / banned 等) の更新。select を明示して promo_until を
+    // RETURNING に含めない (カラム未適用でも壊れないようにする)。
+    let updatedRole = target.role;
+    if (Object.keys(updateData).length > 0) {
+      const updated = await prisma.user.update({
+        where: { id },
+        data: updateData,
+        select: { id: true, role: true },
+      });
+      updatedRole = updated.role;
+    }
+
+    // プロモ/デモの書き込み (生 SQL)。カラム未適用なら false。
+    if (promoChanged) {
+      const ok = await safeSetPromoUntil(prisma, id, promoNext);
+      if (!ok) {
+        promoMigrationMissing = true;
+        promoChanged = false;
+      }
+    }
 
     await logAudit({
       userId: session.user.id,
@@ -125,7 +151,19 @@ export const PATCH = handle(
 
     return NextResponse.json({
       ok: true,
-      user: { id: updated.id, role: updated.role, promoUntil: updated.promoUntil },
+      // promo_until カラムが未適用でプロモ書き込みだけができなかった場合に通知する。
+      ...(promoMigrationMissing
+        ? {
+            promoMigrationMissing: true,
+            message:
+              'promo_until カラムが未適用のため、プロモ設定は保存できませんでした。DB マイグレーションを適用してください。',
+          }
+        : {}),
+      user: {
+        id,
+        role: updatedRole,
+        promoUntil: promoChanged ? (promoNext ? promoNext.toISOString() : null) : undefined,
+      },
     });
   },
 );
