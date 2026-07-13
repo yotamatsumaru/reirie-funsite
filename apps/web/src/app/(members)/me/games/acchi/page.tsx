@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { jstDateKey, remainingPlays, ACCHI_MAX_PLAYS_PER_DAY, ACCHI_WIN_REWARD } from '@idol/shared';
+import { jstDateKey, remainingPlays, ACCHI_MAX_PLAYS_PER_DAY, ACCHI_WIN_REWARD, isPromoActive } from '@idol/shared';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { getAcchiPlayCountToday } from '@/lib/points';
+import { getAcchiPlayCountToday, PROMO_UNLIMITED_REMAINING } from '@/lib/points';
 import { getAcchiVoiceUrlMap } from '@/lib/game-audio';
 import { getCharacterImageUrlMap } from '@/lib/character-image';
 import { AcchiGameClient } from './acchi-client';
@@ -21,11 +21,13 @@ export default async function AcchiGamePage() {
     getAcchiPlayCountToday(session.user.id),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true },
+      select: { points: true, promoUntil: true },
     }),
     getAcchiVoiceUrlMap(),
     getCharacterImageUrlMap(),
   ]);
+
+  const promoActive = isPromoActive(user?.promoUntil ?? null);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
@@ -35,7 +37,10 @@ export default async function AcchiGamePage() {
           maxPerDay: ACCHI_MAX_PLAYS_PER_DAY,
           winReward: ACCHI_WIN_REWARD,
           playedToday,
-          remaining: remainingPlays(playedToday),
+          remaining: promoActive
+            ? PROMO_UNLIMITED_REMAINING
+            : remainingPlays(playedToday),
+          promoActive,
           balance: user?.points ?? 0,
         }}
         voiceUrls={voiceUrls}

@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { UserRowActions } from '../user-row-actions';
 import { WarningPanel, type WarningItem } from './warning-panel';
+import { PromoPanel } from './promo-panel';
 import { getMemberRank } from '@/lib/membership-rank';
 import { getMemberRankTiers } from '@/lib/app-setting';
 import { ORDER_STATUS_LABELS } from '@idol/shared';
@@ -203,6 +204,16 @@ export default async function SuperAdminUserDetailPage({
                 }
               />
               <Field label="TOTP (2段階認証)" value={user.totpEnabled ? '有効' : '無効'} />
+              <Field
+                label="プロモ/デモ"
+                value={
+                  user.promoUntil
+                    ? user.promoUntil > new Date()
+                      ? `有効 (〜${formatDateTime(user.promoUntil)})`
+                      : `期限切れ (${formatDateTime(user.promoUntil)})`
+                    : 'なし'
+                }
+              />
             </dl>
           </CardBody>
         </Card>
@@ -244,6 +255,22 @@ export default async function SuperAdminUserDetailPage({
               </table>
             </div>
           )}
+        </CardBody>
+      </Card>
+
+      {/* プロモ/デモアカウント */}
+      <Card className="mt-4">
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">プロモ/デモアカウント</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            イベント配布用のデモアカウント設定。付与するとミニゲームが回数無制限＋勝率PREMIUM相当になります。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <PromoPanel
+            userId={user.id}
+            initialPromoUntil={user.promoUntil ? user.promoUntil.toISOString() : null}
+          />
         </CardBody>
       </Card>
 
