@@ -27,6 +27,7 @@ import {
   canTransitionRedemptionStatus,
   computeAcchiRewardBonus,
   DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
+  isPromoActive,
   type AcchiRewardBonusSettings,
   type PointRateSettings,
   type PlanTypeLiteral,
@@ -668,9 +669,20 @@ export function hashStringToInt32(input: string): number {
   return (hash >>> 0) | 0;
 }
 
+/**
+ * プロモ/デモアカウント (回数無制限) のときに `remaining` として返す大きな値。
+ * UI 側は promoActive フラグで「∞」表示にするが、数値としても十分大きくして
+ * 「残り 0 で終了」扱いにならないようにする。
+ */
+export const PROMO_UNLIMITED_REMAINING = 9999;
+
 export type AcchiPlayPersistResult = {
   /** 受理されたか (回数上限に達していれば false) */
   accepted: boolean;
+  /** 受理時に作成された MiniGamePlay の id (拒否時は undefined)。2段階フローの進行トークンで使う。 */
+  playId?: string;
+  /** プロモ/デモアカウントとしてプレイされたか (true なら回数無制限)。 */
+  promoActive: boolean;
   /** ゲーム結果 (受理時のみ意味を持つ) */
   result: AcchiResult;
   /** 付与ポイント (勝利時のみ > 0) */
@@ -783,8 +795,9 @@ export async function recordAcchiPlay(
       result === 'WIN' ? applyPlanPointMultiplier(ACCHI_WIN_REWARD, plan) : 0;
 
     // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数・
-    // 本日付与済みの特典ポイント合計を数え、上限チェック (競合に強い)
-    const [playedBefore, extraRow, bonusAgg] = await Promise.all([
+    // 本日付与済みの特典ポイント合計を数え、上限チェック (競合に強い)。
+    // プロモ/デモアカウント判定用に promoUntil も同時取得する。
+    const [playedBefore, extraRow, bonusAgg, promoUser] = await Promise.all([
       tx.miniGamePlay.count({ where: { userId, gameType: 'ACCHI_MUITE_HOI', date } }),
       tx.miniGameExtraPlayPurchase.findUnique({
         where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
@@ -793,18 +806,22 @@ export async function recordAcchiPlay(
         where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
         _sum: { bonusRewardPoint: true },
       }),
+      tx.user.findUnique({ where: { id: userId }, select: { promoUntil: true } }),
     ]);
+    // プロモ/デモアカウントは 1 日の回数上限を撤廃する (何度でもプレイ可能)。
+    const promoActive = isPromoActive(promoUser?.promoUntil ?? null, now);
     const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
     const rewardPointGrantedBefore = bonusAgg._sum.bonusRewardPoint ?? 0;
     const rewardPointDailyCap = rewardBonusSettings.dailyCap;
 
-    if (playedBefore >= maxPerDay) {
+    if (!promoActive && playedBefore >= maxPerDay) {
       const u = await tx.user.findUnique({
         where: { id: userId },
         select: { points: true, rewardPoints: true },
       });
       return {
         accepted: false,
+        promoActive: false,
         result,
         reward: 0,
         balance: u?.points ?? 0,
@@ -827,7 +844,7 @@ export async function recordAcchiPlay(
       rewardBonusSettings,
     );
 
-    await tx.miniGamePlay.create({
+    const createdPlay = await tx.miniGamePlay.create({
       data: {
         userId,
         gameType: 'ACCHI_MUITE_HOI',
@@ -837,6 +854,7 @@ export async function recordAcchiPlay(
         bonusRewardPoint: rewardPointBonus,
         detail: detail ?? null,
       },
+      select: { id: true },
     });
 
     let balance: number;
@@ -874,11 +892,14 @@ export async function recordAcchiPlay(
     const playedToday = playedBefore + 1;
     return {
       accepted: true,
+      playId: createdPlay.id,
+      promoActive,
       result,
       reward,
       balance,
       playedToday,
-      remaining: remainingPlays(playedToday, maxPerDay),
+      // プロモ時は回数無制限のため、残りは常に大きな値を返す (UI は promoActive で「∞」表示)。
+      remaining: promoActive ? PROMO_UNLIMITED_REMAINING : remainingPlays(playedToday, maxPerDay),
       maxPerDay,
       rewardPointBonus,
       rewardPointBalance,

@@ -97,6 +97,31 @@ type PlayResponse = {
   rewardPointBalance?: number;
 };
 
+/** 2段階フロー・フェーズ1 (じゃんけん) のレスポンス。 */
+type JankenPhaseResponse = {
+  round1: Round1;
+  janken: { player: JankenHand; cpu: JankenHand; outcome: JankenOutcome };
+  /** 勝った場合のみ発行される、方向対決 (フェーズ2) 用の署名付き進行トークン。負けなら null。 */
+  round2Token: string | null;
+  /** true なら (じゃんけん負けで) この時点で結果が確定している。false なら方向対決に進む。 */
+  finished: boolean;
+  result: 'WIN' | 'LOSE';
+  reward: number;
+  balance: number;
+  playedToday: number;
+  remaining: number;
+  maxPerDay: number;
+  rewardPointBonus?: number;
+  rewardPointBalance?: number;
+};
+
+/** 2段階フロー・フェーズ2 (方向対決) のレスポンス。 */
+type DirectionPhaseResponse = {
+  janken: { player: JankenHand; cpu: JankenHand; outcome: JankenOutcome };
+  round2: Round2;
+  result: 'WIN' | 'LOSE';
+};
+
 const HAND_EMOJI: Record<JankenHand, string> = {
   ROCK: '✊',
   SCISSORS: '✌️',
@@ -120,7 +145,16 @@ const DIR_LABEL: Record<AcchiDirection, string> = {
   RIGHT: '右',
 };
 
-type Phase = 'start' | 'janken' | 'direction' | 'reveal' | 'result';
+// 2段階フロー:
+//  start   … タップしてスタート (voiceStart)
+//  janken  … 手を選ぶ → フェーズ1 API (じゃんけん確定 + プレイ回数消費)
+//  reveal  … じゃんけん結果の演出 (あいこ→やり直し, 決着→勝ち/負け)。
+//            負け → 「結果を確認」で result へ。
+//            勝ち → 「あっちむいてPUIに挑戦!」で direction へ。
+//  direction … 勝ったときだけ「方向 (指)」を選ぶ → フェーズ2 API (方向対決)。
+//              → その結果を reveal(round2) で演出。
+//  result  … 最終結果。
+type Phase = 'start' | 'janken' | 'reveal' | 'direction' | 'result';
 
 /** ラウンド1 演出のサブフェーズ: 試行を1つずつ見せる → (進めば) ラウンド2 を見せる */
 type RevealSubPhase = 'round1' | 'round2';
@@ -149,6 +183,9 @@ export function AcchiGameClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<PlayResponse | null>(null);
+  // フェーズ1 (じゃんけん勝利) で得た方向対決用の進行トークン。
+  // フェーズ2 (方向送信) でサーバーに渡す。
+  const [round2Token, setRound2Token] = useState<string | null>(null);
   const [revealIndex, setRevealIndex] = useState(0);
   const [revealSubPhase, setRevealSubPhase] = useState<RevealSubPhase>('round1');
   // reveal フェーズで「決着/結果を表示し、ユーザーの操作 (ボタン) 待ち」の状態か。
@@ -275,22 +312,69 @@ export function AcchiGameClient({
     setPhase('janken');
   }
 
-  function selectHand(h: JankenHand) {
-    if (!canPlay || loading) return;
+  // 【フェーズ1: じゃんけん】手を選ぶ → サーバーがじゃんけんを確定 (プレイ回数消費)。
+  // 結果 (round1) を演出フェーズ (reveal/round1) で見せる。
+  //  - 負け  → 「結果を確認」で結果へ。
+  //  - 勝ち  → 「あっちむいてPUIに挑戦!」で 方向選択 (direction) へ。
+  async function selectHand(h: JankenHand) {
+    // 二重送信ガード (ref を同期チェック)。
+    if (!canPlay || loading || submittingRef.current) return;
+    submittingRef.current = true;
     // 開始音声は start 画面で再生済み。ここではタップ音のみ。
     sound.play('tap');
     setHand(h);
     setError(null);
-    setPhase('direction');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/me/games/acchi/janken', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hand: h }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error?.message ?? 'プレイに失敗しました');
+      }
+      const data = json as JankenPhaseResponse;
+      // じゃんけん結果を outcome に反映 (勝ち時は round2 はまだ null)。
+      setOutcome({
+        janken: data.janken,
+        direction: { player: 'UP', cpu: null },
+        result: data.result,
+        reward: data.reward,
+        balance: data.balance,
+        playedToday: data.playedToday,
+        remaining: data.remaining,
+        round1: data.round1,
+        round2: null,
+        rewardPointBonus: data.rewardPointBonus,
+        rewardPointBalance: data.rewardPointBalance,
+      });
+      setRound2Token(data.round2Token);
+      // 回数消費はフェーズ1で完了 → ヘッダーの残り回数を即反映。
+      setRemaining(data.remaining);
+      setBalance(data.balance);
+      setRevealIndex(0);
+      setRevealSubPhase('round1');
+      setAwaitingAction(false);
+      setPhase('reveal');
+    } catch (e) {
+      setError((e as Error).message);
+      setPhase('janken');
+    } finally {
+      setLoading(false);
+      submittingRef.current = false;
+    }
   }
 
   // reveal (round1 で決着=勝ち) → 「あっちむいてPUIに挑戦」ボタン。
-  // ここで掛け声 (voiceAcchi) を鳴らしてから 方向対決 (round2) の演出へ。
-  function goToRound2() {
+  // ここで掛け声 (voiceAcchi) を鳴らしてから 方向選択 (direction) フェーズへ。
+  // (実際のあっちむいてホイと同じく「じゃんけんに勝ってから指を出す」)
+  function goToDirection() {
     sound.play('tap');
     sound.play('voiceAcchi');
     setAwaitingAction(false);
-    setRevealSubPhase('round2');
+    setPhase('direction');
   }
 
   // reveal (round1 で決着=負け / round2 の結果表示後) → 「結果を確認」ボタン。
@@ -301,35 +385,44 @@ export function AcchiGameClient({
     setPhase('result');
   }
 
+  // 【フェーズ2: 方向対決】勝ったときだけ方向 (指) を選ぶ → サーバーが
+  // フェーズ1で確定済みの勝敗に整合する CPU の方向を返す (回数消費・付与済み)。
   async function selectDirection(dir: AcchiDirection) {
-    // 二重送信ガード: ref を同期チェックし、既に送信中なら即 return。
-    // (loading state だけだと非同期更新の隙間で 2 回目が通り得るため)
-    if (!hand || loading || submittingRef.current) return;
+    // 二重送信ガード。
+    if (!round2Token || loading || submittingRef.current) return;
     submittingRef.current = true;
-    // 方向を選んで勝負を確定 (勝敗音声・掛け声は演出フェーズで再生する)。
     sound.play('tap');
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/me/games/acchi', {
+      const res = await fetch('/api/me/games/acchi/direction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hand, direction: dir }),
+        body: JSON.stringify({ token: round2Token, direction: dir }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(json?.error?.message ?? 'プレイに失敗しました');
       }
-      const data = json as PlayResponse;
-      setOutcome(data);
-      setRemaining(data.remaining);
-      setBalance(data.balance);
-      setRevealIndex(0);
-      setRevealSubPhase('round1');
+      const data = json as DirectionPhaseResponse;
+      // 方向対決の結果を outcome にマージし、reveal(round2) で演出する。
+      setOutcome((prev) =>
+        prev
+          ? {
+              ...prev,
+              direction: { player: data.round2.player, cpu: data.round2.cpu },
+              result: data.result,
+              round2: data.round2,
+            }
+          : prev,
+      );
+      setRevealSubPhase('round2');
       setAwaitingAction(false);
       setPhase('reveal');
     } catch (e) {
       setError((e as Error).message);
+      // 方向選択フェーズに留まり、再選択できるようにする。
+      setPhase('direction');
     } finally {
       setLoading(false);
       submittingRef.current = false;
@@ -342,6 +435,7 @@ export function AcchiGameClient({
     sound.play('voiceBye');
     setHand(null);
     setOutcome(null);
+    setRound2Token(null);
     setError(null);
     setRevealIndex(0);
     setRevealSubPhase('round1');
@@ -439,28 +533,31 @@ export function AcchiGameClient({
               <button
                 key={h}
                 onClick={() => selectHand(h)}
-                className="flex flex-col items-center gap-1 rounded-xl border-2 border-slate-200 bg-slate-50 py-4 transition hover:border-twilight-amethyst hover:bg-purple-50 active:scale-95"
+                disabled={loading}
+                className="flex flex-col items-center gap-1 rounded-xl border-2 border-slate-200 bg-slate-50 py-4 transition hover:border-twilight-amethyst hover:bg-purple-50 active:scale-95 disabled:opacity-50"
               >
                 <span className="text-4xl">{HAND_EMOJI[h]}</span>
                 <span className="text-sm font-medium text-slate-700">{HAND_LABEL[h]}</span>
               </button>
             ))}
           </div>
+          {loading ? (
+            <p className="mt-4 text-sm text-slate-400">じゃんけん、ぽん…！</p>
+          ) : null}
         </div>
       ) : null}
 
-      {/* 方向選択フェーズ */}
+      {/* 方向選択フェーズ (じゃんけんに勝ってから「指す」= 本来のあっちむいてホイの順序) */}
       {phase === 'direction' && hand ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
           {/* キャラはあなたの手を出している (演出) */}
           <CharacterAvatar pose={HAND_POSE[hand]} imageUrls={characterImageUrls} variant={imageVariant} bob={false} />
           <p className="mb-1 text-sm text-slate-500">
-            あなたの手: <span className="text-2xl">{HAND_EMOJI[hand]}</span> {HAND_LABEL[hand]}
+            じゃんけんに勝った！あなたが「指す」番だよ
           </p>
           <p className="mb-4 text-lg font-bold text-slate-800">あっちむいて… PU！</p>
           <p className="mb-4 text-xs text-slate-400">
-            じゃんけんに勝てばあなたが「指す」番。{CHARACTER_NAME} が同じ方向を向いたら
-            あなたの勝ち！（じゃんけんに負けると、方向対決に進めずその場で負けだよ）
+            指したい方向を選ぼう。{CHARACTER_NAME} が同じ方向を向いたら あなたの勝ち！
           </p>
           <div className="mx-auto grid max-w-[220px] grid-cols-3 grid-rows-3 gap-2">
             <div />
@@ -476,14 +573,14 @@ export function AcchiGameClient({
         </div>
       ) : null}
 
-      {/* 決着演出フェーズ (ラウンド1のやり直し→決着、勝てばラウンド2) */}
+      {/* 決着演出フェーズ (round1: じゃんけん結果 / round2: 方向対決結果) */}
       {phase === 'reveal' && outcome ? (
         <RevealCard
           outcome={outcome}
           revealIndex={revealIndex}
           revealSubPhase={revealSubPhase}
           awaitingAction={awaitingAction}
-          onChallenge={goToRound2}
+          onChallenge={goToDirection}
           onConfirmResult={goToResult}
           characterImageUrls={characterImageUrls}
           imageVariant={imageVariant}
