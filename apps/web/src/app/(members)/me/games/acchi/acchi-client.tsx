@@ -30,7 +30,7 @@
  *   待機 → じゃんけんの手 → あっちむいてPUIで横顔
  * とアニメーションで動く。キャラ画像の差し替えは ./character.ts 参照。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CHARACTER_IMAGE_VARIANTS,
@@ -170,6 +170,14 @@ export function AcchiGameClient({
 
   const [imageVariant, setImageVariant] = useState<number>(() => pickImageVariant());
 
+  // 二重送信 (連打・ダブルタップ) の同期ガード。
+  // `loading` (state) は setState が非同期のため、極短時間の連打では
+  // 2 回目の onClick が「まだ loading=false」を見て通過し、POST が二重に
+  // 飛ぶ可能性がある。ref は同期的に更新できるため、確実に 1 回に絞れる。
+  // (サーバー側の advisory lock で最終的な超過付与は防げるが、そもそも
+  //  余計なリクエストを投げない = UX / 負荷の両面で望ましい)
+  const submittingRef = useRef(false);
+
   const canPlay = remaining > 0;
 
   // ミニゲームを開いた最初のユーザー操作でゲーム開始ボイスを鳴らすためのフラグ。
@@ -264,7 +272,10 @@ export function AcchiGameClient({
   }
 
   async function selectDirection(dir: AcchiDirection) {
-    if (!hand || loading) return;
+    // 二重送信ガード: ref を同期チェックし、既に送信中なら即 return。
+    // (loading state だけだと非同期更新の隙間で 2 回目が通り得るため)
+    if (!hand || loading || submittingRef.current) return;
+    submittingRef.current = true;
     // 方向を選んで勝負を確定 (勝敗音声・掛け声は演出フェーズで再生する)。
     sound.play('tap');
     setLoading(true);
@@ -290,6 +301,7 @@ export function AcchiGameClient({
       setError((e as Error).message);
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }
 

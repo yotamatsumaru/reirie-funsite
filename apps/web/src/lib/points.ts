@@ -611,6 +611,63 @@ export async function reconcileUserPoints(
 // ミニゲーム (あっちむいてPUI)
 // ---------------------------------------------------------------------
 
+/**
+ * ユーザー単位で「本日のプレイ回数上限チェック → 記録」を直列化するための
+ * トランザクションスコープ advisory lock を取得する。
+ *
+ * なぜ必要か:
+ *  - あっちむいてPUI のプレイ記録 (MiniGamePlay) には日次のユニーク制約が無い
+ *    (1 日に複数回プレイできるため)。上限判定は「トランザクション内で count →
+ *    上限未満なら create」で行うが、PostgreSQL の既定分離レベル READ COMMITTED
+ *    では、同一ユーザーの並列リクエスト (二重送信 / 連打 / PM2 cluster の別プロセス)
+ *    が両方とも同じ count を読み、両方が create を通してしまう「Read-Modify-Write
+ *    競合」が起こり得る。→ 上限を超えたプレイ = 無料報酬 (Fan/特典ポイント) の
+ *    超過付与という不正が成立してしまう。
+ *  - 追加プレイ購入 (buyAcchiExtraPlay) も同様に、並列だと購入上限
+ *    (MAX_EXTRA_PLAYS_PER_DAY) を超えて購入 (=Fan ポイント多重消費) され得る。
+ *
+ * 対策:
+ *  - pg_advisory_xact_lock(key1, key2) を使い、(userId, gameType) をキーに
+ *    トランザクションを直列化する。ロックはトランザクション終了時 (COMMIT/ROLLBACK)
+ *    に自動解放されるため、明示的な解放漏れが起きない。
+ *  - advisory lock は DB (RDS) 全体で有効なので、PM2 cluster の複数プロセス間でも
+ *    確実に排他できる。
+ *
+ * @param client トランザクションクライアント (必ず $transaction 内で呼ぶこと)
+ * @param userId 対象ユーザー ID (UUID 文字列)
+ * @param scope  ロックのサブキー (ゲーム種別ごとに分ける)
+ */
+async function acquireUserGameLock(
+  client: Prisma.TransactionClient,
+  userId: string,
+  scope: string,
+): Promise<void> {
+  // UUID 文字列 + scope を 32bit ずつのキー 2 本 (計 64bit) に落とし込む。
+  // pg_advisory_xact_lock(int4, int4) はキーの組み合わせで排他されるため、
+  // 別ユーザー / 別ゲームのロック同士は互いにブロックしない。
+  const key1 = hashStringToInt32(userId);
+  const key2 = hashStringToInt32(scope);
+  await client.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int, ${key2}::int)`;
+}
+
+/**
+ * 任意の文字列を符号付き 32bit 整数 (PostgreSQL int4 の範囲) に決定論的に変換する。
+ * advisory lock のキー用。衝突しても「別ユーザーが同じロックを共有する」だけで
+ * 正当性 (超過付与の防止) は損なわれないが、実用上は十分に分散する FNV-1a を使う。
+ *
+ * @internal テスト用に export している (通常は acquireUserGameLock 経由で使う)。
+ */
+export function hashStringToInt32(input: string): number {
+  let hash = 0x811c9dc5; // FNV-1a offset basis
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    // FNV prime 乗算 (32bit へ収める)
+    hash = Math.imul(hash, 0x01000193);
+  }
+  // >>> 0 で unsigned 32bit にした後、int4 (符号付き) に変換する。
+  return (hash >>> 0) | 0;
+}
+
 export type AcchiPlayPersistResult = {
   /** 受理されたか (回数上限に達していれば false) */
   accepted: boolean;
@@ -715,6 +772,11 @@ export async function recordAcchiPlay(
   const date = jstDateKey(now);
 
   return prisma.$transaction(async (tx) => {
+    // 【競合対策】同一ユーザー・同一ゲームの「上限チェック → 記録」を直列化する。
+    // これがないと READ COMMITTED 下で並列リクエストが同じ count を読み、
+    // 両方が上限判定を通過して上限超過プレイ (無料報酬の超過付与) が成立し得る。
+    await acquireUserGameLock(tx, userId, 'ACCHI_MUITE_HOI:play');
+
     // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
     const plan = await getUserPlanTx(tx, userId);
     const reward =
@@ -843,6 +905,11 @@ export async function buyAcchiExtraPlay(
   const date = jstDateKey(now);
 
   return prisma.$transaction(async (tx) => {
+    // 【競合対策】追加プレイ購入も並列だと購入上限を超えて購入 (Fan ポイント多重消費)
+    // され得るため、同一ユーザー・同一ゲームで直列化する。
+    // (プレイ記録と同じロックキーを使い、購入とプレイの相互の競合もまとめて排他する)
+    await acquireUserGameLock(tx, userId, 'ACCHI_MUITE_HOI:play');
+
     const existing = await tx.miniGameExtraPlayPurchase.findUnique({
       where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
     });
