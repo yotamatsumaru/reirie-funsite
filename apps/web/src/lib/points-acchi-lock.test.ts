@@ -16,6 +16,13 @@ type Call = { op: string; args: unknown[] };
 
 const calls: Call[] = [];
 
+/**
+ * トップレベル prisma.$queryRaw (= promo_until の読み取り) が
+ * 「column does not exist」で失敗する状況を再現するためのフラグ。
+ * 本番でマイグレーション未適用のときに起きるケースを模す。
+ */
+let promoQueryShouldThrow = false;
+
 // トランザクションクライアントのスタブ。呼ばれた順序を calls に記録する。
 function makeTx() {
   return {
@@ -84,11 +91,27 @@ function makeTx() {
 
 jest.mock('@idol/db', () => {
   const prismaStub = {
+    // promo_until の読み取り (safeGetPromoUntil) はトランザクションの「外」で
+    // トップレベル prisma に対して呼ばれる。カラム未適用時は例外を投げる状況を再現する。
+    $queryRaw: (...args: unknown[]) => {
+      calls.push({ op: '$queryRaw', args });
+      if (promoQueryShouldThrow) {
+        return Promise.reject(
+          new Error('column "promo_until" does not exist'),
+        );
+      }
+      return Promise.resolve([]);
+    },
     $transaction: async (fn: (tx: unknown) => unknown) => fn(makeTx()),
   };
   return {
     prisma: prismaStub,
     Prisma: {
+      // Prisma.sql タグ (safeGetPromoUntil で使用) のダミー
+      sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+        strings,
+        values,
+      }),
       // isUniqueViolation の instanceof チェック用ダミー
       PrismaClientKnownRequestError: class extends Error {
         code: string;
@@ -110,6 +133,7 @@ import {
 
 beforeEach(() => {
   calls.length = 0;
+  promoQueryShouldThrow = false;
 });
 
 describe('hashStringToInt32', () => {
@@ -163,6 +187,40 @@ describe('recordAcchiPlay の advisory lock', () => {
     const sql = Array.isArray(templateParts) ? templateParts.join('') : String(templateParts);
     expect(sql).toContain('pg_advisory_xact_lock');
     expect(sql).toContain('::int');
+  });
+
+  it('promo_until の読み取りはトランザクション (advisory lock) より前に行う', async () => {
+    // これがトランザクション内だと、カラム未適用時に生 SQL が失敗して
+    // トランザクションが aborted 状態になり、後続の create が全部落ちる。
+    await recordAcchiPlay('user-1', 'LOSE', undefined, new Date('2026-07-13T00:00:00Z'));
+
+    const promoIdx = calls.findIndex((c) => c.op === '$queryRaw');
+    const lockIdx = calls.findIndex((c) => c.op === '$executeRaw');
+
+    expect(promoIdx).toBeGreaterThanOrEqual(0); // promo_until を読んでいる
+    expect(lockIdx).toBeGreaterThanOrEqual(0); // トランザクション内でロックしている
+    // promo_until の読み取りは advisory lock (トランザクション開始) より前
+    expect(promoIdx).toBeLessThan(lockIdx);
+  });
+
+  it('promo_until カラム未適用 (生 SQL が失敗) でも 500 にせずプレイを記録できる', async () => {
+    // 本番でマイグレーション未適用のケースを再現。
+    promoQueryShouldThrow = true;
+
+    // safeGetPromoUntil はトランザクション外で呼ばれるため、ここで失敗しても
+    // 後続のトランザクション (miniGamePlay.create 等) は汚染されず成功する。
+    const result = await recordAcchiPlay(
+      'user-1',
+      'LOSE',
+      undefined,
+      new Date('2026-07-13T00:00:00Z'),
+    );
+
+    // プレイは受理され、プロモは無効 (通常アカウント) として扱われる
+    expect(result.accepted).toBe(true);
+    expect(result.promoActive).toBe(false);
+    // トランザクション内でプレイ記録が作成されている (= aborted になっていない)
+    expect(calls.some((c) => c.op === 'miniGamePlay.create')).toBe(true);
   });
 });
 

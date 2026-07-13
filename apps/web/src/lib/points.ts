@@ -688,7 +688,16 @@ export const PROMO_UNLIMITED_REMAINING = 9999;
  *
  * マイグレーション適用後は自動的にプロモが機能する (コード変更不要)。
  *
- * @param client prisma もしくはトランザクションクライアント
+ * 【重要・トランザクション内では呼ばないこと】
+ * PostgreSQL では、1 度でもエラーを起こしたトランザクションは "aborted" 状態になり、
+ * 以降そのトランザクション内の全クエリが失敗する。この関数は promo_until カラムが
+ * 未適用のとき生 SQL が失敗する (例外は握り潰すが、トランザクションは汚染される)。
+ * そのため $transaction のコールバック内で tx を渡して呼ぶと、後続の
+ * tx.xxx.create(...) 等が "current transaction is aborted" で落ちてしまう。
+ * → 必ずトランザクションの「外」でトップレベルの prisma を渡して呼び、
+ *   結果 (promoActive) だけをトランザクション内へ持ち込むこと。
+ *
+ * @param client トップレベルの prisma クライアント (トランザクションクライアント不可)
  */
 export async function safeGetPromoUntil(
   client: Pick<typeof prisma, '$queryRaw'>,
@@ -813,6 +822,20 @@ export async function recordAcchiPlay(
 ): Promise<AcchiPlayPersistResult> {
   const date = jstDateKey(now);
 
+  // 【重要】promo_until の読み取りはトランザクションの「外」で行う。
+  //
+  // 以前は $transaction 内で safeGetPromoUntil(tx, ...) を呼んでいたが、
+  // promo_until カラムが未適用 (マイグレーション未実行) の本番では、この生 SQL が
+  // 「column does not exist」で失敗する。try/catch で例外自体は握り潰せるものの、
+  // PostgreSQL では 1 度でもエラーを起こしたトランザクションは "aborted" 状態になり、
+  // 以降の全クエリが "current transaction is aborted" で失敗する。
+  // その結果 tx.miniGamePlay.create(...) が落ち、ゲーム全体が 500 (サーバーエラー) になる。
+  //
+  // → promo_until はトランザクション開始前に独立した接続で安全に読み、
+  //   トランザクション内では一切生 SQL を投げないことでこの問題を回避する。
+  const promoUntil = await safeGetPromoUntil(prisma, userId);
+  const promoActive = isPromoActive(promoUntil, now);
+
   return prisma.$transaction(async (tx) => {
     // 【競合対策】同一ユーザー・同一ゲームの「上限チェック → 記録」を直列化する。
     // これがないと READ COMMITTED 下で並列リクエストが同じ count を読み、
@@ -826,8 +849,8 @@ export async function recordAcchiPlay(
 
     // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数・
     // 本日付与済みの特典ポイント合計を数え、上限チェック (競合に強い)。
-    // プロモ/デモアカウント判定用に promoUntil も同時取得する。
-    const [playedBefore, extraRow, bonusAgg, promoUntil] = await Promise.all([
+    // ※ promo_until はトランザクション外で取得済み (上記コメント参照)。
+    const [playedBefore, extraRow, bonusAgg] = await Promise.all([
       tx.miniGamePlay.count({ where: { userId, gameType: 'ACCHI_MUITE_HOI', date } }),
       tx.miniGameExtraPlayPurchase.findUnique({
         where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
@@ -836,11 +859,8 @@ export async function recordAcchiPlay(
         where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
         _sum: { bonusRewardPoint: true },
       }),
-      // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
-      safeGetPromoUntil(tx, userId),
     ]);
     // プロモ/デモアカウントは 1 日の回数上限を撤廃する (何度でもプレイ可能)。
-    const promoActive = isPromoActive(promoUntil, now);
     const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
     const rewardPointGrantedBefore = bonusAgg._sum.bonusRewardPoint ?? 0;
     const rewardPointDailyCap = rewardBonusSettings.dailyCap;
