@@ -55,6 +55,8 @@ type Initial = {
   winReward: number;
   playedToday: number;
   remaining: number;
+  /** プロモ/デモアカウントで、プレイ回数が無制限のとき true。 */
+  promoActive?: boolean;
   balance: number;
 };
 
@@ -111,6 +113,8 @@ type JankenPhaseResponse = {
   playedToday: number;
   remaining: number;
   maxPerDay: number;
+  /** プロモ/デモアカウントで回数無制限のとき true。 */
+  promoActive?: boolean;
   rewardPointBonus?: number;
   rewardPointBalance?: number;
 };
@@ -175,6 +179,7 @@ export function AcchiGameClient({
   const router = useRouter();
   const sound = useAcchiSound(voiceUrls);
   const [remaining, setRemaining] = useState(initial.remaining);
+  const [promoActive, setPromoActive] = useState(initial.promoActive ?? false);
   const [balance, setBalance] = useState(initial.balance);
   // 最初は「タップしてスタート」画面。ここでの最初のタップで voiceStart を鳴らし、
   // 以降のボイスも自動再生ブロックされないようにする (ブラウザの自動再生ポリシー対策)。
@@ -353,6 +358,7 @@ export function AcchiGameClient({
       setRound2Token(data.round2Token);
       // 回数消費はフェーズ1で完了 → ヘッダーの残り回数を即反映。
       setRemaining(data.remaining);
+      if (typeof data.promoActive === 'boolean') setPromoActive(data.promoActive);
       setBalance(data.balance);
       setRevealIndex(0);
       setRevealSubPhase('round1');
@@ -477,7 +483,18 @@ export function AcchiGameClient({
         </p>
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="rounded-full bg-white/15 px-3 py-1">
-            本日残り <span className="font-bold">{remaining}</span> / {initial.maxPerDay} 回
+            {promoActive ? (
+              <>
+                本日残り <span className="font-bold">∞</span> 回{' '}
+                <span className="ml-1 rounded-full bg-amber-400/90 px-2 py-0.5 text-[10px] font-bold text-amber-950">
+                  DEMO
+                </span>
+              </>
+            ) : (
+              <>
+                本日残り <span className="font-bold">{remaining}</span> / {initial.maxPerDay} 回
+              </>
+            )}
           </span>
           <span className="rounded-full bg-white/15 px-3 py-1">
             保有ポイント <span className="font-bold text-amber-300">{balance.toLocaleString()}</span>pt
@@ -592,6 +609,7 @@ export function AcchiGameClient({
         <ResultCard
           outcome={outcome}
           canPlay={remaining > 0}
+          promoActive={promoActive}
           onAgain={playAgain}
           onBack={endGame}
           characterImageUrls={characterImageUrls}
@@ -744,6 +762,7 @@ function RevealCard({
 function ResultCard({
   outcome,
   canPlay,
+  promoActive,
   onAgain,
   onBack,
   characterImageUrls,
@@ -751,6 +770,7 @@ function ResultCard({
 }: {
   outcome: PlayResponse;
   canPlay: boolean;
+  promoActive: boolean;
   onAgain: () => void;
   onBack: () => void;
   characterImageUrls?: CharacterImageUrlMap;
@@ -825,7 +845,9 @@ function ResultCard({
         </p>
       ) : null}
 
-      <p className="mt-3 text-xs text-slate-400">本日残り {outcome.remaining} 回</p>
+      <p className="mt-3 text-xs text-slate-400">
+        本日残り {promoActive ? '∞' : outcome.remaining} 回
+      </p>
 
       <div className="mt-5 flex flex-col gap-2">
         {canPlay ? (

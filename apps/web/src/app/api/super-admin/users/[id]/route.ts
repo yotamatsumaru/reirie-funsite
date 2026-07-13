@@ -6,6 +6,8 @@
  *   { role: 'ADMIN' | 'USER' | 'SUPER_ADMIN' }
  *   { banned: true, banReason: '規約違反のため' }
  *   { banned: false }
+ *   { promoUntil: '2026-08-01T00:00:00.000Z' }  … プロモ/デモを付与 (期限付き)
+ *   { promoUntil: null }                         … プロモ/デモを解除
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -23,10 +25,18 @@ const PatchSchema = z
     banned: z.boolean().optional(),
     // BAN 実行時の理由 (任意入力だが、ゴミ箱 UI での確認用に保存する)
     banReason: z.string().trim().max(1000).optional(),
+    // プロモ/デモアカウントの有効期限。
+    //  - ISO 日時文字列 … その日時までプロモ有効 (ミニゲーム回数無制限 + 勝率PREMIUM相当)
+    //  - null            … プロモ解除 (通常アカウントに戻す)
+    promoUntil: z.string().datetime().nullable().optional(),
   })
-  .refine((v) => v.role !== undefined || v.banned !== undefined, {
-    message: 'role か banned のいずれかを指定してください',
-  });
+  .refine(
+    (v) =>
+      v.role !== undefined || v.banned !== undefined || v.promoUntil !== undefined,
+    {
+      message: 'role / banned / promoUntil のいずれかを指定してください',
+    },
+  );
 
 export const PATCH = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -38,7 +48,7 @@ export const PATCH = handle(
     if (!parsed.success) {
       throw errors.unprocessable('入力値が不正です', parsed.error.flatten());
     }
-    const { role, banned, banReason } = parsed.data;
+    const { role, banned, banReason, promoUntil } = parsed.data;
 
     // 自分自身のロール降格・BAN は禁止 (安全装置)
     if (id === session.user.id) {
@@ -76,6 +86,19 @@ export const PATCH = handle(
       // 履歴として確認できるようにするため、意図的に残す)
       auditMeta.restored = true;
     }
+    // プロモ/デモアカウントの付与・解除。
+    let promoChanged = false;
+    if (promoUntil !== undefined) {
+      const next = promoUntil ? new Date(promoUntil) : null;
+      const prev = target.promoUntil ? new Date(target.promoUntil) : null;
+      const prevIso = prev ? prev.toISOString() : null;
+      const nextIso = next ? next.toISOString() : null;
+      if (prevIso !== nextIso) {
+        updateData.promoUntil = next;
+        auditMeta.promoUntil = { from: prevIso, to: nextIso };
+        promoChanged = true;
+      }
+    }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ ok: true, noChange: true });
@@ -88,11 +111,21 @@ export const PATCH = handle(
 
     await logAudit({
       userId: session.user.id,
-      action: banned === true ? 'user.ban' : banned === false ? 'user.restore' : 'user.role.update',
+      action:
+        banned === true
+          ? 'user.ban'
+          : banned === false
+            ? 'user.restore'
+            : promoChanged
+              ? 'user.promo.update'
+              : 'user.role.update',
       resource: `user:${id}`,
       metadata: auditMeta,
     });
 
-    return NextResponse.json({ ok: true, user: { id: updated.id, role: updated.role } });
+    return NextResponse.json({
+      ok: true,
+      user: { id: updated.id, role: updated.role, promoUntil: updated.promoUntil },
+    });
   },
 );
