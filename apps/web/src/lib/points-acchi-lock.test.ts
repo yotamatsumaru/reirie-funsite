@@ -187,6 +187,10 @@ describe('recordAcchiPlay の advisory lock', () => {
     const sql = Array.isArray(templateParts) ? templateParts.join('') : String(templateParts);
     expect(sql).toContain('pg_advisory_xact_lock');
     expect(sql).toContain('::int');
+    // 22003 (integer out of range) 対策: int8 → int4 へ確実にラップする演算を含むこと。
+    // (Prisma がパラメータを int8 として送っても int4 範囲エラーにならないようにする)
+    expect(sql).toContain('4294967295'); // 下位 32bit マスク
+    expect(sql).toContain('4294967296'); // 2^32 での剰余
   });
 
   it('promo_until の読み取りはトランザクション (advisory lock) より前に行う', async () => {
