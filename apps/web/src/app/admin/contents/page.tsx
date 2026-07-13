@@ -8,6 +8,12 @@ import { requireCapabilityPage } from '@/auth';
 export const metadata: Metadata = { title: 'コンテンツ管理' };
 export const dynamic = 'force-dynamic';
 
+/** ContentType を日本語ラベルに変換 */
+const TYPE_LABEL: Record<string, string> = { BLOG: 'ブログ', GALLERY: 'ギャラリー' };
+function typeLabel(t: string): string {
+  return TYPE_LABEL[t] ?? t;
+}
+
 export default async function AdminContentsPage() {
   await requireCapabilityPage('CONTENT');
   const items = await prisma.content.findMany({
@@ -57,7 +63,7 @@ export default async function AdminContentsPage() {
                   {c.title}
                 </Link>
                 <div className="flex flex-wrap gap-1.5 text-xs">
-                  <Badge tone="gray">{c.type}</Badge>
+                  <Badge tone="gray">{typeLabel(c.type)}</Badge>
                   <Badge tone={c.accessLevel === 'PREMIUM' ? 'brand' : c.accessLevel === 'MEMBERS' ? 'info' : 'gray'}>
                     {c.accessLevel}
                   </Badge>
@@ -95,7 +101,7 @@ export default async function AdminContentsPage() {
                       {c.title}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">{c.type}</td>
+                  <td className="px-4 py-3">{typeLabel(c.type)}</td>
                   <td className="px-4 py-3">{c.accessLevel}</td>
                   <td className="px-4 py-3">
                     <Badge tone={c.status === 'PUBLISHED' ? 'success' : 'gray'}>{c.status}</Badge>

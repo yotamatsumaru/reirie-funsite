@@ -41,7 +41,7 @@ export default async function ContentDetailPage({
   return (
     <article className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge tone="gray">{content.type}</Badge>
+        <Badge tone="gray">{content.type === 'BLOG' ? 'ブログ' : 'ギャラリー'}</Badge>
         {content.accessLevel === 'PREMIUM' && <Badge tone="brand">PREMIUM</Badge>}
         {content.accessLevel === 'MEMBERS' && <Badge tone="info">MEMBERS</Badge>}
       </div>
