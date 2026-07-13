@@ -120,8 +120,47 @@ function resolveRound1(playerHand: JankenHand): AcchiRound1Result {
 function resolveRound2(playerDirection: AcchiDirection, setting: AcchiWinSetting): AcchiRound2Result {
   const winRate = acchiWinRate(setting);
   const matched = randomUnit() < winRate;
+  return buildRound2(playerDirection, matched, setting);
+}
+
+/**
+ * ラウンド1 (じゃんけん) だけを解決する (2段階フローのフェーズ1用)。
+ * あいこは内部でやり直し、決着 (WIN / LOSE) するまでループする。
+ *
+ * 2段階フロー:
+ *   フェーズ1: プレイヤーの「手」だけを受け取り、じゃんけん (このラウンド1) を確定する。
+ *             ここでプレイ回数を 1 消費する。
+ *   フェーズ2: じゃんけんに勝った場合のみ、プレイヤーの「方向」を受け取り
+ *             ラウンド2 (方向対決) を解決する。
+ */
+export function resolveAcchiRound1(playerHand: JankenHand): AcchiRound1Result {
+  return resolveRound1(playerHand);
+}
+
+/**
+ * 勝率抽選の結果 (matched) から、それに整合する CPU の方向を構成して
+ * ラウンド2 の結果オブジェクトを組み立てる純粋関数。
+ *
+ * 2段階フローのフェーズ1で「勝つか負けるか (matched)」を先に確定しておき、
+ * フェーズ2でプレイヤーが実際に指した方向に合わせて CPU の方向を後から
+ * 構成するために使う (勝敗は matched で既に決まっているため、方向の見た目を
+ * 整合させるだけ)。
+ */
+export function buildRound2(
+  playerDirection: AcchiDirection,
+  matched: boolean,
+  setting: AcchiWinSetting,
+): AcchiRound2Result {
   const cpu = matched ? playerDirection : pickMismatchedDirection(playerDirection);
   return { player: playerDirection, cpu, matched, setting };
+}
+
+/**
+ * 設定 (1〜6) の勝率に従って「方向対決に勝つか (matched)」だけを抽選する。
+ * CPU の方向は含まない (プレイヤーの方向が未確定な段階=フェーズ1で使う)。
+ */
+export function rollRound2Matched(setting: AcchiWinSetting): boolean {
+  return randomUnit() < acchiWinRate(setting);
 }
 
 /**
