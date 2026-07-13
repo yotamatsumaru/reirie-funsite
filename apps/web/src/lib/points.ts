@@ -608,7 +608,7 @@ export async function reconcileUserPoints(
 }
 
 // ---------------------------------------------------------------------
-// ミニゲーム (あっち向いてホイ)
+// ミニゲーム (あっちむいてPUI)
 // ---------------------------------------------------------------------
 
 export type AcchiPlayPersistResult = {
@@ -637,7 +637,7 @@ export type AcchiPlayPersistResult = {
 };
 
 /**
- * 本日のあっち向いてホイのプレイ回数を取得する (JST 基準)。
+ * 本日のあっちむいてPUIのプレイ回数を取得する (JST 基準)。
  */
 export async function getAcchiPlayCountToday(
   userId: string,
@@ -691,7 +691,7 @@ export async function getAcchiEffectiveMaxPerDay(
 }
 
 /**
- * あっち向いてホイの 1 プレイをサーバー側で確定・記録する。
+ * あっちむいてPUIの 1 プレイをサーバー側で確定・記録する。
  *
  * セキュリティ上の不変条件:
  *  - 勝敗 (result) は API ハンドラ側がサーバー生成の乱数で確定したものを受け取る。
@@ -783,7 +783,7 @@ export async function recordAcchiPlay(
         userId,
         amount: reward,
         reason: 'GAME_REWARD',
-        note: 'あっち向いてホイ 勝利報酬',
+        note: 'あっちむいてPUI 勝利報酬',
       });
     } else {
       const u = await tx.user.findUnique({
@@ -799,7 +799,7 @@ export async function recordAcchiPlay(
         userId,
         amount: rewardPointBonus,
         reason: 'GAME_REWARD',
-        note: 'あっち向いてホイ 勝利ボーナス (特典ポイント)',
+        note: 'あっちむいてPUI 勝利ボーナス (特典ポイント)',
       });
     } else {
       const u = await tx.user.findUnique({
@@ -831,7 +831,7 @@ export type BuyExtraPlayResult =
   | { ok: false; reason: 'LIMIT_REACHED' };
 
 /**
- * ミニゲーム (あっち向いてホイ) の追加プレイ回数を Fan ポイントで購入する。
+ * ミニゲーム (あっちむいてPUI) の追加プレイ回数を Fan ポイントで購入する。
  *  - 1 日に購入できる追加回数には上限がある (MAX_EXTRA_PLAYS_PER_DAY)。
  *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
  *    トランザクション全体 (購入回数の加算を含む) がロールバックされる。
@@ -856,7 +856,7 @@ export async function buyAcchiExtraPlay(
       userId,
       amount: -EXTRA_PLAY_COST_FAN_POINTS,
       reason: 'EXTRA_PLAY_PURCHASE',
-      note: 'あっち向いてホイ 追加プレイ購入',
+      note: 'あっちむいてPUI 追加プレイ購入',
     });
 
     if (existing) {

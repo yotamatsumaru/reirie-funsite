@@ -15,6 +15,7 @@ export const ACCHI_VOICE_SLOTS = [
   'voiceWin',
   'voiceLose',
   'voiceDraw',
+  'voiceBye',
 ] as const;
 
 export type AcchiVoiceSlot = (typeof ACCHI_VOICE_SLOTS)[number];
@@ -39,32 +40,38 @@ export const ACCHI_VOICE_SLOT_META: Record<AcchiVoiceSlot, AcchiVoiceSlotMeta> =
   voiceStart: {
     slot: 'voiceStart',
     label: 'ゲーム開始',
-    timing: 'じゃんけんの手を選んだとき',
+    timing: 'ミニゲームを開いたとき',
     scriptExample: 'じゃんけん、いくよ〜！',
   },
   voiceAcchi: {
     slot: 'voiceAcchi',
-    label: 'あっち向いてホイ',
-    timing: '方向を選んだとき',
-    scriptExample: 'あっち向いて…ホイ！',
+    label: 'あっちむいてPU',
+    timing: 'じゃんけんに勝って方向対決に進むとき',
+    scriptExample: 'あっちむいて…PU！',
   },
   voiceWin: {
     slot: 'voiceWin',
     label: 'ファンの勝ち',
-    timing: 'プレイヤーが勝ったとき',
+    timing: 'プレイヤーが勝ったとき (じゃんけん勝ち / 方向一致)',
     scriptExample: 'わっ、負けちゃった〜！キミ、やるね♪',
   },
   voiceLose: {
     slot: 'voiceLose',
     label: 'ファンの負け',
-    timing: 'プレイヤーが負けたとき',
+    timing: 'プレイヤーが負けたとき (じゃんけん負け / 方向不一致)',
     scriptExample: 'えへへ、私の勝ち♪',
   },
   voiceDraw: {
     slot: 'voiceDraw',
     label: 'あいこ',
-    timing: '勝負がつかなかったとき',
+    timing: 'じゃんけんがあいこでもう一回のとき',
     scriptExample: 'あれ、同じだ！もう一回っ！',
+  },
+  voiceBye: {
+    slot: 'voiceBye',
+    label: 'またね (終了)',
+    timing: 'もう一度 / 終了ボタンを押してゲームを離れるとき',
+    scriptExample: 'またね〜！また遊んでね♪',
   },
 };
 

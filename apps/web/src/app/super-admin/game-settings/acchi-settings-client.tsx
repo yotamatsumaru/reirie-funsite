@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * あっち向いてホイ「設定」(パチンコ風 1〜6) のプラン別編集 UI (SUPER_ADMIN)。
+ * あっちむいてPUI「設定」(パチンコ風 1〜6) のプラン別編集 UI (SUPER_ADMIN)。
  *
  * 設定値が大きいほどプレイヤーが勝ちやすい。プラン (FREE/STANDARD/PREMIUM) ごとに
  * 設定を割り当て、PATCH /api/super-admin/acchi-settings で永続化する。
@@ -45,7 +45,7 @@ export function AcchiSettingsClient({ initial }: { initial: AcchiWinSettingsByPl
         throw new Error(json?.error?.message ?? '保存に失敗しました');
       }
       setSettings(json.settings as AcchiWinSettingsByPlan);
-      toast.success('あっち向いてホイの設定を保存しました');
+      toast.success('あっちむいてPUIの設定を保存しました');
     } catch (e) {
       toast.error((e as Error).message, '保存エラー');
     } finally {
@@ -57,7 +57,7 @@ export function AcchiSettingsClient({ initial }: { initial: AcchiWinSettingsByPl
     <Card className="mt-6">
       <CardHeader>
         <h2 className="text-sm font-semibold text-slate-800">
-          あっち向いてホイ 勝率設定 (パチンコ風 設定 1〜6)
+          あっちむいてPUI 勝率設定 (パチンコ風 設定 1〜6)
         </h2>
         <p className="mt-1 text-xs text-slate-500">
           プランごとに「設定」を割り当てます。数字が大きいほどプレイヤーが勝ちやすくなります

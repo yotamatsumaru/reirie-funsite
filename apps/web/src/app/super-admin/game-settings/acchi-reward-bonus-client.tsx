@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * あっち向いてホイ「勝利特典ポイントボーナス」の編集 UI (SUPER_ADMIN)。
+ * あっちむいてPUI「勝利特典ポイントボーナス」の編集 UI (SUPER_ADMIN)。
  *
  * Fan ポイントは無料で貯まるため、それを使って遊ぶゲームの勝利報酬を
  * そのまま課金経済圏 (特典ポイント) に交換できてしまうと経済バランスが崩れる。
@@ -53,7 +53,7 @@ export function AcchiRewardBonusClient({ initial }: { initial: AcchiRewardBonusS
     <Card className="mt-6">
       <CardHeader>
         <h2 className="text-sm font-semibold text-slate-800">
-          あっち向いてホイ 勝利特典ポイントボーナス
+          あっちむいてPUI 勝利特典ポイントボーナス
         </h2>
         <p className="mt-1 text-xs text-slate-500">
           勝利すると Fan ポイントとは別枠で、少量の特典ポイントも付与できます。
@@ -124,7 +124,7 @@ export function AcchiRewardBonusClient({ initial }: { initial: AcchiRewardBonusS
         </div>
 
         <p className="mt-3 text-xs text-slate-400">
-          ※ 対象は「あっち向いてホイ」の勝利のみです。ログインボーナス・SNSシェア等は
+          ※ 対象は「あっちむいてPUI」の勝利のみです。ログインボーナス・SNSシェア等は
           引き続き Fan ポイントのみで変更されません。
         </p>
       </CardBody>

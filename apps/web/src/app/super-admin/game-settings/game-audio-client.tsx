@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * あっち向いてホイ キャラボイスのアップロード UI (SUPER_ADMIN)。
+ * あっちむいてPUI キャラボイスのアップロード UI (SUPER_ADMIN)。
  *
  * スロットごとに音声ファイルをアップロード / 差し替え / 削除できる。
  * 保存は /api/super-admin/game-audio (multipart) 経由。コード編集・デプロイ不要。
@@ -96,7 +96,7 @@ export function GameAudioClient({ initial }: { initial: GameAudioItem[] }) {
     <Card className="mt-6">
       <CardHeader>
         <h2 className="text-sm font-semibold text-slate-800">
-          あっち向いてホイ キャラボイス
+          あっちむいてPUI キャラボイス
         </h2>
         <p className="mt-1 text-xs text-slate-500">
           各シーンで再生するキャラクターボイス (REIRIE) をアップロードします。
