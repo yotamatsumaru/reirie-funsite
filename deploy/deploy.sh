@@ -81,7 +81,23 @@ echo "[deploy] prisma generate..."
 pnpm --filter @idol/db prisma:generate
 
 echo "[deploy] prisma migrate..."
-pnpm --filter @idol/db prisma:migrate:deploy
+# 【重要】マイグレーション失敗でデプロイ全体を止めない。
+#   set -euo pipefail 下で `prisma migrate deploy` が失敗すると、以降の build /
+#   PM2 再起動が実行されず、アプリのコード修正が本番に反映されない
+#   (= 修正済みでもサーバーエラーが直らない典型的なハマり)。
+#   マイグレーションが失敗しても、アプリ側は promo_until 等のカラム未適用でも
+#   500 にならないよう防御実装済みなので、まずアプリを確実に更新することを優先する。
+#   migrate が失敗した場合はログに大きく警告を出し、手動対応を促す。
+if pnpm --filter @idol/db prisma:migrate:deploy; then
+  echo "[deploy] prisma migrate: OK"
+else
+  echo "########################################################################"
+  echo "[deploy][WARN] prisma migrate deploy が失敗しました。"
+  echo "[deploy][WARN] マイグレーションはスキップし、アプリのデプロイを継続します。"
+  echo "[deploy][WARN] DB スキーマの適用は手動で確認・対応してください:"
+  echo "[deploy][WARN]   pnpm --filter @idol/db exec prisma migrate status"
+  echo "########################################################################"
+fi
 
 echo "[deploy] build..."
 pnpm --filter @idol/web build
