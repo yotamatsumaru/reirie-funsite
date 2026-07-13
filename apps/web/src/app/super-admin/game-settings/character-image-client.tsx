@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * あっち向いてホイ キャラクター画像のアップロード UI (SUPER_ADMIN)。
+ * あっちむいてPUI キャラクター画像のアップロード UI (SUPER_ADMIN)。
  *
  * ポーズ (idle/rock/scissors/paper/up/down/left/right) ごとに、
  * 最大 CHARACTER_IMAGE_VARIANTS_PER_SLOT (=3) パターンの画像を
@@ -114,7 +114,7 @@ export function CharacterImageClient({ initial }: { initial: CharacterImageItem[
     <Card className="mt-6">
       <CardHeader>
         <h2 className="text-sm font-semibold text-slate-800">
-          あっち向いてホイ キャラクター画像
+          あっちむいてPUI キャラクター画像
         </h2>
         <p className="mt-1 text-xs text-slate-500">
           ゲーム画面に表示するキャラクター画像 (現在は人形の SVG) を、ポーズごとに
@@ -226,7 +226,7 @@ export function CharacterImageClient({ initial }: { initial: CharacterImageItem[
         <p className="mt-3 text-xs text-slate-400">
           ※ アップロード後は会員のゲーム画面に即時反映されます (再デプロイ不要)。
           同じポーズに複数パターンを登録すると、ゲーム表示のたびにランダムで
-          1 枚が選ばれます。「上/下/左/右」はあっち向いてホイの方向対決ラウンドで、
+          1 枚が選ばれます。「上/下/左/右」はあっちむいてPUIの方向対決ラウンドで、
           キャラクターがその方向を向いたときに表示される画像です。
         </p>
       </CardBody>

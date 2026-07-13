@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * あっち向いてホイ ミニゲーム (クライアント UI)。
+ * あっちむいてPUI ミニゲーム (クライアント UI)。
  *
  * 重要: このコンポーネントは「演出」のみを担当する。
  * 勝敗・CPU の手/方向・ポイント付与はすべてサーバー (POST /api/me/games/acchi) が確定する。
@@ -27,7 +27,7 @@
  * 2ラウンド制の見え方を実現する。
  *
  * 演出: REIRIE キャラクター (CharacterAvatar) が
- *   待機 → じゃんけんの手 → あっち向いてホイで横顔
+ *   待機 → じゃんけんの手 → あっちむいてPUIで横顔
  * とアニメーションで動く。キャラ画像の差し替えは ./character.ts 参照。
  */
 import { useEffect, useState } from 'react';
@@ -152,7 +152,23 @@ export function AcchiGameClient({
 
   const canPlay = remaining > 0;
 
-  // ラウンド1 の試行を 1 つずつ演出し、決着に応じてラウンド2 演出 → 結果表示へ進める。
+  // ミニゲームを開いた最初のユーザー操作でゲーム開始ボイスを鳴らすためのフラグ。
+  // 自動再生ポリシー対策として、最初のタップ (手を選ぶ操作) の延長で再生する。
+  const [startVoicePlayed, setStartVoicePlayed] = useState(false);
+
+  // === 音声フロー ===
+  // 1. ミニゲームを開く → ゲーム開始音声 (voiceStart)  ※最初の操作で再生
+  // 2. じゃんけん → 結果表示 → じゃんけんの勝敗音声
+  //      あいこ → もう一回 (voiceDraw)
+  //      負け   → 終了 (lose + voiceLose)
+  //      勝ち   → 勝ち音声 (win + voiceWin) → あっちむいてPU (voiceAcchi) で方向対決へ
+  // 3. 方向選択 → 結果表示 → REIRIE の勝敗音声
+  //      方向一致 = プレイヤーの勝ち → REIRIE 負け (win + voiceWin)
+  //      方向不一致 = プレイヤーの負け → REIRIE 勝ち (lose + voiceLose)
+  // 4. もう一度 / 終了 → またね音声 (voiceBye) → ホーム or 最初の画面へ
+
+  // ラウンド1 の試行を 1 つずつ演出し、決着に応じて勝敗音声を鳴らしてから
+  // ラウンド2 演出 or 結果表示へ進める。
   useEffect(() => {
     if (phase !== 'reveal' || !outcome) return;
 
@@ -162,53 +178,66 @@ export function AcchiGameClient({
       const isLast = revealIndex === attempts.length - 1;
 
       if (!isLast) {
-        // あいこ (やり直し) の演出
+        // あいこ (やり直し) → もう一回の音声
         sound.play('draw');
         sound.play('voiceDraw');
         const t = setTimeout(() => setRevealIndex((i) => i + 1), REVEAL_STEP_MS);
         return () => clearTimeout(t);
       }
 
-      // 決着した試行
+      // 決着した試行 = じゃんけんの結果を表示し、勝敗音声を鳴らす。
       if (attempt.outcome === 'LOSE') {
-        // ラウンド1 で負け → その場で結果表示へ (ラウンド2 なし)
+        // じゃんけんで負け → 負け音声 → その場で結果表示へ (ラウンド2 なし)
+        sound.play('lose');
+        sound.play('voiceLose');
         const t = setTimeout(() => setPhase('result'), REVEAL_STEP_MS);
         return () => clearTimeout(t);
       }
-      // 勝ち → ラウンド2 演出へ
-      sound.play('tap');
+      // じゃんけんで勝ち → 勝ち音声 → あっちむいてPU の掛け声 → 方向対決へ
+      sound.play('win');
+      sound.play('voiceWin');
+      const tAcchi = setTimeout(() => sound.play('voiceAcchi'), REVEAL_STEP_MS);
       const t = setTimeout(() => setRevealSubPhase('round2'), REVEAL_STEP_MS);
-      return () => clearTimeout(t);
+      return () => {
+        clearTimeout(tAcchi);
+        clearTimeout(t);
+      };
     }
 
-    // ラウンド2 (方向) の演出
+    // ラウンド2 (方向) の演出 → 一致/不一致に応じて REIRIE の勝敗音声を鳴らす。
+    const matched = outcome.round2?.matched ?? false;
+    if (matched) {
+      // 方向一致 = プレイヤーの勝ち = REIRIE の負け
+      sound.play('win');
+      sound.play('voiceWin');
+    } else {
+      // 方向不一致 = プレイヤーの負け = REIRIE の勝ち
+      sound.play('lose');
+      sound.play('voiceLose');
+    }
     const t = setTimeout(() => setPhase('result'), REVEAL_ROUND2_MS);
     return () => clearTimeout(t);
   }, [phase, outcome, revealIndex, revealSubPhase, sound]);
 
-  // 結果フェーズに入ったら、勝敗に応じた効果音とボイスを鳴らす。
+  // 結果フェーズに入ったら、勝利報酬のポイント獲得音のみ鳴らす。
+  // 勝敗ボイス/効果音は reveal フェーズで既に再生済み。
   useEffect(() => {
     if (phase !== 'result' || !outcome) return;
-    if (outcome.result === 'WIN') {
-      sound.play('win');
-      sound.play('voiceWin');
-      if (outcome.reward > 0) {
-        // ポイント獲得音は少し遅らせて重ねる。
-        const t = setTimeout(() => sound.play('point'), 450);
-        return () => clearTimeout(t);
-      }
-    } else {
-      sound.play('lose');
-      sound.play('voiceLose');
+    if (outcome.result === 'WIN' && outcome.reward > 0) {
+      const t = setTimeout(() => sound.play('point'), 300);
+      return () => clearTimeout(t);
     }
   }, [phase, outcome, sound]);
 
   function selectHand(h: JankenHand) {
     if (!canPlay || loading) return;
-    // じゃんけんの手を選んだタイミング = 最初のユーザー操作。
-    // ここで開始ボイスとタップ音を鳴らす (自動再生ブロック対策も兼ねる)。
+    // ミニゲームを開いてから最初の操作 = ゲーム開始音声を鳴らす。
+    // (自動再生ブロック対策として、最初のユーザー操作の延長で再生する)
     sound.play('tap');
-    sound.play('voiceStart');
+    if (!startVoicePlayed) {
+      sound.play('voiceStart');
+      setStartVoicePlayed(true);
+    }
     setHand(h);
     setError(null);
     setPhase('direction');
@@ -216,9 +245,8 @@ export function AcchiGameClient({
 
   async function selectDirection(dir: AcchiDirection) {
     if (!hand || loading) return;
-    // 「あっち向いて…ホイ！」の掛け声。
+    // 方向を選んで勝負を確定 (勝敗音声・掛け声は演出フェーズで再生する)。
     sound.play('tap');
-    sound.play('voiceAcchi');
     setLoading(true);
     setError(null);
     try {
@@ -246,13 +274,24 @@ export function AcchiGameClient({
   }
 
   function playAgain() {
+    // もう一度 → またね音声を鳴らしてから最初の画面 (じゃんけん) に戻す。
     sound.play('tap');
+    sound.play('voiceBye');
     setHand(null);
     setOutcome(null);
     setError(null);
     setRevealIndex(0);
     setRevealSubPhase('round1');
+    // 次のプレイでも開始音声が鳴るように、開始フラグを戻す。
+    setStartVoicePlayed(false);
     setPhase('janken');
+  }
+
+  function endGame() {
+    // 終了 → またね音声を鳴らしてからホーム (会員カード) に戻る。
+    sound.play('tap');
+    sound.play('voiceBye');
+    router.push('/me/card');
   }
 
   return (
@@ -260,7 +299,7 @@ export function AcchiGameClient({
       {/* ヘッダー */}
       <div className="mb-6 rounded-2xl border-2 border-black bg-twilight-rose p-6 text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)]">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-bold">あっち向いてホイ</h1>
+          <h1 className="text-2xl font-bold">あっちむいてPUI</h1>
           {/* 音声 ON/OFF 切り替え */}
           <button
             type="button"
@@ -333,7 +372,7 @@ export function AcchiGameClient({
           <p className="mb-1 text-sm text-slate-500">
             あなたの手: <span className="text-2xl">{HAND_EMOJI[hand]}</span> {HAND_LABEL[hand]}
           </p>
-          <p className="mb-4 text-lg font-bold text-slate-800">あっち向いて… ホイ！</p>
+          <p className="mb-4 text-lg font-bold text-slate-800">あっちむいて… PU！</p>
           <p className="mb-4 text-xs text-slate-400">
             じゃんけんに勝てばあなたが「指す」番。{CHARACTER_NAME} が同じ方向を向いたら
             あなたの勝ち！（じゃんけんに負けると、方向対決に進めずその場で負けだよ）
@@ -368,7 +407,7 @@ export function AcchiGameClient({
           outcome={outcome}
           canPlay={remaining > 0}
           onAgain={playAgain}
-          onBack={() => router.push('/me/card')}
+          onBack={endGame}
           characterImageUrls={characterImageUrls}
         />
       ) : null}

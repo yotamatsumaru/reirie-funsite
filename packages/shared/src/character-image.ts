@@ -95,22 +95,22 @@ export const CHARACTER_IMAGE_SLOT_META: Record<CharacterImageSlot, CharacterImag
   up: {
     slot: 'up',
     label: '上向き',
-    description: 'あっち向いてホイで上を向いたときの横顔。',
+    description: 'あっちむいてPUIで上を向いたときの横顔。',
   },
   down: {
     slot: 'down',
     label: '下向き',
-    description: 'あっち向いてホイで下を向いたときの横顔。',
+    description: 'あっちむいてPUIで下を向いたときの横顔。',
   },
   left: {
     slot: 'left',
     label: '左向き',
-    description: 'あっち向いてホイで左を向いたときの横顔。',
+    description: 'あっちむいてPUIで左を向いたときの横顔。',
   },
   right: {
     slot: 'right',
     label: '右向き',
-    description: 'あっち向いてホイで右を向いたときの横顔。',
+    description: 'あっちむいてPUIで右を向いたときの横顔。',
   },
 };
 

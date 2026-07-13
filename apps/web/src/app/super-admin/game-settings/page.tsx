@@ -1,7 +1,7 @@
 /**
  * /super-admin/game-settings — ゲーム設定
  *
- * あっち向いてホイ等のゲームの「設定」を集約する専用ページ。
+ * あっちむいてPUI等のゲームの「設定」を集約する専用ページ。
  * 売上・統計を扱う「ゲーム経済」(/super-admin/game) とは役割を分離している:
  *   - ゲーム経済 … DLC 売上 / アイテム集計 / プレイヤー統計 (数値の閲覧)
  *   - ゲーム設定 … 勝率 / 特典ポイントボーナス / キャラボイス / キャラクター画像 (挙動の設定)
@@ -47,21 +47,21 @@ export default async function SuperAdminGameSettingsPage() {
       <header className="mb-5">
         <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ゲーム設定</h1>
         <p className="mt-1 text-sm text-slate-500">
-          あっち向いてホイの勝率・特典ボーナス・キャラボイス・キャラクター画像などの設定。
+          あっちむいてPUIの勝率・特典ボーナス・キャラボイス・キャラクター画像などの設定。
           売上・統計は「ゲーム経済」で確認できます。
         </p>
       </header>
 
-      {/* あっち向いてホイ 勝率設定 */}
+      {/* あっちむいてPUI 勝率設定 */}
       <AcchiSettingsClient initial={acchiSettings} />
 
-      {/* あっち向いてホイ 勝利特典ポイントボーナス設定 */}
+      {/* あっちむいてPUI 勝利特典ポイントボーナス設定 */}
       <AcchiRewardBonusClient initial={acchiRewardBonusSettings} />
 
-      {/* あっち向いてホイ キャラボイス アップロード */}
+      {/* あっちむいてPUI キャラボイス アップロード */}
       <GameAudioClient initial={gameAudioItems} />
 
-      {/* あっち向いてホイ キャラクター画像 アップロード (1ポーズ最大3パターン) */}
+      {/* あっちむいてPUI キャラクター画像 アップロード (1ポーズ最大3パターン) */}
       <CharacterImageClient initial={characterImageItems} />
     </main>
   );

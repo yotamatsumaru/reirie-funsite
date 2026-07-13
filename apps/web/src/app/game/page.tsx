@@ -28,11 +28,11 @@ const MINI_GAMES: {
 }[] = [
   {
     slug: 'acchi',
-    title: 'あっち向いてホイ',
+    title: 'あっちむいてPUI',
     emoji: '👉',
     href: '/me/games/acchi',
     description:
-      'REIRIE とあっち向いてホイで勝負! 勝つとポイントがもらえます。',
+      'REIRIE とあっちむいてPUIで勝負! 勝つとポイントがもらえます。',
     themeColor: '#ede9fe',
     badges: [`1日${ACCHI_MAX_PLAYS_PER_DAY}回まで`, `勝利で${ACCHI_WIN_REWARD}pt`, '無料'],
     requiresAuth: true,

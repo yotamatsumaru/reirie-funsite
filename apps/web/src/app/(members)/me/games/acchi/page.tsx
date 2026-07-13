@@ -8,7 +8,7 @@ import { getAcchiVoiceUrlMap } from '@/lib/game-audio';
 import { getCharacterImageUrlMap } from '@/lib/character-image';
 import { AcchiGameClient } from './acchi-client';
 
-export const metadata: Metadata = { title: 'あっち向いてホイ' };
+export const metadata: Metadata = { title: 'あっちむいてPUI' };
 export const dynamic = 'force-dynamic';
 
 export default async function AcchiGamePage() {
