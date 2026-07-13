@@ -24,11 +24,20 @@ import {
 export type UseAcchiSound = {
   /** 指定キーのサウンドを鳴らす (ミュート/無効/未設定なら何もしない)。 */
   play: (key: SoundKey) => void;
+  /**
+   * 指定キーのサウンドを鳴らし、再生が終わる (または一定時間で打ち切る) まで待つ Promise を返す。
+   * ミュート / 未設定 / 再生ブロック時は即座に解決するため、呼び出し側が固まることはない。
+   * (例: 「またね」ボイスを鳴らし切ってからページ遷移したい場合に使う)
+   */
+  playToEnd: (key: SoundKey) => Promise<void>;
   /** ミュート中か。 */
   muted: boolean;
   /** ミュートを切り替える。 */
   toggleMute: () => void;
 };
+
+/** playToEnd の保険タイムアウト (ms)。音声が長すぎる/終了イベントが来ない場合に強制解決。 */
+const PLAY_TO_END_MAX_WAIT_MS = 6000;
 
 export function useAcchiSound(voiceUrls: AcchiVoiceUrlMap = {}): UseAcchiSound {
   const [muted, setMuted] = useState(false);
@@ -116,5 +125,63 @@ export function useAcchiSound(voiceUrls: AcchiVoiceUrlMap = {}): UseAcchiSound {
     [muted, soundMap, getAudio],
   );
 
-  return useMemo(() => ({ play, muted, toggleMute }), [play, muted, toggleMute]);
+  const playToEnd = useCallback(
+    (key: SoundKey): Promise<void> => {
+      // 鳴らさないケースは即解決 (呼び出し側を絶対にブロックしない)。
+      if (muted) return Promise.resolve();
+      const def = soundMap[key];
+      if (!def) return Promise.resolve();
+      if (!def.voice && !SE_ENABLED) return Promise.resolve();
+
+      const audio = getAudio(key);
+      if (!audio) return Promise.resolve();
+
+      return new Promise<void>((resolve) => {
+        let settled = false;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+
+        const cleanup = () => {
+          if (timer) clearTimeout(timer);
+          audio.removeEventListener('ended', onEnded);
+          audio.removeEventListener('error', onError);
+        };
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve();
+        };
+        function onEnded() {
+          done();
+        }
+        function onError() {
+          done();
+        }
+
+        audio.addEventListener('ended', onEnded);
+        audio.addEventListener('error', onError);
+        // 保険: 終了イベントが来なくても必ず解決させる。
+        timer = setTimeout(done, PLAY_TO_END_MAX_WAIT_MS);
+
+        try {
+          audio.currentTime = 0;
+          const p = audio.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch(() => {
+              // 自動再生ブロック等。待たずに解決する。
+              done();
+            });
+          }
+        } catch {
+          done();
+        }
+      });
+    },
+    [muted, soundMap, getAudio],
+  );
+
+  return useMemo(
+    () => ({ play, playToEnd, muted, toggleMute }),
+    [play, playToEnd, muted, toggleMute],
+  );
 }
