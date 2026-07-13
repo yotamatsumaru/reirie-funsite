@@ -676,6 +676,36 @@ export function hashStringToInt32(input: string): number {
  */
 export const PROMO_UNLIMITED_REMAINING = 9999;
 
+/**
+ * ユーザーの promo_until を「壊れないように」取得する。
+ *
+ * `promo_until` カラムは後から追加したものなので、本番でマイグレーション
+ * (20260713000000_add_user_promo_until) が未適用だと、Prisma の
+ * `select: { promoUntil: true }` は「column does not exist」で例外になる。
+ * その例外がゲーム API 全体を 500 (サーバーエラー) に落としてしまうため、
+ * ここでは生 SQL + try/catch で安全に読み、カラムが無い/失敗した場合は
+ * null (= プロモ無効・通常アカウント) にフォールバックする。
+ *
+ * マイグレーション適用後は自動的にプロモが機能する (コード変更不要)。
+ *
+ * @param client prisma もしくはトランザクションクライアント
+ */
+export async function safeGetPromoUntil(
+  client: Pick<typeof prisma, '$queryRaw'>,
+  userId: string,
+): Promise<Date | null> {
+  try {
+    const rows = await client.$queryRaw<Array<{ promo_until: Date | null }>>(
+      Prisma.sql`SELECT "promo_until" FROM "users" WHERE "id" = ${userId} LIMIT 1`,
+    );
+    return rows[0]?.promo_until ?? null;
+  } catch (e) {
+    // カラム未追加 (マイグレーション未適用) 等。プロモ無効として扱う。
+    console.error('[safeGetPromoUntil] failed (treating as non-promo)', e);
+    return null;
+  }
+}
+
 export type AcchiPlayPersistResult = {
   /** 受理されたか (回数上限に達していれば false) */
   accepted: boolean;
@@ -797,7 +827,7 @@ export async function recordAcchiPlay(
     // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数・
     // 本日付与済みの特典ポイント合計を数え、上限チェック (競合に強い)。
     // プロモ/デモアカウント判定用に promoUntil も同時取得する。
-    const [playedBefore, extraRow, bonusAgg, promoUser] = await Promise.all([
+    const [playedBefore, extraRow, bonusAgg, promoUntil] = await Promise.all([
       tx.miniGamePlay.count({ where: { userId, gameType: 'ACCHI_MUITE_HOI', date } }),
       tx.miniGameExtraPlayPurchase.findUnique({
         where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
@@ -806,10 +836,11 @@ export async function recordAcchiPlay(
         where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
         _sum: { bonusRewardPoint: true },
       }),
-      tx.user.findUnique({ where: { id: userId }, select: { promoUntil: true } }),
+      // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
+      safeGetPromoUntil(tx, userId),
     ]);
     // プロモ/デモアカウントは 1 日の回数上限を撤廃する (何度でもプレイ可能)。
-    const promoActive = isPromoActive(promoUser?.promoUntil ?? null, now);
+    const promoActive = isPromoActive(promoUntil, now);
     const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
     const rewardPointGrantedBefore = bonusAgg._sum.bonusRewardPoint ?? 0;
     const rewardPointDailyCap = rewardBonusSettings.dailyCap;

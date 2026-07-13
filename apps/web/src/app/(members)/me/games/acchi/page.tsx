@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { jstDateKey, remainingPlays, ACCHI_MAX_PLAYS_PER_DAY, ACCHI_WIN_REWARD, isPromoActive } from '@idol/shared';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { getAcchiPlayCountToday, PROMO_UNLIMITED_REMAINING } from '@/lib/points';
+import { getAcchiPlayCountToday, PROMO_UNLIMITED_REMAINING, safeGetPromoUntil } from '@/lib/points';
 import { getAcchiVoiceUrlMap } from '@/lib/game-audio';
 import { getCharacterImageUrlMap } from '@/lib/character-image';
 import { AcchiGameClient } from './acchi-client';
@@ -17,17 +17,19 @@ export default async function AcchiGamePage() {
     redirect('/signin?callbackUrl=/me/games/acchi');
   }
 
-  const [playedToday, user, voiceUrls, characterImageUrls] = await Promise.all([
+  const [playedToday, user, voiceUrls, characterImageUrls, promoUntil] = await Promise.all([
     getAcchiPlayCountToday(session.user.id),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true, promoUntil: true },
+      select: { points: true },
     }),
     getAcchiVoiceUrlMap(),
     getCharacterImageUrlMap(),
+    // promo_until はカラム未追加でも落ちないよう安全に読む (未適用なら null)。
+    safeGetPromoUntil(prisma, session.user.id),
   ]);
 
-  const promoActive = isPromoActive(user?.promoUntil ?? null);
+  const promoActive = isPromoActive(promoUntil);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
