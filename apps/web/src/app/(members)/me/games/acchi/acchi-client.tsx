@@ -388,9 +388,13 @@ export function AcchiGameClient({
   }
 
   // reveal (round1 で決着=負け / round2 の結果表示後) → 「結果を確認」ボタン。
-  // 結果画面へ進む。
+  // 結果画面へ進む。押した瞬間に、この後のプレイ状況に応じたボイスを鳴らす:
+  //  - まだ本日のプレイ回数が残っている (or プレミアム無制限) → 「もう一回」系 (voiceAgain)
+  //  - 本日のプレイが終了 → 「またね (また明日)」系 (voiceBye)
+  // ボイスが未アップロードのスロットは黙ってスキップされる。
   function goToResult() {
-    sound.play('tap');
+    const canPlayMore = promoActive || remaining > 0;
+    sound.play(canPlayMore ? 'voiceAgain' : 'voiceBye');
     setAwaitingAction(false);
     setPhase('result');
   }
