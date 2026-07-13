@@ -55,7 +55,7 @@ export default async function ContentsPage() {
                 )}
                 <CardBody>
                   <div className="mb-2 flex items-center gap-2">
-                    <Badge tone="gray">{c.type}</Badge>
+                    <Badge tone="gray">{c.type === 'BLOG' ? 'ブログ' : 'ギャラリー'}</Badge>
                     {c.accessLevel === 'PREMIUM' && <Badge tone="brand">PREMIUM</Badge>}
                     {c.accessLevel === 'MEMBERS' && <Badge tone="info">MEMBERS</Badge>}
                   </div>
