@@ -646,9 +646,28 @@ async function acquireUserGameLock(
   // UUID 文字列 + scope を 32bit ずつのキー 2 本 (計 64bit) に落とし込む。
   // pg_advisory_xact_lock(int4, int4) はキーの組み合わせで排他されるため、
   // 別ユーザー / 別ゲームのロック同士は互いにブロックしない。
+  //
+  // 【重要 / 22003 "integer out of range" 対策】
+  //   Prisma の $executeRaw はテンプレートの ${key} を「バインドパラメータ」として送る。
+  //   このとき Prisma は JS の number を int4 ではなく int8(bigint)/numeric として送るため、
+  //   PostgreSQL 側では「int8 の値を pg_advisory_xact_lock(int4, int4) に渡す」形になり、
+  //   値が int4 範囲を 1 でも外れると即 22003 (integer out of range) で失敗する。
+  //   (JS 側の hashStringToInt32 は int4 に収めているが、パラメータの型付け次第で
+  //    暗黙変換の境界チェックに引っかかる余地が残る。)
+  //
+  //   → SQL 側で明示的に (( $1 & x'7fffffff'::bigint ) - ... ) 等の演算をせず、
+  //     単純かつ確実に「int8 → int4 へラップする」よう、#>> ではなく
+  //     ((key % 2147483648) の符号調整) を避け、下位 32bit を取り出して int4 化する。
+  //     具体的には (key::bigint & 4294967295) を 0..2^32-1 にし、そこから 2^32 を引いて
+  //     符号付き int4 相当へ丸めてから ::int にキャストする。これで JS からどんな整数が
+  //     来ても pg_advisory_xact_lock(int4, int4) が範囲エラーにならない。
   const key1 = hashStringToInt32(userId);
   const key2 = hashStringToInt32(scope);
-  await client.$executeRaw`SELECT pg_advisory_xact_lock(${key1}::int, ${key2}::int)`;
+  await client.$executeRaw`
+    SELECT pg_advisory_xact_lock(
+      (((${key1}::bigint & 4294967295) + 2147483648) % 4294967296 - 2147483648)::int,
+      (((${key2}::bigint & 4294967295) + 2147483648) % 4294967296 - 2147483648)::int
+    )`;
 }
 
 /**
