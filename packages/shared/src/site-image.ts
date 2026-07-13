@@ -10,13 +10,22 @@
  */
 
 /** 画像スロット識別子 (DB SiteImage.slot に保存する値)。 */
-export const SITE_IMAGE_SLOTS = ['home.hero'] as const;
+export const SITE_IMAGE_SLOTS = ['home.hero', 'game.acchi.thumbnail'] as const;
 
 export type SiteImageSlot = (typeof SITE_IMAGE_SLOTS)[number];
 
 /** slot が有効なサイト画像スロットか。 */
 export function isSiteImageSlot(v: unknown): v is SiteImageSlot {
   return typeof v === 'string' && (SITE_IMAGE_SLOTS as readonly string[]).includes(v);
+}
+
+/**
+ * ミニゲームのサムネイル画像スロット。
+ * ゲーム一覧 (/game) のカードに表示する画像。未設定なら絵文字プレースホルダー。
+ * 将来ゲームが増えたら `game.<slug>.thumbnail` を SITE_IMAGE_SLOTS に追加する。
+ */
+export function gameThumbnailSlot(gameSlug: string): string {
+  return `game.${gameSlug}.thumbnail`;
 }
 
 /** 各スロットのメタ情報 (管理画面表示用)。 */
@@ -36,6 +45,13 @@ export const SITE_IMAGE_SLOT_META: Record<SiteImageSlot, SiteImageSlotMeta> = {
     label: 'トップページ ヒーロー画像',
     description: 'トップページ最上部に表示されるメインビジュアル画像です。',
     recommendedAspect: '縦長 4:5 推奨 (例: 1200×1500px)',
+  },
+  'game.acchi.thumbnail': {
+    slot: 'game.acchi.thumbnail',
+    label: 'あっちむいてPUI サムネイル',
+    description:
+      'ゲーム一覧 (/game) のミニゲームカードに表示するサムネイル画像です。未設定の場合は絵文字が表示されます。',
+    recommendedAspect: '横長 16:9 推奨 (例: 1280×720px)',
   },
 };
 

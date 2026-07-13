@@ -115,11 +115,46 @@ export const CHARACTER_IMAGE_SLOT_META: Record<CharacterImageSlot, CharacterImag
 };
 
 /**
- * slot → 公開URL のマップ (未設定スロットは欠落)。
- * 1 ポーズにつき最大 CHARACTER_IMAGE_VARIANTS_PER_SLOT 枚の URL を配列で保持し、
- * ゲーム表示時にこの中からランダムに 1 枚が選ばれる。
+ * slot → (パターン番号 → 公開URL) のマップ (未設定スロット/パターンは欠落)。
+ *
+ * 1 ポーズにつき最大 CHARACTER_IMAGE_VARIANTS_PER_SLOT 枚の画像を、
+ * パターン番号 (variant: 1〜N) をキーにして保持する。
+ *
+ * 「パターン番号」を保持するのが重要:
+ *   1 プレイ内で最初にパターン (例: パターン1) がランダムに選ばれたら、
+ *   その後のポーズもすべて同じパターン番号の画像を出したい (統一感のため)。
+ *   そのためにはポーズをまたいでパターン番号を揃える必要があり、
+ *   単なる配列 (位置) ではなくパターン番号をキーにする。
  */
-export type CharacterImageUrlMap = Partial<Record<CharacterImageSlot, string[]>>;
+export type CharacterImageVariantMap = Partial<Record<number, string>>;
+export type CharacterImageUrlMap = Partial<
+  Record<CharacterImageSlot, CharacterImageVariantMap>
+>;
+
+/**
+ * あるポーズ (slot) について、指定したパターン番号の画像 URL を返す。
+ * 指定パターンが無ければ、登録済みパターンの中から最小の番号 (フォールバック) を返す。
+ * 1 枚も無ければ undefined。
+ *
+ * これにより「プレイ開始時に選んだパターン番号」を全ポーズで優先しつつ、
+ * そのポーズに当該パターンが未登録でも別パターンで代替表示できる。
+ */
+export function pickCharacterImageUrl(
+  variants: CharacterImageVariantMap | undefined,
+  preferredVariant: number,
+): string | undefined {
+  if (!variants) return undefined;
+  const direct = variants[preferredVariant];
+  if (direct) return direct;
+  // フォールバック: 登録済みパターン番号のうち最小のものを使う。
+  const available = Object.keys(variants)
+    .map((k) => Number(k))
+    .filter((n) => Number.isInteger(n) && variants[n])
+    .sort((a, b) => a - b);
+  const first = available[0];
+  if (first === undefined) return undefined;
+  return variants[first];
+}
 
 /** アップロード可能な画像の MIME → 拡張子。 */
 export const ALLOWED_CHARACTER_IMAGE_TYPES: Record<string, string> = {
