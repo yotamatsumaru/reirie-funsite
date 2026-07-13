@@ -17,6 +17,7 @@ import { WarningPanel, type WarningItem } from './warning-panel';
 import { PromoPanel } from './promo-panel';
 import { getMemberRank } from '@/lib/membership-rank';
 import { getMemberRankTiers } from '@/lib/app-setting';
+import { safeGetPromoUntil } from '@/lib/points';
 import { ORDER_STATUS_LABELS } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'ユーザー詳細 | Super Admin' };
@@ -47,6 +48,10 @@ export default async function SuperAdminUserDetailPage({
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user || user.role !== 'USER') notFound();
+
+  // promo_until は Prisma モデル外 (生 SQL) のため別途取得する。
+  // カラム未適用 (マイグレーション未実行) の場合は null が返る。
+  const promoUntil = await safeGetPromoUntil(prisma, id);
 
   const [rankTiers, orders, warningsRaw, auditLogs, subscription] = await Promise.all([
     getMemberRankTiers(),
@@ -207,10 +212,10 @@ export default async function SuperAdminUserDetailPage({
               <Field
                 label="プロモ/デモ"
                 value={
-                  user.promoUntil
-                    ? user.promoUntil > new Date()
-                      ? `有効 (〜${formatDateTime(user.promoUntil)})`
-                      : `期限切れ (${formatDateTime(user.promoUntil)})`
+                  promoUntil
+                    ? promoUntil > new Date()
+                      ? `有効 (〜${formatDateTime(promoUntil)})`
+                      : `期限切れ (${formatDateTime(promoUntil)})`
                     : 'なし'
                 }
               />
@@ -269,7 +274,7 @@ export default async function SuperAdminUserDetailPage({
         <CardBody>
           <PromoPanel
             userId={user.id}
-            initialPromoUntil={user.promoUntil ? user.promoUntil.toISOString() : null}
+            initialPromoUntil={promoUntil ? promoUntil.toISOString() : null}
           />
         </CardBody>
       </Card>

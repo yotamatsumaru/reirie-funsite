@@ -704,14 +704,44 @@ export async function safeGetPromoUntil(
   userId: string,
 ): Promise<Date | null> {
   try {
+    // users.id は uuid 型。パラメータは text としてバインドされるため、明示的に
+    // ::uuid へキャストしないと "operator does not exist: uuid = text" で失敗する。
+    // (このキャストが無いと、カラムが存在していても常に catch に落ちてプロモが
+    //  永久に無効化されてしまう。)
     const rows = await client.$queryRaw<Array<{ promo_until: Date | null }>>(
-      Prisma.sql`SELECT "promo_until" FROM "users" WHERE "id" = ${userId} LIMIT 1`,
+      Prisma.sql`SELECT "promo_until" FROM "users" WHERE "id" = ${userId}::uuid LIMIT 1`,
     );
     return rows[0]?.promo_until ?? null;
   } catch (e) {
     // カラム未追加 (マイグレーション未適用) 等。プロモ無効として扱う。
     console.error('[safeGetPromoUntil] failed (treating as non-promo)', e);
     return null;
+  }
+}
+
+/**
+ * ユーザーの promo_until を「壊れないように」書き込む (プロモ付与 / 解除)。
+ *
+ * promo_until は Prisma モデルに載せていない (カラム未適用の DB で全 user 操作が
+ * 壊れるのを防ぐため) ので、書き込みも生 SQL で行う。
+ *
+ * @returns 書き込みに成功したか。カラム未適用 (マイグレーション未実行) の場合は
+ *          false を返す (呼び出し側で「マイグレーション未適用」を案内できる)。
+ */
+export async function safeSetPromoUntil(
+  client: Pick<typeof prisma, '$executeRaw'>,
+  userId: string,
+  promoUntil: Date | null,
+): Promise<boolean> {
+  try {
+    await client.$executeRaw(
+      Prisma.sql`UPDATE "users" SET "promo_until" = ${promoUntil} WHERE "id" = ${userId}::uuid`,
+    );
+    return true;
+  } catch (e) {
+    // カラム未追加 (マイグレーション未適用) 等。
+    console.error('[safeSetPromoUntil] failed', e);
+    return false;
   }
 }
 
