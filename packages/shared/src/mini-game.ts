@@ -5,6 +5,9 @@
  * 乱数はサーバー側 (apps/web/src/lib/games/acchi.ts) で生成し、本モジュールの
  * 判定関数に渡す。クライアントとサーバーで同じ判定を共有することで、表示と
  * 実際の勝敗ロジックを一致させる (勝敗の確定はあくまでサーバーが行う)。
+ *
+ * ゲームルールは「方向対決」の 1 ラウンドのみ (じゃんけんは廃止済み)。
+ * プレイヤーが指した方向と CPU が向いた方向が一致すれば勝ち、不一致であれば負け。
  */
 
 import { z } from 'zod';
@@ -24,29 +27,17 @@ export const ACCHI_WIN_REWARD = 30;
 // 型
 // ---------------------------------------------------------------------
 
-/** じゃんけんの手 */
-export type JankenHand = 'ROCK' | 'SCISSORS' | 'PAPER';
-
 /** あっち向いてホイの方向 */
 export type AcchiDirection = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 
-/** じゃんけんの結果 (プレイヤー視点) */
-export type JankenOutcome = 'WIN' | 'LOSE' | 'DRAW';
+/** プレイ全体の結果 (プレイヤー視点)。方向が一致すれば WIN、不一致なら LOSE。 */
+export type AcchiResult = 'WIN' | 'LOSE';
 
-/** プレイ全体の結果 (プレイヤー視点) */
-export type AcchiResult = 'WIN' | 'LOSE' | 'DRAW';
-
-export const JANKEN_HANDS: readonly JankenHand[] = ['ROCK', 'SCISSORS', 'PAPER'];
 export const ACCHI_DIRECTIONS: readonly AcchiDirection[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
 
 // ---------------------------------------------------------------------
 // 判定ロジック (純粋関数)
 // ---------------------------------------------------------------------
-
-/** 値が有効なじゃんけんの手か */
-export function isJankenHand(v: unknown): v is JankenHand {
-  return v === 'ROCK' || v === 'SCISSORS' || v === 'PAPER';
-}
 
 /** 値が有効な方向か */
 export function isAcchiDirection(v: unknown): v is AcchiDirection {
@@ -54,49 +45,17 @@ export function isAcchiDirection(v: unknown): v is AcchiDirection {
 }
 
 /**
- * じゃんけんの勝敗をプレイヤー視点で判定する。
- * ROCK > SCISSORS > PAPER > ROCK
- */
-export function judgeJanken(player: JankenHand, cpu: JankenHand): JankenOutcome {
-  if (player === cpu) return 'DRAW';
-  const beats: Record<JankenHand, JankenHand> = {
-    ROCK: 'SCISSORS',
-    SCISSORS: 'PAPER',
-    PAPER: 'ROCK',
-  };
-  return beats[player] === cpu ? 'WIN' : 'LOSE';
-}
-
-/**
- * あっち向いてホイ (2ラウンド制) — ラウンド1 (じゃんけん) の結果から、
- * 次に何をすべきかを判定する。
+ * あっち向いてホイ — 指した方向と向いた方向の一致/不一致から最終結果を判定する。
  *
- *  - WIN  → ラウンド2 (方向) へ進む
- *  - LOSE → その場でゲーム終了 (最終結果 LOSE、ラウンド2は行われない)
- *  - DRAW → ラウンド1 をやり直す (サーバーが自動的に CPU の手を再抽選する)
- */
-export type AcchiRound1Decision = 'ADVANCE_TO_ROUND2' | 'GAME_OVER' | 'RETRY';
-
-export function decideAcchiRound1(outcome: JankenOutcome): AcchiRound1Decision {
-  if (outcome === 'WIN') return 'ADVANCE_TO_ROUND2';
-  if (outcome === 'LOSE') return 'GAME_OVER';
-  return 'RETRY';
-}
-
-/**
- * あっち向いてホイ (2ラウンド制) — ラウンド2 (方向) の一致/不一致から
- * 最終結果を判定する。
- *
- * ラウンド2 に進めるのはラウンド1 (じゃんけん) に勝った場合のみ。
  * 指した方向と向いた方向が一致 (matched) すればプレイヤーの勝ち、
  * 不一致であればプレイヤーの負け。
  *
  * この「一致するかどうか」自体は、設定 (1〜6) に基づく勝率
  * (acchiWinRate) で抽選される (=CPU の方向はこの結果に整合するよう構成する)。
  *
- * @param matched ラウンド2で指した方向と向いた方向が一致したか
+ * @param matched 指した方向と向いた方向が一致したか
  */
-export function judgeAcchiRound2(matched: boolean): AcchiResult {
+export function judgeAcchiResult(matched: boolean): AcchiResult {
   return matched ? 'WIN' : 'LOSE';
 }
 

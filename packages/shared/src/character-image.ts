@@ -12,9 +12,6 @@
  * スロット値は apps/web 側の `CharacterPose`
  * (apps/web/src/app/(members)/me/games/acchi/character.ts) と一致させる:
  *   idle      … 待機(正面)
- *   rock      … グー
- *   scissors  … チョキ
- *   paper     … パー
  *   up        … 上向き(横顔)
  *   down      … 下向き(横顔)
  *   left      … 左向き(横顔)
@@ -24,9 +21,6 @@
 /** 画像スロット識別子 (DB CharacterImage.slot に保存する値)。 */
 export const CHARACTER_IMAGE_SLOTS = [
   'idle',
-  'rock',
-  'scissors',
-  'paper',
   'up',
   'down',
   'left',
@@ -75,22 +69,7 @@ export const CHARACTER_IMAGE_SLOT_META: Record<CharacterImageSlot, CharacterImag
   idle: {
     slot: 'idle',
     label: '待機',
-    description: 'じゃんけん前の待機ポーズ (正面)。',
-  },
-  rock: {
-    slot: 'rock',
-    label: 'グー',
-    description: 'じゃんけんで「グー」を出したときの手のポーズ。',
-  },
-  scissors: {
-    slot: 'scissors',
-    label: 'チョキ',
-    description: 'じゃんけんで「チョキ」を出したときの手のポーズ。',
-  },
-  paper: {
-    slot: 'paper',
-    label: 'パー',
-    description: 'じゃんけんで「パー」を出したときの手のポーズ。',
+    description: 'ゲーム開始前の待機ポーズ (正面)。',
   },
   up: {
     slot: 'up',

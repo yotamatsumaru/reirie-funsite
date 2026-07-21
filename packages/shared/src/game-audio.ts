@@ -14,7 +14,6 @@ export const ACCHI_VOICE_SLOTS = [
   'voiceAcchi',
   'voiceWin',
   'voiceLose',
-  'voiceDraw',
   'voiceAgain',
   'voiceBye',
 ] as const;
@@ -42,31 +41,25 @@ export const ACCHI_VOICE_SLOT_META: Record<AcchiVoiceSlot, AcchiVoiceSlotMeta> =
     slot: 'voiceStart',
     label: 'ゲーム開始',
     timing: 'ミニゲームを開いたとき',
-    scriptExample: 'じゃんけん、いくよ〜！',
+    scriptExample: 'あっちむいてホイ、いくよ〜！',
   },
   voiceAcchi: {
     slot: 'voiceAcchi',
     label: 'あっちむいてPU',
-    timing: 'じゃんけんに勝って方向対決に進むとき',
+    timing: '方向を選んで「あっちむいてPU」を仕掛けるとき',
     scriptExample: 'あっちむいて…PU！',
   },
   voiceWin: {
     slot: 'voiceWin',
     label: 'ファンの勝ち',
-    timing: 'プレイヤーが勝ったとき (じゃんけん勝ち / 方向一致)',
+    timing: 'プレイヤーが勝ったとき (方向が一致)',
     scriptExample: 'わっ、負けちゃった〜！キミ、やるね♪',
   },
   voiceLose: {
     slot: 'voiceLose',
     label: 'ファンの負け',
-    timing: 'プレイヤーが負けたとき (じゃんけん負け / 方向不一致)',
+    timing: 'プレイヤーが負けたとき (方向が不一致)',
     scriptExample: 'えへへ、私の勝ち♪',
-  },
-  voiceDraw: {
-    slot: 'voiceDraw',
-    label: 'あいこ',
-    timing: 'じゃんけんがあいこでもう一回のとき',
-    scriptExample: 'あれ、同じだ！もう一回っ！',
   },
   voiceAgain: {
     slot: 'voiceAgain',

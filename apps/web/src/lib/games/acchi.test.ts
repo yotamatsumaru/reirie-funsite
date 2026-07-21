@@ -1,99 +1,60 @@
 /**
- * あっち向いてホイ — サーバー側解決ロジック (2ラウンド制) の単体テスト。
+ * あっち向いてホイ — サーバー側解決ロジック (方向対決 1 ラウンドのみ) の単体テスト。
  *
  * 暗号論的乱数を使うため、統計的性質 (概ねの分布) と、ルール上絶対に
  * 成り立つべき不変条件 (invariant) を中心に検証する。
  */
 import { resolveAcchiPlay } from './acchi';
-import { judgeJanken } from '@idol/shared';
-import type { JankenHand, AcchiDirection } from '@idol/shared';
+import type { AcchiDirection } from '@idol/shared';
 
-const HANDS: JankenHand[] = ['ROCK', 'SCISSORS', 'PAPER'];
 const DIRECTIONS: AcchiDirection[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
 
-describe('resolveAcchiPlay (2ラウンド制)', () => {
-  it('ラウンド1の各試行はプレイヤーの手を常に反映する', () => {
-    for (const hand of HANDS) {
-      const play = resolveAcchiPlay(hand, 'UP', 3);
-      for (const attempt of play.round1.attempts) {
-        expect(attempt.player).toBe(hand);
-        expect(judgeJanken(attempt.player, attempt.cpu)).toBe(attempt.outcome);
-      }
+describe('resolveAcchiPlay (方向対決 1 ラウンドのみ)', () => {
+  it('方向対決の player は常にプレイヤーが指した方向を反映する', () => {
+    for (const dir of DIRECTIONS) {
+      const play = resolveAcchiPlay(dir, 3);
+      expect(play.direction.player).toBe(dir);
+      expect(DIRECTIONS).toContain(play.direction.cpu);
     }
   });
 
-  it('ラウンド1の決着試行は attempts の最後の要素と一致し、DRAW ではない', () => {
-    for (let i = 0; i < 200; i++) {
-      const play = resolveAcchiPlay('ROCK', 'UP', 3);
-      const attempts = play.round1.attempts;
-      const decisive = attempts[attempts.length - 1];
-      expect(decisive.outcome).not.toBe('DRAW');
-      // 最後以外は全てDRAW (やり直し) のはず
-      for (const a of attempts.slice(0, -1)) {
-        expect(a.outcome).toBe('DRAW');
-      }
-    }
-  });
-
-  it('ラウンド1で負けたら round2 は null、result は LOSE', () => {
+  it('matched と result が整合する', () => {
     for (let i = 0; i < 500; i++) {
-      const play = resolveAcchiPlay('ROCK', 'UP', 3);
-      const decisive = play.round1.attempts[play.round1.attempts.length - 1];
-      if (decisive.outcome === 'LOSE') {
-        expect(play.round2).toBeNull();
-        expect(play.result).toBe('LOSE');
-      }
+      const play = resolveAcchiPlay('UP', 3);
+      expect(play.direction.matched).toBe(play.direction.player === play.direction.cpu);
+      expect(play.result).toBe(play.direction.matched ? 'WIN' : 'LOSE');
     }
   });
 
-  it('ラウンド1で勝ったら round2 が必ず存在し、matched と result が整合する', () => {
-    for (let i = 0; i < 500; i++) {
-      const play = resolveAcchiPlay('ROCK', 'UP', 3);
-      const decisive = play.round1.attempts[play.round1.attempts.length - 1];
-      if (decisive.outcome === 'WIN') {
-        expect(play.round2).not.toBeNull();
-        if (play.round2) {
-          expect(play.round2.player).toBe('UP');
-          expect(DIRECTIONS).toContain(play.round2.cpu);
-          expect(play.round2.matched).toBe(play.round2.player === play.round2.cpu);
-          expect(play.result).toBe(play.round2.matched ? 'WIN' : 'LOSE');
-        }
-      }
-    }
-  });
-
-  it('最終結果は常に WIN か LOSE のいずれか (DRAW は出ない)', () => {
+  it('最終結果は常に WIN か LOSE のいずれか', () => {
     for (let i = 0; i < 300; i++) {
-      const play = resolveAcchiPlay('SCISSORS', 'LEFT', 4);
+      const play = resolveAcchiPlay('LEFT', 4);
       expect(['WIN', 'LOSE']).toContain(play.result);
     }
   });
 
-  it('ラウンド1の決着後の勝率は設定に依らず概ね50% (公正なじゃんけん: あいこを除けば勝敗は1/2ずつ)', () => {
-    const trials = 3000;
-    let advanced = 0;
-    for (let i = 0; i < trials; i++) {
-      const play = resolveAcchiPlay('PAPER', 'DOWN', 3);
-      if (play.round2) advanced++;
+  it('不一致のとき CPU の方向は必ずプレイヤーの方向と異なる', () => {
+    for (let i = 0; i < 300; i++) {
+      const play = resolveAcchiPlay('DOWN', 1); // 勝率 0.2 (不一致が多い)
+      if (!play.direction.matched) {
+        expect(play.direction.cpu).not.toBe(play.direction.player);
+      } else {
+        expect(play.direction.cpu).toBe(play.direction.player);
+      }
     }
-    const rate = advanced / trials;
-    // 各試行は WIN/LOSE/DRAW が概ね1/3ずつ (公正) で、DRAW は単純にやり直すだけなので、
-    // 決着 (WIN or LOSE) した時点での WIN 率は約 1/2 になる。
-    expect(rate).toBeGreaterThan(0.4);
-    expect(rate).toBeLessThan(0.6);
   });
 
-  it('設定 (1〜6) の勝率がラウンド2の一致率に反映される (統計的検証)', () => {
+  it('設定 (1〜6) の勝率が一致率に反映される (統計的検証)', () => {
     const trials = 4000;
     let matchedLowSetting = 0;
     let matchedHighSetting = 0;
 
     for (let i = 0; i < trials; i++) {
-      const lowPlay = resolveAcchiPlay('ROCK', 'UP', 1); // 勝率 0.2
-      if (lowPlay.round2?.matched) matchedLowSetting++;
+      const lowPlay = resolveAcchiPlay('UP', 1); // 勝率 0.2
+      if (lowPlay.direction.matched) matchedLowSetting++;
 
-      const highPlay = resolveAcchiPlay('ROCK', 'UP', 6); // 勝率 0.6
-      if (highPlay.round2?.matched) matchedHighSetting++;
+      const highPlay = resolveAcchiPlay('UP', 6); // 勝率 0.6
+      if (highPlay.direction.matched) matchedHighSetting++;
     }
 
     // 設定6の一致数は設定1より明確に多いはず (十分なサンプル数で余裕を持った比較)
