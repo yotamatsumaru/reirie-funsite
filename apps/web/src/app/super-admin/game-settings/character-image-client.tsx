@@ -3,7 +3,7 @@
 /**
  * あっちむいてPUI キャラクター画像のアップロード UI (SUPER_ADMIN)。
  *
- * ポーズ (idle/rock/scissors/paper/up/down/left/right) ごとに、
+ * ポーズ (idle/up/down/left/right) ごとに、
  * 最大 CHARACTER_IMAGE_VARIANTS_PER_SLOT (=3) パターンの画像を
  * アップロード / 差し替え / 削除できる。
  * ゲーム画面では、そのポーズに登録されているパターンからランダムに 1 枚が表示される。
