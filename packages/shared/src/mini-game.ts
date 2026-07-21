@@ -20,8 +20,15 @@ import { PLAN_TYPES, type PlanTypeLiteral } from './constants';
 /** 1 日にプレイできる回数の上限 */
 export const ACCHI_MAX_PLAYS_PER_DAY = 5;
 
-/** あっち向いてホイで「プレイヤーが勝った」ときに付与するポイント */
-export const ACCHI_WIN_REWARD = 30;
+/**
+ * あっち向いてホイで「プレイヤーが勝った」ときに付与する Fan ポイント。
+ *
+ * 【2026-07 統合】以前は勝利報酬を Fan ポイント 30pt + 特典ポイント
+ * (1勝1pt, 1日上限3pt の薄いボーナス) の 2 枠に分けて付与していたが、
+ * Fan ポイント 1 種類への統合に伴い特典ポイント枠は廃止し、その分の
+ * 経済性を維持するため Fan ポイント報酬をこの 1 本 (32pt) に増額した。
+ */
+export const ACCHI_WIN_REWARD = 32;
 
 // ---------------------------------------------------------------------
 // 型
@@ -154,63 +161,10 @@ export function resolveAcchiSettingForPlan(
 }
 
 // ---------------------------------------------------------------------
-// 勝利による特典ポイント付与 (Fan ポイントとは別枠のボーナス)
+// 【2026-07 廃止】勝利による特典ポイント付与 (Fan ポイントとは別枠のボーナス)
 //
-// Fan ポイントは無料で貯まる (ログイン等) ため、そのまま特典ポイントに
-// 交換できてしまうと課金経済 (Stripe 購入 / サブスク特典) が薄まってしまう。
-// そのため「あっち向いてホイ」の勝利に限り、ごく薄い還元率 + 1日上限を設けて
-// 少量の特典ポイントを付与する、という抑制的なボーナスとして実装する。
+// 以前は Fan ポイントとは別枠の「特典ポイント」通貨があり、あっち向いてホイの
+// 勝利に限り薄い還元率 (1勝1pt, 1日上限3pt) で少量付与していたが、
+// Fan ポイント 1 種類への統合に伴いこの別枠ボーナス機構は廃止した。
+// 廃止分の経済性は ACCHI_WIN_REWARD の増額 (30pt → 32pt) で相殺している。
 // ---------------------------------------------------------------------
-
-/** 1 勝あたりに付与する特典ポイント (既定値) */
-export const ACCHI_REWARD_POINT_PER_WIN = 1;
-
-/** 1 日に付与できる特典ポイントの上限 (既定値) */
-export const ACCHI_REWARD_POINT_DAILY_CAP = 3;
-
-/**
- * あっち向いてホイの勝利特典ポイント設定。
- * 管理者が /super-admin/game で変更し、AppSetting (acchi.rewardBonusSettings) に永続化する。
- */
-export type AcchiRewardBonusSettings = {
-  /** 1 勝あたりに付与する特典ポイント */
-  perWin: number;
-  /** 1 日 (JST) に付与できる特典ポイントの上限 */
-  dailyCap: number;
-};
-
-/** AppSetting に保存するキー */
-export const ACCHI_REWARD_BONUS_SETTINGS_KEY = 'acchi.rewardBonusSettings';
-
-/** 既定の勝利特典ポイント設定 (1勝 = 1pt, 1日上限3pt という薄い還元率) */
-export const DEFAULT_ACCHI_REWARD_BONUS_SETTINGS: AcchiRewardBonusSettings = {
-  perWin: ACCHI_REWARD_POINT_PER_WIN,
-  dailyCap: ACCHI_REWARD_POINT_DAILY_CAP,
-};
-
-/** Zod: 勝利特典ポイント設定 (0 以上の整数。0 にすると事実上ボーナスを無効化できる) */
-export const AcchiRewardBonusSettingsSchema = z.object({
-  perWin: z.number().int().min(0).max(1000),
-  dailyCap: z.number().int().min(0).max(1000),
-}) satisfies z.ZodType<AcchiRewardBonusSettings>;
-
-/**
- * 今回の勝利で実際に付与すべき特典ポイントを計算する (純粋関数)。
- *
- * - 負けている場合や設定が 0 の場合は 0。
- * - 既に本日の上限まで付与済みの場合は 0。
- * - 上限に近い場合は端数分 (残り枠) のみを付与する (perWin をそのまま超えて付与しない)。
- *
- * @param result このプレイの結果
- * @param grantedToday 本日 (JST) 既に付与済みの特典ポイント合計
- * @param settings 勝利特典ポイント設定 (perWin / dailyCap)
- */
-export function computeAcchiRewardBonus(
-  result: AcchiResult,
-  grantedToday: number,
-  settings: AcchiRewardBonusSettings = DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
-): number {
-  if (result !== 'WIN') return 0;
-  const remainingCap = Math.max(0, settings.dailyCap - Math.max(0, grantedToday));
-  return Math.max(0, Math.min(settings.perWin, remainingCap));
-}

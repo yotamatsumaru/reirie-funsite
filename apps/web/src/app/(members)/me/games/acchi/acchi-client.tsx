@@ -61,10 +61,6 @@ type PlayResponse = {
   balance: number;
   playedToday: number;
   remaining: number;
-  /** 今回のプレイで付与された特典ポイント (勝利時、かつ本日上限内のみ > 0) */
-  rewardPointBonus?: number;
-  /** プレイ後の特典ポイント残高 */
-  rewardPointBalance?: number;
 };
 
 const DIR_EMOJI: Record<AcchiDirection, string> = {
@@ -500,15 +496,6 @@ function ResultCard({
       ) : (
         <p className="mt-4 text-sm text-slate-500">残高 {outcome.balance.toLocaleString()}pt</p>
       )}
-
-      {win && (outcome.rewardPointBonus ?? 0) > 0 ? (
-        <p className="mt-2 rounded-full bg-purple-100 px-4 py-2 text-sm font-bold text-purple-800">
-          🎁 特典ポイント +{outcome.rewardPointBonus}pt！
-          {typeof outcome.rewardPointBalance === 'number'
-            ? ` (残高 ${outcome.rewardPointBalance.toLocaleString()}pt)`
-            : ''}
-        </p>
-      ) : null}
 
       <p className="mt-3 text-xs text-slate-400">
         本日残り {promoActive ? '∞' : outcome.remaining} 回

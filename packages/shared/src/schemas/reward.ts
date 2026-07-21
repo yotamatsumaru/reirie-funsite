@@ -1,39 +1,16 @@
 /**
- * 特典ポイント (Reward Point) 関連の Zod スキーマ・定数・ラベル定義。
+ * 景品カタログ・交換・Fan ポイント購入 (Stripe) 関連の Zod スキーマ・定数・ラベル定義。
  *
- * 2 段階ポイント体系:
- *  - Fan ポイント     : ログイン等で無料で貯まり、ゲーム内 (章/アイテム購入・追加プレイ) で使う。
- *                        既存の User.points / PointTransaction をそのまま使用する (packages/shared/src/membership.ts)。
- *  - 特典ポイント     : Stripe 購入 or サブスク月次自動付与で貯まり、景品カタログとの交換に使う。
- *                        User.rewardPoints / RewardPointTransaction が真実の残高。
+ * 【2026-07 統合】以前は Fan ポイントと特典ポイント (Stripe 購入 / サブスク月次自動付与で貯まり
+ * 景品カタログ交換に使う別枠の通貨。旧 User.rewardPoints / RewardPointTransaction /
+ * RewardPointReason) の 2 種類があったが、Fan ポイント 1 種類に統合した。
+ * 特典ポイント取引理由 (旧 RewardPointReason) は PointReason (packages/shared/src/membership.ts)
+ * に統合済みのため、このファイルにあった REWARD_POINT_REASONS 等は削除した。
+ * 景品カタログ・交換・購入パック等の型/テーブル名 (RewardCatalogItem 等) はそのまま維持し、
+ * 実際に増減するのは User.points / PointTransaction (Fan ポイント) である。
  */
 import { z } from 'zod';
 import { PLAN_TYPES, type PlanTypeLiteral } from '../constants';
-
-// ---------------------------------------------------------------------
-// 特典ポイント取引理由 (RewardPointReason)
-// ---------------------------------------------------------------------
-
-export const REWARD_POINT_REASONS = [
-  'STRIPE_PURCHASE',
-  'SUBSCRIPTION_BONUS',
-  'ADMIN_ADJUST',
-  'REDEMPTION',
-  'REFUND',
-  'GAME_REWARD',
-  'OTHER',
-] as const;
-export type RewardPointReasonLiteral = (typeof REWARD_POINT_REASONS)[number];
-
-export const REWARD_POINT_REASON_LABELS: Record<RewardPointReasonLiteral, string> = {
-  STRIPE_PURCHASE: 'ポイントパック購入',
-  SUBSCRIPTION_BONUS: 'サブスク月次特典',
-  ADMIN_ADJUST: '運営による調整',
-  REDEMPTION: '景品交換',
-  REFUND: '交換キャンセル返還',
-  GAME_REWARD: 'ミニゲーム勝利報酬',
-  OTHER: 'その他',
-};
 
 // ---------------------------------------------------------------------
 // 景品カタログ (RewardCatalogItem)
@@ -130,7 +107,7 @@ export type GamePurchasePayMethodLiteral = (typeof GAME_PURCHASE_PAY_METHODS)[nu
 // ---------------------------------------------------------------------
 
 /**
- * サブスクプラン別の月次特典ポイント自動付与量。
+ * サブスクプラン別の月次 Fan ポイント自動付与量。
  *  - FREE     : 0 (対象外)
  *  - STANDARD : 300pt/月
  *  - PREMIUM  : 1000pt/月
@@ -155,15 +132,7 @@ export const MAX_EXTRA_PLAYS_PER_DAY = 5;
 // API 入力スキーマ
 // ---------------------------------------------------------------------
 
-/** 管理者による特典ポイント手動調整 */
-export const AdminAdjustRewardPointsSchema = z.object({
-  userId: z.uuid(),
-  amount: z.number().int().refine((n) => n !== 0, '0 以外を指定してください'),
-  note: z.string().max(200).optional(),
-});
-export type AdminAdjustRewardPointsInput = z.infer<typeof AdminAdjustRewardPointsSchema>;
-
-/** 特典ポイントパックの管理 (作成・編集) */
+/** Fan ポイントパックの管理 (作成・編集) */
 export const AdminRewardPointPackInputSchema = z.object({
   name: z.string().min(1).max(80),
   points: z.number().int().min(1).max(1_000_000),
@@ -173,7 +142,7 @@ export const AdminRewardPointPackInputSchema = z.object({
 });
 export type AdminRewardPointPackInput = z.infer<typeof AdminRewardPointPackInputSchema>;
 
-/** 特典ポイント購入 (Stripe Checkout Session 作成) */
+/** Fan ポイント購入 (Stripe Checkout Session 作成) */
 export const RewardPointPurchaseInputSchema = z.object({
   packId: z.uuid(),
   successUrl: z.url(),

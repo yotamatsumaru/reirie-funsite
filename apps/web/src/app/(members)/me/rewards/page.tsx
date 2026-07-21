@@ -1,5 +1,8 @@
 /**
- * /me/rewards — 景品カタログ (特典ポイント交換)
+ * /me/rewards — 景品カタログ (Fan ポイント交換)
+ *
+ * 【2026-07 統合】以前は特典ポイント (旧 User.rewardPoints) を消費していたが、
+ * Fan ポイント 1 種類への統合に伴い、User.points を消費する。
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -24,7 +27,7 @@ export default async function MeRewardsPage() {
       .findUnique({
         where: { id: session.user.id },
         select: {
-          rewardPoints: true,
+          points: true,
           fullName: true,
           phone: true,
           postalCode: true,
@@ -58,7 +61,7 @@ export default async function MeRewardsPage() {
       }),
   ]);
 
-  const balance = user?.rewardPoints ?? 0;
+  const balance = user?.points ?? 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-10">
@@ -66,7 +69,7 @@ export default async function MeRewardsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">景品交換</h1>
           <p className="mt-1 text-sm text-slate-500">
-            特典ポイントでグッズ・特典会優先枠・デジタル特典と交換できます。
+            Fan ポイントでグッズ・特典会優先枠・デジタル特典と交換できます。
           </p>
         </div>
         <Link href="/me/points" className="text-sm text-brand-600 hover:underline">
@@ -77,7 +80,7 @@ export default async function MeRewardsPage() {
       <Card>
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-slate-500">保有 特典ポイント</p>
+            <p className="text-sm text-slate-500">保有 Fan ポイント</p>
             <p className="text-3xl font-bold text-slate-900">
               {balance.toLocaleString()}
               <span className="ml-1 text-base font-normal text-slate-500">pt</span>

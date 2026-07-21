@@ -96,3 +96,58 @@ pnpm --filter @idol/db exec prisma migrate resolve --applied 20260712180000_add_
 ローカル PostgreSQL (citext / pgcrypto 拡張有効) に本マイグレーション単体を適用した上で、
 `prisma migrate diff --from-url <db> --to-schema-datamodel prisma/schema.prisma --script` の
 差分が空 (= 生成される実DBスキーマが `schema.prisma` の定義と完全一致) であることを確認済み。
+
+## Fan ポイント / 特典ポイント統合 (2026年7月)
+
+これまで「Fan ポイント (`User.points`)」と「特典ポイント (`User.rewardPoints`)」の
+2 種類の通貨に分かれていたが、Fan ポイント 1 種類に統合した。
+`RewardPointPack` / `RewardPointPurchase` / `RewardCatalogItem` / `RewardRedemption` /
+`MonthlyRewardPointGrant` の各テーブル・モデル名はそのまま維持し、
+それらが操作する通貨だけが Fan ポイントに変わる (テーブル名変更なし)。
+
+以下 7 つのマイグレーションを **順番に** 適用する必要がある
+(enum 値追加 → データ移行 → カラム/テーブル削除、の順序を守らないとデータを失う):
+
+1. `20260721000000_add_point_reason_stripe_purchase` — `PointReason` に `STRIPE_PURCHASE` を追加
+2. `20260721000100_add_point_reason_subscription_bonus` — `PointReason` に `SUBSCRIPTION_BONUS` を追加
+3. `20260721000200_add_point_reason_redemption` — `PointReason` に `REDEMPTION` を追加
+4. `20260721000300_add_point_reason_refund` — `PointReason` に `REFUND` を追加
+5. `20260721000400_add_point_reason_merge_adjust` — `PointReason` に `MERGE_ADJUST` を追加 (統合用)
+6. `20260721001000_merge_reward_points_into_points` — **データ移行**。
+   既存ユーザーの `users.reward_points` を無条件に `users.points` へ合算し、
+   `point_transactions` に `reason = 'MERGE_ADJUST'` の台帳エントリを記録する
+   (`reward_points != 0` のユーザーのみ対象)。
+7. `20260721002000_drop_reward_point_currency_columns` — 破壊的変更。
+   `reward_point_transactions` テーブル・`RewardPointReason` enum・
+   `users.reward_points` カラム・`mini_game_plays.bonus_reward_point` カラムを削除する。
+   **6 のデータ移行が完了した後にのみ実行すること。**
+
+### 適用方法
+
+```bash
+# 6 は SELECT + INSERT + UPDATE のみで DDL を含まないため、
+# migrate deploy でも psql -f でも同様に安全に実行できる。
+psql "$DATABASE_URL" -f prisma/migrations/20260721000000_add_point_reason_stripe_purchase/migration.sql
+psql "$DATABASE_URL" -f prisma/migrations/20260721000100_add_point_reason_subscription_bonus/migration.sql
+psql "$DATABASE_URL" -f prisma/migrations/20260721000200_add_point_reason_redemption/migration.sql
+psql "$DATABASE_URL" -f prisma/migrations/20260721000300_add_point_reason_refund/migration.sql
+psql "$DATABASE_URL" -f prisma/migrations/20260721000400_add_point_reason_merge_adjust/migration.sql
+psql "$DATABASE_URL" -f prisma/migrations/20260721001000_merge_reward_points_into_points/migration.sql
+psql "$DATABASE_URL" -f prisma/migrations/20260721002000_drop_reward_point_currency_columns/migration.sql
+```
+
+`_prisma_migrations` 管理テーブルを使っている環境では、上記を個別に適用した後に
+それぞれ `prisma migrate resolve --applied <migration名>` を実行して記録を揃えること。
+
+### 検証済み事項 (ローカル PostgreSQL 15 で確認)
+
+1. 上記 7 マイグレーションをこの順番で適用。
+2. 統合前に `reward_points = 1` を持つ既存デモユーザーが、統合後に
+   `points` が `reward_points` の分だけ増加し (`0 → 1`)、
+   `point_transactions` に `reason = 'MERGE_ADJUST', amount = 1, balance = 1` の
+   台帳エントリが 1 件作成されることを確認。
+3. `prisma migrate diff --from-url <db> --to-schema-datamodel prisma/schema.prisma --script`
+   の差分が空であることを確認 (`promo_until` は元々 `schema.prisma` 管理外の生SQLカラムのため、
+   このマイグレーションとは無関係に差分として出る既知の仕様であり問題ない)。
+4. `pnpm --filter @idol/db exec prisma generate` が成功し、Prisma Client が
+   新スキーマ (rewardPoints フィールド無し) で再生成されることを確認。

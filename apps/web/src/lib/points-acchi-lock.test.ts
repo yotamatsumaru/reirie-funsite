@@ -43,7 +43,7 @@ function makeTx() {
       },
       aggregate: () => {
         calls.push({ op: 'miniGamePlay.aggregate', args: [] });
-        return Promise.resolve({ _sum: { bonusRewardPoint: 0 } });
+        return Promise.resolve({ _sum: {} });
       },
       create: () => {
         calls.push({ op: 'miniGamePlay.create', args: [] });
@@ -67,22 +67,16 @@ function makeTx() {
     user: {
       findUnique: () => {
         calls.push({ op: 'user.findUnique', args: [] });
-        return Promise.resolve({ points: 100, rewardPoints: 0 });
+        return Promise.resolve({ points: 100 });
       },
       update: () => {
         calls.push({ op: 'user.update', args: [] });
-        return Promise.resolve({ points: 90, rewardPoints: 0 });
+        return Promise.resolve({ points: 90 });
       },
     },
     pointTransaction: {
       create: () => {
         calls.push({ op: 'pointTransaction.create', args: [] });
-        return Promise.resolve({});
-      },
-    },
-    rewardPointTransaction: {
-      create: () => {
-        calls.push({ op: 'rewardPointTransaction.create', args: [] });
         return Promise.resolve({});
       },
     },

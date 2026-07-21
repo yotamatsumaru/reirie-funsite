@@ -128,15 +128,11 @@ GET /api/call/events/{id}/queue/events?access_token=<accessToken>
 {
   "direction": { "player": "UP", "cpu": "UP", "matched": true },
   "result": "WIN",
-  "reward": 30,
+  "reward": 32,
   "balance": 130,
   "playedToday": 1,
   "remaining": 4,
-  "maxPerDay": 5,
-  "rewardPointBonus": 5,
-  "rewardPointBalance": 25,
-  "rewardPointGrantedToday": 5,
-  "rewardPointDailyCap": 50
+  "maxPerDay": 5
 }
 ```
 - `direction`: `player` (プレイヤーが指した方向) / `cpu` (サーバーが決めた CPU の向き) /
@@ -145,8 +141,12 @@ GET /api/call/events/{id}/queue/events?access_token=<accessToken>
 - `result`: `WIN`(一致=報酬) / `LOSE`(不一致)。じゃんけん廃止に伴い `DRAW` は存在しません。
 - `reward` / `balance`: 獲得した Fan ポイントと、プレイ後のポイント残高。
 - `playedToday` / `remaining` / `maxPerDay`: 本日の消化回数・残り回数・本日の上限。
-- `rewardPointBonus` 等: 特典ポイント (reward points) 関連の付与額・残高・本日付与済み・上限。
 - 本日の上限に達していると HTTP `429` が返ります。
+
+> ⚠️ **破壊的変更 (2026年7月)**: Fan ポイントと特典ポイントの統合により、
+> 従来別枠で付与されていた `rewardPointBonus` / `rewardPointBalance` /
+> `rewardPointGrantedToday` / `rewardPointDailyCap` は廃止されました。
+> 勝利報酬は `reward` (Fan ポイント) に一本化されています。
 
 ---
 
@@ -175,7 +175,7 @@ public static class ApiConfig
 [Serializable] public class PlayResponse {
     public DirInfo direction;
     public string result; public int reward; public int balance; public int playedToday; public int remaining;
-    public int maxPerDay; public int rewardPointBonus; public int rewardPointBalance;
+    public int maxPerDay;
 }
 
 public class AcchiApiClient : MonoBehaviour

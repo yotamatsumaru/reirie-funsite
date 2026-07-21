@@ -16,7 +16,6 @@ export interface MemberSummary {
   plan: 'FREE' | 'STANDARD' | 'PREMIUM';
   rank: MemberRank;
   points: number;
-  rewardPoints: number;
 }
 
 interface MemberSummaryState {

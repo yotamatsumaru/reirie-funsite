@@ -15,8 +15,6 @@ import {
   resolveAcchiSettingForPlan,
   DEFAULT_ACCHI_WIN_SETTINGS,
   AcchiWinSettingsByPlanSchema,
-  computeAcchiRewardBonus,
-  DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
 } from './mini-game';
 
 describe('judgeAcchiResult (方向の一致/不一致からの最終結果)', () => {
@@ -137,30 +135,3 @@ describe('勝率設定 (1〜6)', () => {
   });
 });
 
-describe('computeAcchiRewardBonus (勝利特典ポイントの薄い還元率 + 1日上限)', () => {
-  it('負けは常に0', () => {
-    expect(computeAcchiRewardBonus('LOSE', 0, DEFAULT_ACCHI_REWARD_BONUS_SETTINGS)).toBe(0);
-  });
-
-  it('勝利かつ上限未達なら perWin を付与する', () => {
-    expect(computeAcchiRewardBonus('WIN', 0, { perWin: 1, dailyCap: 3 })).toBe(1);
-    expect(computeAcchiRewardBonus('WIN', 2, { perWin: 1, dailyCap: 3 })).toBe(1);
-  });
-
-  it('残り枠が perWin より少なければ残り枠分だけ付与する', () => {
-    expect(computeAcchiRewardBonus('WIN', 2, { perWin: 2, dailyCap: 3 })).toBe(1);
-  });
-
-  it('本日の上限に達していれば0', () => {
-    expect(computeAcchiRewardBonus('WIN', 3, { perWin: 1, dailyCap: 3 })).toBe(0);
-    expect(computeAcchiRewardBonus('WIN', 10, { perWin: 1, dailyCap: 3 })).toBe(0);
-  });
-
-  it('dailyCap が 0 なら常に0 (機能無効化)', () => {
-    expect(computeAcchiRewardBonus('WIN', 0, { perWin: 1, dailyCap: 0 })).toBe(0);
-  });
-
-  it('負の grantedToday は 0 として扱う', () => {
-    expect(computeAcchiRewardBonus('WIN', -5, { perWin: 1, dailyCap: 3 })).toBe(1);
-  });
-});

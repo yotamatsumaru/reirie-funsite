@@ -27,8 +27,7 @@ const users = [
     role: 'USER',
     avatarUrl: null,
     marketingOptIn: true,
-    points: 350,
-    rewardPoints: 1500,
+    points: 1850,
     deletedAt: null,
     createdAt: daysAgo(45),
     updatedAt: daysAgo(1),
@@ -1043,28 +1042,12 @@ const rewardCatalogItem = [
 ];
 
 // =====================================================================
-// 特典ポイント取引履歴 (デモユーザーのサンプル)
+// Fan ポイント取引履歴 (デモユーザーのサンプル)
+//
+// 2026-07 のポイント統合により、旧 rewardPointTransaction (RewardPointTransaction
+// モデル) は廃止された。旧データは PointTransaction 側に MERGE_ADJUST 等の
+// reason で記録される想定だが、デモ fixtures では簡略化のため省略する。
 // =====================================================================
-const rewardPointTransaction = [
-  {
-    id: 'rpt-1',
-    userId: DEMO_USER_ID,
-    amount: 1200,
-    balance: 1200,
-    reason: 'STRIPE_PURCHASE',
-    note: '特典ポイントパック購入 (1200pt / ¥1,000)',
-    createdAt: daysAgo(10),
-  },
-  {
-    id: 'rpt-2',
-    userId: DEMO_USER_ID,
-    amount: 300,
-    balance: 1500,
-    reason: 'SUBSCRIPTION_BONUS',
-    note: 'サブスク月次特典',
-    createdAt: daysAgo(3),
-  },
-];
 
 // =====================================================================
 // その他空テーブル (Prisma 呼び出し時に空配列を返せばよい)
@@ -1107,7 +1090,6 @@ const fixtures: Record<string, unknown[]> = {
   rewardPointPack,
   rewardPointPurchase,
   rewardCatalogItem,
-  rewardPointTransaction,
   rewardRedemption: empty,
   monthlyRewardPointGrant: empty,
   announcement,
