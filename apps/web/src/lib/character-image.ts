@@ -6,7 +6,7 @@
  *   2. 未設定 → バイト列を DB (CharacterImage.data) に保存し、
  *      /api/media/character-image/{id} 経由で配信する。
  *
- * slot (= ポーズ: idle/rock/scissors/paper/up/down/left/right) ごとに、
+ * slot (= ポーズ: idle/up/down/left/right) ごとに、
  * variant (1〜CHARACTER_IMAGE_VARIANTS_PER_SLOT) の複数パターンを保持できる。
  * 同一 (slot, variant) は 1 件だけ保持する (再アップロード時は既存を置き換え)。
  * ゲーム表示時は各ポーズの登録済みパターンからランダムに 1 枚が選ばれる。

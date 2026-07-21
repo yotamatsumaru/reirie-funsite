@@ -4,7 +4,7 @@
  * DELETE /api/super-admin/character-images — 指定ポーズの画像を削除
  *
  * SUPER_ADMIN 限定。保存は S3 (設定時) または DB (フォールバック)。
- * あっち向いてホイのキャラクター (idle/rock/scissors/paper/up/down/left/right)
+ * あっち向いてホイのキャラクター (idle/up/down/left/right)
  * の表示画像を、コード変更・再デプロイ不要で差し替えられるようにする。
  *
  * form fields (POST):

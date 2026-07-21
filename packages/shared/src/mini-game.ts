@@ -79,7 +79,7 @@ export type AcchiWinSetting = (typeof ACCHI_WIN_SETTINGS)[number];
  * 設定値 → 「最終的にプレイヤーが勝つ確率」(0〜1)。
  * あっち向いてホイは決着がつくまで繰り返すゲームなので、
  * ここでは "1 プレイ (= 決着 1 回) で WIN になる確率" を直接定義する。
- * (実際のじゃんけん/方向の出目は、この確率に整合するようサーバーが構成する)
+ * (実際の方向の出目は、この確率に整合するようサーバーが構成する)
  */
 export const ACCHI_WIN_RATE_BY_SETTING: Record<AcchiWinSetting, number> = {
   1: 0.2, // 設定1: 約20%
