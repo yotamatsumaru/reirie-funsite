@@ -16,22 +16,20 @@ Unity / モバイルアプリから利用できます。クライアント側で
 
 ## 1. 設計の前提
 
-- **サーバー権威 (Server-authoritative)**: じゃんけんの CPU の手、方向、勝敗、ポイント付与は
-  すべてサーバーが確定します。クライアントは「自分の手」と「方向」しか送りません。
+- **サーバー権威 (Server-authoritative)**: CPU が向く方向、勝敗、ポイント付与は
+  すべてサーバーが確定します。クライアントは「自分が指す方向」しか送りません。
   → Unity 側を改造してもポイントを不正に増やすことはできません。
-- **2ラウンド制のゲームルール (2026年7月〜)**: あっち向いてホイは
-  「ラウンド1 (じゃんけん) → ラウンド2 (方向)」の2段階で決着します。
-  - ラウンド1 (じゃんけん): 負けたらその場でゲーム終了。あいこならサーバーが
-    内部で自動的にやり直す (CPU の手を再抽選)。勝ったらラウンド2へ進む。
-  - ラウンド2 (方向): 指した方向と向いた方向が一致すれば勝ち、不一致なら負け。
-    一致するかどうかは、プレイヤーのプランに割り当てられた勝率設定で決まる。
-  - **API リクエスト/レスポンスの形は変わりません** (下記 §3.2 参照)。
-    クライアントは以前と同じく `{hand, direction}` を 1 回のリクエストで送るだけで、
-    サーバーが上記の2ラウンドをすべて内部で解決してから結果を返します。
-    レスポンスには新たに `round1` / `round2` フィールドが追加されており、
-    やり直し (あいこ) を含む詳細な演出情報を取得できます (後方互換のため
-    既存の `janken` / `direction` / `result` フィールドも維持されます。
-    ラウンド1で負けてラウンド2に進まなかった場合、`direction.cpu` は `null` になります)。
+- **単一ラウンド制のゲームルール (2026年7月〜)**: あっち向いてホイは
+  じゃんけんを行わず、「方向対決」1 ラウンドのみで決着します。
+  - プレイヤーが指した方向と CPU が向いた方向が一致すれば勝ち、不一致なら負け。
+  - 一致するかどうかは、プレイヤーのプランに割り当てられた勝率設定 (設定1〜6) で決まる。
+  - **破壊的変更 (2026年7月)**: 以前は `{hand, direction}` (じゃんけん→方向の2段階) を
+    送るリクエスト形式でしたが、じゃんけんフェーズ自体を廃止したため、
+    現在は `{direction}` のみを送る 1 フィールドのリクエストになりました。
+    レスポンスの `janken` フィールドおよび `round1` / `round2` フィールドは廃止され、
+    フラットな `direction: {player, cpu, matched}` フィールドに統一されています
+    (下記 §3.2 参照)。**既にこの API に統合済みのネイティブクライアントがある場合、
+    この変更に追従する改修が必要です**。
 - **認証は 2 方式に対応**:
   - Web ブラウザ … Cookie セッション (Auth.js)
   - Unity / モバイル … **Bearer トークン** (`Authorization: Bearer <accessToken>`)
@@ -113,45 +111,42 @@ GET /api/call/events/{id}/queue/events?access_token=<accessToken>
 
 詳細なリクエスト/レスポンス形式は `docs/openapi.yaml` を参照 (Swagger UI 等で閲覧可)。
 
-### あっち向いてホイ プレイ (2ラウンド制)
-リクエスト (変更なし。手と方向を1回でまとめて送る):
+### あっち向いてホイ プレイ (単一ラウンド制)
+
+> ⚠️ **破壊的変更 (2026年7月)**: じゃんけんフェーズを廃止したため、
+> リクエスト/レスポンスの形が変わりました。以前の `{hand, direction}` リクエストや
+> `janken` / `round1` / `round2` フィールドは廃止されています。
+
+リクエスト (方向だけを送る):
 ```json
-{ "hand": "ROCK", "direction": "UP" }
+{ "direction": "UP" }
 ```
-- `hand`: `ROCK` | `SCISSORS` | `PAPER`
 - `direction`: `UP` | `DOWN` | `LEFT` | `RIGHT`
 
-レスポンス (例: ラウンド1で1回あいこがあり、その後勝ってラウンド2で勝利):
+レスポンス (例: 方向が一致して勝利):
 ```json
 {
-  "janken":   { "player": "ROCK", "cpu": "SCISSORS", "outcome": "WIN" },
-  "direction":{ "player": "UP", "cpu": "UP" },
+  "direction": { "player": "UP", "cpu": "UP", "matched": true },
   "result": "WIN",
   "reward": 30,
   "balance": 130,
   "playedToday": 1,
   "remaining": 4,
-  "round1": {
-    "attempts": [
-      { "player": "ROCK", "cpu": "ROCK", "outcome": "DRAW" },
-      { "player": "ROCK", "cpu": "SCISSORS", "outcome": "WIN" }
-    ],
-    "result": "ADVANCE_TO_ROUND2"
-  },
-  "round2": { "player": "UP", "cpu": "UP", "matched": true }
+  "maxPerDay": 5,
+  "rewardPointBonus": 5,
+  "rewardPointBalance": 25,
+  "rewardPointGrantedToday": 5,
+  "rewardPointDailyCap": 50
 }
 ```
-- `janken` / `direction`: 後方互換用。`janken` はラウンド1の**決着した**試行
-  (`round1.attempts` の最後の要素) を表す。`direction.cpu` はラウンド1で
-  負けてラウンド2に進まなかった場合は `null` になる (以前は常に値が入っていた点が変更点)。
-- `round1.attempts`: ラウンド1 (じゃんけん) の全試行。あいこが続いた場合は複数件になる。
-  各要素の `outcome` が `WIN` または `LOSE` になった時点で決着 (それ以外は `DRAW` でやり直し)。
-- `round1.result`: `ADVANCE_TO_ROUND2` (勝ってラウンド2へ進んだ) | `GAME_OVER` (負けて終了)。
-- `round2`: ラウンド1で負けた場合は `null` (ラウンド2は行われない)。`matched` は
-  指した方向と向いた方向が一致したか (一致=勝ち/不一致=負け)。
-- `result`: `WIN`(勝ち=報酬) / `LOSE`(負け)。ラウンド1で負けた場合も `LOSE` になる
-  (2026年7月のルール変更前は `DRAW` を返すことがあったが、現在は必ず `WIN`/`LOSE` で決着する)。
-- 本日の上限 (5 回) に達していると HTTP `429` が返ります。
+- `direction`: `player` (プレイヤーが指した方向) / `cpu` (サーバーが決めた CPU の向き) /
+  `matched` (一致したか。一致するかどうかはプレイヤーのプランに割り当てられた
+  勝率設定 (設定1〜6) で決まる)。
+- `result`: `WIN`(一致=報酬) / `LOSE`(不一致)。じゃんけん廃止に伴い `DRAW` は存在しません。
+- `reward` / `balance`: 獲得した Fan ポイントと、プレイ後のポイント残高。
+- `playedToday` / `remaining` / `maxPerDay`: 本日の消化回数・残り回数・本日の上限。
+- `rewardPointBonus` 等: 特典ポイント (reward points) 関連の付与額・残高・本日付与済み・上限。
+- 本日の上限に達していると HTTP `429` が返ります。
 
 ---
 
@@ -175,14 +170,12 @@ public static class ApiConfig
 [Serializable] public class TokenResponse {
     public string accessToken; public string refreshToken; public string tokenType; public int expiresIn;
 }
-[Serializable] public class PlayRequest { public string hand; public string direction; }
-[Serializable] public class JankenInfo { public string player; public string cpu; public string outcome; }
-[Serializable] public class DirInfo { public string player; public string cpu; } // cpu は round1 負け時 null
+[Serializable] public class PlayRequest { public string direction; }
+[Serializable] public class DirInfo { public string player; public string cpu; public bool matched; }
 [Serializable] public class PlayResponse {
-    public JankenInfo janken; public DirInfo direction;
+    public DirInfo direction;
     public string result; public int reward; public int balance; public int playedToday; public int remaining;
-    // 2ラウンド制の詳細情報 (省略しても JsonUtility は無視するので後方互換に影響なし。
-    // あいこのやり直し演出をしたい場合のみ round1/round2 クラスを追加して使う)。
+    public int maxPerDay; public int rewardPointBonus; public int rewardPointBalance;
 }
 
 public class AcchiApiClient : MonoBehaviour
@@ -214,14 +207,14 @@ public class AcchiApiClient : MonoBehaviour
     }
 
     // --- プレイ (401 のとき自動リフレッシュして 1 回だけ再試行) ---
-    public IEnumerator Play(string hand, string direction, Action<PlayResponse> done)
+    public IEnumerator Play(string direction, Action<PlayResponse> done)
     {
-        yield return PlayInternal(hand, direction, true, done);
+        yield return PlayInternal(direction, true, done);
     }
 
-    IEnumerator PlayInternal(string hand, string direction, bool retryOn401, Action<PlayResponse> done)
+    IEnumerator PlayInternal(string direction, bool retryOn401, Action<PlayResponse> done)
     {
-        var body = JsonUtility.ToJson(new PlayRequest { hand = hand, direction = direction });
+        var body = JsonUtility.ToJson(new PlayRequest { direction = direction });
         using var req = MakeJsonPost($"{ApiConfig.BaseUrl}/api/v1/games/acchi", body, withAuth:true);
         yield return req.SendWebRequest();
 
@@ -229,7 +222,7 @@ public class AcchiApiClient : MonoBehaviour
         {
             bool ok = false;
             yield return Refresh(r => ok = r);
-            if (ok) { yield return PlayInternal(hand, direction, false, done); yield break; }
+            if (ok) { yield return PlayInternal(direction, false, done); yield break; }
         }
         if (req.responseCode == 429) { Debug.Log("本日の上限に達しました"); done?.Invoke(null); yield break; }
         if (req.result != UnityWebRequest.Result.Success) { done?.Invoke(null); yield break; }
@@ -256,11 +249,10 @@ public class AcchiApiClient : MonoBehaviour
 ```csharp
 StartCoroutine(client.Login("user@example.com", "password", ok => {
     if (!ok) { /* ログイン失敗表示 */ return; }
-    StartCoroutine(client.Play("ROCK", "UP", res => {
+    StartCoroutine(client.Play("UP", res => {
         if (res == null) return;          // 上限 or エラー
         if (res.result == "WIN") ShowWin(res.reward, res.balance);
-        else if (res.result == "LOSE") ShowLose();
-        else ShowDraw();
+        else ShowLose();
         UpdateRemaining(res.remaining);
     }));
 }));

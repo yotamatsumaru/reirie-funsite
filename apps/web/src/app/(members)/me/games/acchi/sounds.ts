@@ -30,7 +30,7 @@ export type SoundDef = {
 };
 
 /** 効果音キー。 */
-export type SeKey = 'tap' | 'win' | 'lose' | 'draw' | 'point';
+export type SeKey = 'tap' | 'win' | 'lose' | 'point';
 
 /** ボイスキー = 共有のスロット識別子。 */
 export type VoiceKey = AcchiVoiceSlot;
@@ -43,7 +43,6 @@ export const SE: Record<SeKey, SoundDef> = {
   tap: { src: '/audio/se-tap.mp3', volume: 0.5 },
   win: { src: '/audio/se-win.mp3', volume: 0.6 },
   lose: { src: '/audio/se-lose.mp3', volume: 0.5 },
-  draw: { src: '/audio/se-draw.mp3', volume: 0.5 },
   point: { src: '/audio/se-point.mp3', volume: 0.6 },
 };
 

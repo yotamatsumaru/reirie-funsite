@@ -1262,16 +1262,17 @@ paths:
       tags: [API v1 (Mobile/Unity), Game]
       summary: あっち向いてホイ — 1 プレイ実行
       description: |
-        プレイヤーの「じゃんけんの手」と「方向」を送信する。
-        CPU の手・方向・勝敗・ポイント付与はすべてサーバーで確定する
+        プレイヤーの「指す方向」を送信する。
+        CPU の向く方向・勝敗・ポイント付与はすべてサーバーで確定する
         (クライアントから結果やポイントは受け取らない)。
         本日の上限 (5 回) に達している場合は 429 を返す。
 
-        2026年7月〜: 2ラウンド制。ラウンド1 (じゃんけん) で負けたらその場で
-        ゲーム終了、あいこならサーバー内部で自動的にやり直し、勝ったら
-        ラウンド2 (方向) に進む。ラウンド2は方向の一致 (勝率設定で抽選)
-        で勝敗が決まる。リクエスト形式は変更なし (`hand`+`direction` を
-        1回で送信)。レスポンスに `round1`/`round2` の詳細情報が追加された。
+        2026年7月〜: じゃんけんフェーズを廃止し、方向対決のみの単一ラウンド制。
+        指した方向と CPU が向いた方向が一致すれば勝ち、不一致なら負け。
+        一致するかどうかはプレイヤーのプランに割り当てられた勝率設定 (設定1〜6) で決まる。
+
+        **破壊的変更**: 以前の `{hand, direction}` リクエスト形式、および
+        レスポンスの `janken` / `round1` / `round2` フィールドは廃止されました。
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
@@ -1279,9 +1280,8 @@ paths:
           application/json:
             schema:
               type: object
-              required: [hand, direction]
+              required: [direction]
               properties:
-                hand: { type: string, enum: [ROCK, SCISSORS, PAPER] }
                 direction: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
       responses:
         '200':
@@ -1291,52 +1291,24 @@ paths:
               schema:
                 type: object
                 properties:
-                  janken:
-                    type: object
-                    description: 後方互換用。ラウンド1の "決着した" 試行を表す。
-                    properties:
-                      player: { type: string, enum: [ROCK, SCISSORS, PAPER] }
-                      cpu: { type: string, enum: [ROCK, SCISSORS, PAPER] }
-                      outcome: { type: string, enum: [WIN, LOSE] }
                   direction:
                     type: object
-                    description: |
-                      後方互換用。ラウンド1で負けてラウンド2に進まなかった場合、
-                      cpu は null になる。
-                    properties:
-                      player: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
-                      cpu: { type: string, enum: [UP, DOWN, LEFT, RIGHT], nullable: true }
-                  result:
-                    type: string
-                    enum: [WIN, LOSE]
-                    description: ラウンド1で負けた場合も LOSE (DRAW は最終結果には現れない)
-                  reward: { type: integer, description: 付与ポイント (勝利時のみ > 0) }
-                  balance: { type: integer }
-                  playedToday: { type: integer }
-                  remaining: { type: integer }
-                  round1:
-                    type: object
-                    description: ラウンド1 (じゃんけん) の詳細。あいこによるやり直しを含む全試行。
-                    properties:
-                      attempts:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            player: { type: string, enum: [ROCK, SCISSORS, PAPER] }
-                            cpu: { type: string, enum: [ROCK, SCISSORS, PAPER] }
-                            outcome: { type: string, enum: [WIN, LOSE, DRAW] }
-                      result:
-                        type: string
-                        enum: [ADVANCE_TO_ROUND2, GAME_OVER]
-                  round2:
-                    type: object
-                    nullable: true
-                    description: ラウンド1で負けた場合は null (ラウンド2は行われない)。
                     properties:
                       player: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
                       cpu: { type: string, enum: [UP, DOWN, LEFT, RIGHT] }
                       matched: { type: boolean }
-        '400': { description: 手/方向が不正 }
+                  result:
+                    type: string
+                    enum: [WIN, LOSE]
+                  reward: { type: integer, description: 付与ポイント (勝利時のみ > 0) }
+                  balance: { type: integer }
+                  playedToday: { type: integer }
+                  remaining: { type: integer }
+                  maxPerDay: { type: integer }
+                  rewardPointBonus: { type: integer }
+                  rewardPointBalance: { type: integer }
+                  rewardPointGrantedToday: { type: integer }
+                  rewardPointDailyCap: { type: integer }
+        '400': { description: 方向が不正 }
         '401': { description: 未認証 }
         '429': { description: 本日のプレイ上限に達した }

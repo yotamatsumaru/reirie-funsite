@@ -2,10 +2,7 @@
  * ミニゲーム「あっち向いてホイ」純粋ロジックの単体テスト
  */
 import {
-  judgeJanken,
-  decideAcchiRound1,
-  judgeAcchiRound2,
-  isJankenHand,
+  judgeAcchiResult,
   isAcchiDirection,
   remainingPlays,
   ACCHI_MAX_PLAYS_PER_DAY,
@@ -22,60 +19,17 @@ import {
   DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
 } from './mini-game';
 
-describe('judgeJanken', () => {
-  it('同じ手はあいこ', () => {
-    expect(judgeJanken('ROCK', 'ROCK')).toBe('DRAW');
-    expect(judgeJanken('SCISSORS', 'SCISSORS')).toBe('DRAW');
-    expect(judgeJanken('PAPER', 'PAPER')).toBe('DRAW');
-  });
-
-  it('グーはチョキに勝つ', () => {
-    expect(judgeJanken('ROCK', 'SCISSORS')).toBe('WIN');
-    expect(judgeJanken('SCISSORS', 'ROCK')).toBe('LOSE');
-  });
-
-  it('チョキはパーに勝つ', () => {
-    expect(judgeJanken('SCISSORS', 'PAPER')).toBe('WIN');
-    expect(judgeJanken('PAPER', 'SCISSORS')).toBe('LOSE');
-  });
-
-  it('パーはグーに勝つ', () => {
-    expect(judgeJanken('PAPER', 'ROCK')).toBe('WIN');
-    expect(judgeJanken('ROCK', 'PAPER')).toBe('LOSE');
-  });
-});
-
-describe('decideAcchiRound1 (ラウンド1=じゃんけんの結果からの分岐)', () => {
-  it('勝ちならラウンド2へ進む', () => {
-    expect(decideAcchiRound1('WIN')).toBe('ADVANCE_TO_ROUND2');
-  });
-
-  it('負けならその場でゲーム終了', () => {
-    expect(decideAcchiRound1('LOSE')).toBe('GAME_OVER');
-  });
-
-  it('あいこならラウンド1をやり直す', () => {
-    expect(decideAcchiRound1('DRAW')).toBe('RETRY');
-  });
-});
-
-describe('judgeAcchiRound2 (ラウンド2=方向の一致/不一致からの最終結果)', () => {
+describe('judgeAcchiResult (方向の一致/不一致からの最終結果)', () => {
   it('一致すればプレイヤーの勝ち', () => {
-    expect(judgeAcchiRound2(true)).toBe('WIN');
+    expect(judgeAcchiResult(true)).toBe('WIN');
   });
 
   it('不一致であればプレイヤーの負け', () => {
-    expect(judgeAcchiRound2(false)).toBe('LOSE');
+    expect(judgeAcchiResult(false)).toBe('LOSE');
   });
 });
 
-describe('isJankenHand / isAcchiDirection', () => {
-  it('有効な手だけ true', () => {
-    expect(isJankenHand('ROCK')).toBe(true);
-    expect(isJankenHand('rock')).toBe(false);
-    expect(isJankenHand(undefined)).toBe(false);
-  });
-
+describe('isAcchiDirection', () => {
   it('有効な方向だけ true', () => {
     expect(isAcchiDirection('UP')).toBe(true);
     expect(isAcchiDirection('up')).toBe(false);
@@ -184,9 +138,8 @@ describe('勝率設定 (1〜6)', () => {
 });
 
 describe('computeAcchiRewardBonus (勝利特典ポイントの薄い還元率 + 1日上限)', () => {
-  it('負け/あいこは常に0', () => {
+  it('負けは常に0', () => {
     expect(computeAcchiRewardBonus('LOSE', 0, DEFAULT_ACCHI_REWARD_BONUS_SETTINGS)).toBe(0);
-    expect(computeAcchiRewardBonus('DRAW', 0, DEFAULT_ACCHI_REWARD_BONUS_SETTINGS)).toBe(0);
   });
 
   it('勝利かつ上限未達なら perWin を付与する', () => {

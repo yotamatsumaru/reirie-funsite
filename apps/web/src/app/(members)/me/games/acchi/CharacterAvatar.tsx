@@ -12,7 +12,6 @@
  *
  * pose:
  *   idle                       … 待機(正面)
- *   rock / scissors / paper    … じゃんけんの手 (顔は正面のまま手だけ変化)
  *   up / down / left / right   … あっち向いてホイの横顔
  */
 
@@ -134,7 +133,7 @@ function PlaceholderCharacter({ pose }: { pose: CharacterPose }) {
       {/* 体 */}
       <ellipse cx="60" cy="120" rx="34" ry="20" fill="url(#acchi-body)" />
 
-      {/* 手 (じゃんけんの形) */}
+      {/* 手 (体の横に添える控えめな手) */}
       <Hands pose={pose} />
 
       {/* 頭 */}
@@ -199,7 +198,7 @@ function Face({ pose }: { pose: CharacterPose }) {
     );
   }
 
-  // idle / rock / scissors / paper … 正面のにこやか顔
+  // idle … 正面のにこやか顔
   return (
     <g>
       <circle cx="48" cy="60" r="3.8" fill="#3b2a4a" />
@@ -214,38 +213,9 @@ function Face({ pose }: { pose: CharacterPose }) {
   );
 }
 
-function Hands({ pose }: { pose: CharacterPose }) {
-  // じゃんけんの手だけ表現。横顔/idle は控えめな手。
-  const common = { fill: '#fde8d4', stroke: '#f0b48a', strokeWidth: 1.5 };
-
-  if (pose === 'rock') {
-    return (
-      <g>
-        <circle cx="26" cy="106" r="11" {...common} />
-        <circle cx="94" cy="106" r="11" {...common} />
-      </g>
-    );
-  }
-  if (pose === 'scissors') {
-    return (
-      <g>
-        <circle cx="26" cy="106" r="11" {...common} />
-        {/* チョキ(指2本) */}
-        <rect x="88" y="84" width="5" height="22" rx="2.5" {...common} />
-        <rect x="96" y="86" width="5" height="20" rx="2.5" {...common} />
-        <circle cx="94" cy="108" r="8" {...common} />
-      </g>
-    );
-  }
-  if (pose === 'paper') {
-    return (
-      <g>
-        <circle cx="26" cy="106" r="11" {...common} />
-        <ellipse cx="94" cy="104" rx="13" ry="10" {...common} />
-      </g>
-    );
-  }
+function Hands({ pose: _pose }: { pose: CharacterPose }) {
   // idle / 方向ポーズ: 小さな手を体の横に
+  const common = { fill: '#fde8d4', stroke: '#f0b48a', strokeWidth: 1.5 };
   return (
     <g>
       <circle cx="26" cy="110" r="9" {...common} />

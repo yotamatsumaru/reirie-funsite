@@ -6,9 +6,6 @@
  *    (= apps/web/public/characters/reirie/) に画像を置く。
  * 2. 必要なファイル名は `CHARACTER_POSES` のキーに対応:
  *      idle.png      … 待機(正面)
- *      rock.png      … グー
- *      scissors.png  … チョキ
- *      paper.png     … パー
  *      up.png        … 上向き(横顔)
  *      down.png      … 下向き(横顔)
  *      left.png      … 左向き(横顔)
@@ -21,7 +18,7 @@
  * (CharacterAvatar) が表示されるので、見た目は崩れない。
  */
 
-import type { JankenHand, AcchiDirection } from '@idol/shared';
+import type { AcchiDirection } from '@idol/shared';
 
 /** public からの相対パス (末尾スラッシュ不要)。 */
 export const CHARACTER_IMAGE_DIR = '/characters/reirie';
@@ -39,33 +36,9 @@ export const CHARACTER_IMAGES_ENABLED = false;
 export const CHARACTER_NAME = 'REIRIE';
 
 /** ポーズ ID。画像ファイル名 (拡張子なし) と一致させる。 */
-export type CharacterPose =
-  | 'idle'
-  | 'rock'
-  | 'scissors'
-  | 'paper'
-  | 'up'
-  | 'down'
-  | 'left'
-  | 'right';
+export type CharacterPose = 'idle' | 'up' | 'down' | 'left' | 'right';
 
-export const CHARACTER_POSES: CharacterPose[] = [
-  'idle',
-  'rock',
-  'scissors',
-  'paper',
-  'up',
-  'down',
-  'left',
-  'right',
-];
-
-/** じゃんけんの手 → ポーズ */
-export const HAND_POSE: Record<JankenHand, CharacterPose> = {
-  ROCK: 'rock',
-  SCISSORS: 'scissors',
-  PAPER: 'paper',
-};
+export const CHARACTER_POSES: CharacterPose[] = ['idle', 'up', 'down', 'left', 'right'];
 
 /** あっち向いて方向 → ポーズ (= 横顔の向き) */
 export const DIRECTION_POSE: Record<AcchiDirection, CharacterPose> = {

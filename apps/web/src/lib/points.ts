@@ -767,7 +767,7 @@ export async function safeSetPromoUntil(
 export type AcchiPlayPersistResult = {
   /** 受理されたか (回数上限に達していれば false) */
   accepted: boolean;
-  /** 受理時に作成された MiniGamePlay の id (拒否時は undefined)。2段階フローの進行トークンで使う。 */
+  /** 受理時に作成された MiniGamePlay の id (拒否時は undefined)。監査用。 */
   playId?: string;
   /** プロモ/デモアカウントとしてプレイされたか (true なら回数無制限)。 */
   promoActive: boolean;
