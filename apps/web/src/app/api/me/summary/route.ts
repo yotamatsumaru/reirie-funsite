@@ -18,7 +18,7 @@ export const GET = handle(async (req: Request) => {
   const [user, { rank }] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true, rewardPoints: true },
+      select: { points: true },
     }),
     getMemberRank(session.user.id),
   ]);
@@ -27,6 +27,5 @@ export const GET = handle(async (req: Request) => {
     plan: session.user.plan,
     rank,
     points: user?.points ?? 0,
-    rewardPoints: user?.rewardPoints ?? 0,
   });
 });

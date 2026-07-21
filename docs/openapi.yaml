@@ -793,19 +793,14 @@ paths:
       responses:
         '200': { description: 成功 }
 
-  /api/me/reward-points:
-    get:
-      tags: [Me]
-      summary: 特典ポイント残高 & 取引履歴 (直近50件)
-      security: [{ bearerAuth: [] }, { sessionCookie: [] }]
-      responses:
-        '200': { description: 成功 }
-
   /api/me/reward-points/purchase:
     post:
       tags: [Me]
-      summary: 特典ポイントパックを Stripe Checkout で購入
-      description: 確定は Stripe Webhook (`/api/game/webhook`) で行う。
+      summary: Fan ポイントパックを Stripe Checkout で購入
+      description: |
+        確定は Stripe Webhook (`/api/game/webhook`) で行う。
+        2026-07 のポイント統合により、購入されたポイントは Fan ポイント (`User.points`) に
+        直接加算される (残高取得は `/api/me/points` を使用)。
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true

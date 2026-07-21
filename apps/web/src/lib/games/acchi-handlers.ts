@@ -35,14 +35,13 @@ import { requireApiPrincipal, type ApiPrincipal } from '@/lib/api-auth';
 import {
   getAcchiPlayCountToday,
   getAcchiExtraPlaysToday,
-  getAcchiRewardBonusGrantedToday,
   recordAcchiPlay,
   buyAcchiExtraPlay,
   PROMO_UNLIMITED_REMAINING,
   safeGetPromoUntil,
 } from '@/lib/points';
 import { resolveAcchiPlay } from '@/lib/games/acchi';
-import { getAcchiWinSettings, getAcchiRewardBonusSettings } from '@/lib/app-setting';
+import { getAcchiWinSettings } from '@/lib/app-setting';
 
 /**
  * ユーザーの現在プランを DB の有効サブスクリプションから解決する。
@@ -73,19 +72,16 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
 export async function handleAcchiGet(req: Request): Promise<Response> {
   const principal = await requireApiPrincipal(req);
 
-  const [playedToday, purchasedExtra, user, rewardBonusSettings, rewardPointGrantedToday, promoUntil] =
-    await Promise.all([
-      getAcchiPlayCountToday(principal.userId),
-      getAcchiExtraPlaysToday(principal.userId),
-      prisma.user.findUnique({
-        where: { id: principal.userId },
-        select: { points: true, rewardPoints: true },
-      }),
-      getAcchiRewardBonusSettings(),
-      getAcchiRewardBonusGrantedToday(principal.userId),
-      // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
-      safeGetPromoUntil(prisma, principal.userId),
-    ]);
+  const [playedToday, purchasedExtra, user, promoUntil] = await Promise.all([
+    getAcchiPlayCountToday(principal.userId),
+    getAcchiExtraPlaysToday(principal.userId),
+    prisma.user.findUnique({
+      where: { id: principal.userId },
+      select: { points: true },
+    }),
+    // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
+    safeGetPromoUntil(prisma, principal.userId),
+  ]);
 
   // プロモ/デモアカウントは回数無制限。remaining は大きな値を返し、
   // promoActive フラグを立てて UI 側で「∞」表示にする。
@@ -108,12 +104,6 @@ export async function handleAcchiGet(req: Request): Promise<Response> {
       costFanPoints: EXTRA_PLAY_COST_FAN_POINTS,
       canBuyMore: purchasedExtra < MAX_EXTRA_PLAYS_PER_DAY,
     },
-    rewardPointBonus: {
-      perWin: rewardBonusSettings.perWin,
-      dailyCap: rewardBonusSettings.dailyCap,
-      grantedToday: rewardPointGrantedToday,
-      balance: user?.rewardPoints ?? 0,
-    },
   });
 }
 
@@ -132,10 +122,9 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
   }
 
   // プラン → 設定 (1〜6) → 勝率 を解決し、サーバー側で勝敗を確定する
-  const [plan, winSettings, rewardBonusSettings] = await Promise.all([
+  const [plan, winSettings] = await Promise.all([
     resolveUserPlan(principal.userId),
     getAcchiWinSettings(),
-    getAcchiRewardBonusSettings(),
   ]);
   const setting = resolveAcchiSettingForPlan(winSettings, plan);
 
@@ -147,20 +136,14 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
     setting,
   });
 
-  const persisted = await recordAcchiPlay(
-    principal.userId,
-    play.result,
-    detail,
-    undefined,
-    rewardBonusSettings,
-  );
+  const persisted = await recordAcchiPlay(principal.userId, play.result, detail);
 
   if (!persisted.accepted) {
     // 本日の上限に達している
     throw errors.rateLimited('本日のプレイ回数の上限に達しました。明日また挑戦してください');
   }
 
-  if (persisted.reward > 0 || persisted.rewardPointBonus > 0) {
+  if (persisted.reward > 0) {
     await logAudit({
       userId: principal.userId,
       action: 'points.game_reward',
@@ -168,7 +151,6 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
       metadata: {
         game: 'ACCHI_MUITE_HOI',
         amount: persisted.reward,
-        rewardPointBonus: persisted.rewardPointBonus,
         result: persisted.result,
         via: principal.source,
         plan,
@@ -189,10 +171,6 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
     playedToday: persisted.playedToday,
     remaining: persisted.remaining,
     maxPerDay: persisted.maxPerDay,
-    rewardPointBonus: persisted.rewardPointBonus,
-    rewardPointBalance: persisted.rewardPointBalance,
-    rewardPointGrantedToday: persisted.rewardPointGrantedToday,
-    rewardPointDailyCap: persisted.rewardPointDailyCap,
   });
 }
 

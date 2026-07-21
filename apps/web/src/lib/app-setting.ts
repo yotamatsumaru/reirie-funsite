@@ -19,10 +19,6 @@ import {
   MemberRankTiersSchema,
   normalizeMemberRankTiers,
   type MemberRankTiers,
-  ACCHI_REWARD_BONUS_SETTINGS_KEY,
-  DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
-  AcchiRewardBonusSettingsSchema,
-  type AcchiRewardBonusSettings,
   STRIPE_MODE_SETTING_KEY,
   DEFAULT_STRIPE_MODE,
   StripeModeSchema,
@@ -87,37 +83,6 @@ export async function setAcchiWinSettings(
   await prisma.appSetting.upsert({
     where: { key: ACCHI_WIN_SETTINGS_KEY },
     create: { key: ACCHI_WIN_SETTINGS_KEY, value },
-    update: { value },
-  });
-  return validated;
-}
-
-/**
- * あっち向いてホイの勝利特典ポイント設定 (1勝あたりの付与量 / 1日上限) を取得する。
- * 未設定 / 破損時は既定値 (1勝=1pt, 1日上限3pt) を返す (安全側)。
- */
-export async function getAcchiRewardBonusSettings(): Promise<AcchiRewardBonusSettings> {
-  try {
-    const row = await prisma.appSetting.findUnique({
-      where: { key: ACCHI_REWARD_BONUS_SETTINGS_KEY },
-    });
-    if (!row) return DEFAULT_ACCHI_REWARD_BONUS_SETTINGS;
-    const parsed = AcchiRewardBonusSettingsSchema.safeParse(JSON.parse(row.value));
-    return parsed.success ? parsed.data : DEFAULT_ACCHI_REWARD_BONUS_SETTINGS;
-  } catch {
-    return DEFAULT_ACCHI_REWARD_BONUS_SETTINGS;
-  }
-}
-
-/** あっち向いてホイの勝利特典ポイント設定を保存する */
-export async function setAcchiRewardBonusSettings(
-  settings: AcchiRewardBonusSettings,
-): Promise<AcchiRewardBonusSettings> {
-  const validated = AcchiRewardBonusSettingsSchema.parse(settings);
-  const value = JSON.stringify(validated);
-  await prisma.appSetting.upsert({
-    where: { key: ACCHI_REWARD_BONUS_SETTINGS_KEY },
-    create: { key: ACCHI_REWARD_BONUS_SETTINGS_KEY, value },
     update: { value },
   });
   return validated;

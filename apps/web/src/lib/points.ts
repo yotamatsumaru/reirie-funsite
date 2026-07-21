@@ -25,19 +25,21 @@ import {
   MAX_EXTRA_PLAYS_PER_DAY,
   requiresShipping,
   canTransitionRedemptionStatus,
-  computeAcchiRewardBonus,
-  DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
   isPromoActive,
-  type AcchiRewardBonusSettings,
   type PointRateSettings,
   type PlanTypeLiteral,
   type SocialPlatformLiteral,
   type AcchiResult,
-  type RewardPointReasonLiteral,
   type RewardCatalogItemKindLiteral,
   type RewardRedemptionStatusLiteral,
 } from '@idol/shared';
 
+/**
+ * Fan ポイント取引の理由。
+ * 【2026-07 統合】以前は Fan ポイントと特典ポイント (旧 RewardPointReason) の
+ * 2 種類の理由 enum があったが、Fan ポイント 1 種類への統合に伴い、
+ * Stripe 購入・サブスク月次特典・景品交換・返還の理由もこの型に統合した。
+ */
 type PointReasonLiteral =
   | 'LOGIN_BONUS'
   | 'LOGIN_STREAK'
@@ -47,6 +49,11 @@ type PointReasonLiteral =
   | 'GAME_REWARD'
   | 'ITEM_PURCHASE'
   | 'EXTRA_PLAY_PURCHASE'
+  | 'STRIPE_PURCHASE'
+  | 'SUBSCRIPTION_BONUS'
+  | 'REDEMPTION'
+  | 'REFUND'
+  | 'MERGE_ADJUST'
   | 'OTHER';
 
 /**
@@ -783,14 +790,6 @@ export type AcchiPlayPersistResult = {
   remaining: number;
   /** 本日の上限回数 (標準上限 + Fan ポイント購入分) */
   maxPerDay: number;
-  /** 今回のプレイで付与された特典ポイント (勝利時、かつ本日上限内のみ > 0) */
-  rewardPointBonus: number;
-  /** プレイ後の特典ポイント残高 */
-  rewardPointBalance: number;
-  /** 本日 (JST) 付与済みの特典ポイント合計 (このプレイ分を含む) */
-  rewardPointGrantedToday: number;
-  /** 本日 (JST) 付与できる特典ポイントの上限 */
-  rewardPointDailyCap: number;
 };
 
 /**
@@ -818,22 +817,6 @@ export async function getAcchiExtraPlaysToday(
     where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
   });
   return row?.purchasedCount ?? 0;
-}
-
-/**
- * 本日 (JST) 既に付与済みの特典ポイントボーナス合計を取得する。
- * GET (状況表示) 用。実際の上限チェックは recordAcchiPlay 内でトランザクション内に行う。
- */
-export async function getAcchiRewardBonusGrantedToday(
-  userId: string,
-  now: Date = new Date(),
-): Promise<number> {
-  const date = jstDateKey(now);
-  const agg = await prisma.miniGamePlay.aggregate({
-    where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
-    _sum: { bonusRewardPoint: true },
-  });
-  return agg._sum.bonusRewardPoint ?? 0;
 }
 
 /**
@@ -867,7 +850,6 @@ export async function recordAcchiPlay(
   result: AcchiResult,
   detail?: string,
   now: Date = new Date(),
-  rewardBonusSettings: AcchiRewardBonusSettings = DEFAULT_ACCHI_REWARD_BONUS_SETTINGS,
 ): Promise<AcchiPlayPersistResult> {
   const date = jstDateKey(now);
 
@@ -896,28 +878,22 @@ export async function recordAcchiPlay(
     const reward =
       result === 'WIN' ? applyPlanPointMultiplier(ACCHI_WIN_REWARD, plan) : 0;
 
-    // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数・
-    // 本日付与済みの特典ポイント合計を数え、上限チェック (競合に強い)。
+    // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数を数え、
+    // 上限チェック (競合に強い)。
     // ※ promo_until はトランザクション外で取得済み (上記コメント参照)。
-    const [playedBefore, extraRow, bonusAgg] = await Promise.all([
+    const [playedBefore, extraRow] = await Promise.all([
       tx.miniGamePlay.count({ where: { userId, gameType: 'ACCHI_MUITE_HOI', date } }),
       tx.miniGameExtraPlayPurchase.findUnique({
         where: { userId_gameType_date: { userId, gameType: 'ACCHI_MUITE_HOI', date } },
       }),
-      tx.miniGamePlay.aggregate({
-        where: { userId, gameType: 'ACCHI_MUITE_HOI', date },
-        _sum: { bonusRewardPoint: true },
-      }),
     ]);
     // プロモ/デモアカウントは 1 日の回数上限を撤廃する (何度でもプレイ可能)。
     const maxPerDay = ACCHI_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
-    const rewardPointGrantedBefore = bonusAgg._sum.bonusRewardPoint ?? 0;
-    const rewardPointDailyCap = rewardBonusSettings.dailyCap;
 
     if (!promoActive && playedBefore >= maxPerDay) {
       const u = await tx.user.findUnique({
         where: { id: userId },
-        select: { points: true, rewardPoints: true },
+        select: { points: true },
       });
       return {
         accepted: false,
@@ -928,21 +904,8 @@ export async function recordAcchiPlay(
         playedToday: playedBefore,
         remaining: 0,
         maxPerDay,
-        rewardPointBonus: 0,
-        rewardPointBalance: u?.rewardPoints ?? 0,
-        rewardPointGrantedToday: rewardPointGrantedBefore,
-        rewardPointDailyCap,
       };
     }
-
-    // 「薄い還元率 + 1日上限」の特典ポイントボーナスを計算する (純粋関数)。
-    // Fan ポイントは無料で貯まるため、そのまま特典ポイントに交換されないよう
-    // ここで厳しく絞る (勝利時のみ・1日上限あり)。
-    const rewardPointBonus = computeAcchiRewardBonus(
-      result,
-      rewardPointGrantedBefore,
-      rewardBonusSettings,
-    );
 
     const createdPlay = await tx.miniGamePlay.create({
       data: {
@@ -951,7 +914,6 @@ export async function recordAcchiPlay(
         date,
         result,
         rewardPoint: reward,
-        bonusRewardPoint: rewardPointBonus,
         detail: detail ?? null,
       },
       select: { id: true },
@@ -973,22 +935,6 @@ export async function recordAcchiPlay(
       balance = u?.points ?? 0;
     }
 
-    let rewardPointBalance: number;
-    if (rewardPointBonus > 0) {
-      rewardPointBalance = await applyRewardPoints(tx, {
-        userId,
-        amount: rewardPointBonus,
-        reason: 'GAME_REWARD',
-        note: 'あっちむいてPUI 勝利ボーナス (特典ポイント)',
-      });
-    } else {
-      const u = await tx.user.findUnique({
-        where: { id: userId },
-        select: { rewardPoints: true },
-      });
-      rewardPointBalance = u?.rewardPoints ?? 0;
-    }
-
     const playedToday = playedBefore + 1;
     return {
       accepted: true,
@@ -1001,10 +947,6 @@ export async function recordAcchiPlay(
       // プロモ時は回数無制限のため、残りは常に大きな値を返す (UI は promoActive で「∞」表示)。
       remaining: promoActive ? PROMO_UNLIMITED_REMAINING : remainingPlays(playedToday, maxPerDay),
       maxPerDay,
-      rewardPointBonus,
-      rewardPointBalance,
-      rewardPointGrantedToday: rewardPointGrantedBefore + rewardPointBonus,
-      rewardPointDailyCap,
     };
   });
 }
@@ -1078,72 +1020,14 @@ export async function buyAcchiExtraPlay(
 }
 
 // ---------------------------------------------------------------------
-// 特典ポイント (Reward Point) — 課金 / 会員特典で貯まり、景品交換に使う
+// Fan ポイント購入 (Stripe) / サブスク月次特典 / 景品交換
+//
+// 【2026-07 統合】以前はここで「特典ポイント (User.rewardPoints /
+// RewardPointTransaction)」という Fan ポイントとは別枠の通貨を増減していたが、
+// Fan ポイント 1 種類への統合により、以下の関数はすべて applyPoints
+// (User.points / PointTransaction) を使うようになった。関数名・テーブル名
+// (RewardPointPurchase 等) は変更していない。
 // ---------------------------------------------------------------------
-
-/**
- * 特典ポイントを増減し、履歴を残す (内部用)。残高を返す。
- * tx を渡せば既存トランザクションに参加する。applyPoints (Fan ポイント用) と
- * 同じ不変条件 (整数 / 非ゼロ / 上限内 / マイナス残高禁止) を適用する。
- */
-async function applyRewardPoints(
-  client: Prisma.TransactionClient,
-  params: {
-    userId: string;
-    amount: number;
-    reason: RewardPointReasonLiteral;
-    note?: string;
-    allowNegative?: boolean;
-  },
-): Promise<number> {
-  if (!isValidPointAmount(params.amount)) {
-    if (!Number.isInteger(params.amount)) {
-      throw new PointIntegrityError('特典ポイントは整数で指定してください');
-    }
-    if (params.amount === 0) {
-      throw new PointIntegrityError('0 特典ポイントの取引は記録できません');
-    }
-    throw new PointIntegrityError(
-      `1 取引で動かせる特典ポイントは ±${MAX_POINTS_PER_TX} までです`,
-    );
-  }
-
-  const user = await client.user.update({
-    where: { id: params.userId },
-    data: { rewardPoints: { increment: params.amount } },
-    select: { rewardPoints: true },
-  });
-
-  if (!params.allowNegative && user.rewardPoints < 0) {
-    throw new PointIntegrityError('特典ポイント残高が不足しています');
-  }
-
-  await client.rewardPointTransaction.create({
-    data: {
-      userId: params.userId,
-      amount: params.amount,
-      balance: user.rewardPoints,
-      reason: params.reason,
-      note: params.note ?? null,
-    },
-  });
-  return user.rewardPoints;
-}
-
-/**
- * 管理者による特典ポイント手動調整。amount は正負どちらも可。
- */
-export async function adminAdjustRewardPoints(
-  userId: string,
-  amount: number,
-  note?: string,
-): Promise<number> {
-  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-  if (!target) throw new PointIntegrityError('対象ユーザーが見つかりません');
-  return prisma.$transaction((tx) =>
-    applyRewardPoints(tx, { userId, amount, reason: 'ADMIN_ADJUST', note }),
-  );
-}
 
 export type RewardPointPurchaseConfirmResult =
   | { ok: true; balance: number }
@@ -1172,11 +1056,11 @@ export async function grantRewardPointsFromStripePurchase(
       },
     });
 
-    const balance = await applyRewardPoints(tx, {
+    const balance = await applyPoints(tx, {
       userId: purchase.userId,
       amount: purchase.points,
       reason: 'STRIPE_PURCHASE',
-      note: `特典ポイントパック購入 (${purchase.points}pt / ¥${purchase.amountJpy.toLocaleString()})`,
+      note: `Fan ポイントパック購入 (${purchase.points}pt / ¥${purchase.amountJpy.toLocaleString()})`,
     });
 
     return { ok: true, balance };
@@ -1211,11 +1095,11 @@ export async function grantMonthlyRewardPointBonus(
         data: { userId, yearMonth, plan, points: amount },
       });
 
-      return applyRewardPoints(tx, {
+      return applyPoints(tx, {
         userId,
         amount,
         reason: 'SUBSCRIPTION_BONUS',
-        note: `${plan} プラン ${yearMonth} 月次特典ポイント`,
+        note: `${plan} プラン ${yearMonth} 月次 Fan ポイント特典`,
       });
     });
     return { granted: true, amount, balance };
@@ -1238,10 +1122,10 @@ export type RedeemCatalogItemResult =
     };
 
 /**
- * 景品カタログ交換 (特典ポイント消費)。
+ * 景品カタログ交換 (Fan ポイント消費)。
  *  - stock が設定されている場合は在庫を原子的にデクリメントする。
  *  - GOODS (発送必要) は配送先情報が必須。
- *  - 特典ポイント残高不足時は applyRewardPoints が PointIntegrityError を投げ、
+ *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
  *    トランザクション全体 (在庫デクリメント・交換記録を含む) がロールバックされる。
  */
 export async function redeemRewardCatalogItem(
@@ -1276,7 +1160,7 @@ export async function redeemRewardCatalogItem(
       if (updated.count === 0) return { ok: false, reason: 'OUT_OF_STOCK' };
     }
 
-    const balance = await applyRewardPoints(tx, {
+    const balance = await applyPoints(tx, {
       userId,
       amount: -item.pointCost,
       reason: 'REDEMPTION',
@@ -1341,9 +1225,9 @@ export async function updateRedemptionStatus(
       },
     });
 
-    // キャンセル時は特典ポイントを返還する
+    // キャンセル時は Fan ポイントを返還する
     if (next === 'CANCELED') {
-      await applyRewardPoints(tx, {
+      await applyPoints(tx, {
         userId: redemption.userId,
         amount: redemption.pointCost,
         reason: 'REFUND',

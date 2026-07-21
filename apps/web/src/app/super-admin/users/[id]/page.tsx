@@ -191,7 +191,6 @@ export default async function SuperAdminUserDetailPage({
               <Field label="ログイン日数" value={`${metrics.loginDays} 日`} />
               <Field label="買い物回数" value={`${metrics.purchaseCount} 回`} />
               <Field label="保有 Fan ポイント" value={`${user.points.toLocaleString()} pt`} />
-              <Field label="保有 特典ポイント" value={`${user.rewardPoints.toLocaleString()} pt`} />
               <Field
                 label="サブスクリプション"
                 value={subscription ? `${subscription.planType} (${subscription.status})` : 'なし'}

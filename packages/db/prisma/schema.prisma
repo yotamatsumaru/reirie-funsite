@@ -111,7 +111,11 @@ enum AdminInvitationStatus {
   EXPIRED // 有効期限切れ
 }
 
-// Fan ポイント取引の理由 (ログイン等で貯まり、ゲーム内で使う無料ポイント)
+// Fan ポイント取引の理由。
+// 【2026-07 統合】以前は「Fan ポイント (無料)」と「特典ポイント (課金/会員特典)」の
+// 2 種類の通貨があったが、Fan ポイント 1 種類に統合した。旧 RewardPointReason の
+// 理由もすべてこの enum に統合し、Stripe 購入・サブスク月次特典・景品交換もすべて
+// Fan ポイント (User.points / PointTransaction) で扱う。
 enum PointReason {
   LOGIN_BONUS // 毎日のログインボーナス
   LOGIN_STREAK // 連続ログインボーナス
@@ -121,17 +125,11 @@ enum PointReason {
   GAME_REWARD // ミニゲーム勝利報酬
   ITEM_PURCHASE // 恋愛ADVの章/アイテムを Fan ポイントで購入 (消費)
   EXTRA_PLAY_PURCHASE // ミニゲームの追加プレイ回数を Fan ポイントで購入 (消費)
-  OTHER
-}
-
-// 特典ポイント取引の理由 (課金 or 会員特典で貯まり、景品交換に使うポイント)
-enum RewardPointReason {
-  STRIPE_PURCHASE // Stripe でポイントパックを購入
-  SUBSCRIPTION_BONUS // サブスクプランの月次自動付与
-  ADMIN_ADJUST // 管理者による手動調整
-  REDEMPTION // 景品交換 (消費)
-  REFUND // 交換キャンセル等による返還
-  GAME_REWARD // ミニゲーム (あっち向いてホイ) 勝利による少量付与 (Fan ポイントの薄い還元率で1日上限あり)
+  STRIPE_PURCHASE // Stripe でポイントパックを購入 (旧 RewardPointReason)
+  SUBSCRIPTION_BONUS // サブスクプランの月次自動付与 (旧 RewardPointReason)
+  REDEMPTION // 景品交換 (消費) (旧 RewardPointReason)
+  REFUND // 交換キャンセル等による返還 (旧 RewardPointReason)
+  MERGE_ADJUST // 特典ポイント統合時の残高付け替え (移行用)
   OTHER
 }
 
@@ -309,10 +307,13 @@ model User {
   // 会員番号 (RR-000123 形式)。登録順の連番を MemberCounter で採番する。
   // 既存ユーザーへは backfill スクリプトで付与するため nullable。
   memberNumber         String?   @unique @map("member_number")
-  // 保有 Fan ポイント残高 (無料で貯まり、ゲーム内で使う。PointTransaction の合計と一致させる)
+  // 保有 Fan ポイント残高。PointTransaction の合計と一致させる。
+  // 【2026-07 統合】以前は Fan ポイントと特典ポイント (課金/会員特典で貯まり、
+  // 景品交換に使う別枠のポイント。旧 User.rewardPoints / RewardPointTransaction) の
+  // 2 種類があったが、Fan ポイント 1 種類に統合した。ログイン・SNSシェア・ミニゲーム
+  // 勝利に加え、Stripe 購入・サブスク月次特典もすべてこの残高に加算され、
+  // 恋愛ADV購入・ミニゲーム追加プレイ・景品交換のいずれにも使える。
   points               Int       @default(0)
-  // 保有 特典ポイント残高 (課金/会員特典で貯まり、景品交換に使う。RewardPointTransaction の合計と一致させる)
-  rewardPoints         Int       @default(0) @map("reward_points")
   // Stripe 関連を user に持たせる(1ユーザー1顧客)
   stripeCustomerId     String?   @unique @map("stripe_customer_id")
   // メール確認用トークン (旧: リンク方式。後方互換のため残置、新規登録では使用しない)
@@ -387,8 +388,7 @@ model User {
   miniGamePlays      MiniGamePlay[]
   extraPlayPurchases MiniGameExtraPlayPurchase[]
 
-  // 特典ポイント (課金/会員特典で貯まり、景品交換に使う)
-  rewardPointTransactions  RewardPointTransaction[]
+  // 景品カタログ関連 (交換は Fan ポイントを消費する。旧特典ポイント関連の名残の型/テーブル名は維持)
   rewardPointPurchases     RewardPointPurchase[]
   rewardRedemptions        RewardRedemption[]
   monthlyRewardPointGrants MonthlyRewardPointGrant[]
@@ -1312,33 +1312,20 @@ model PointTransaction {
 }
 
 // =====================================================================
-// 特典ポイント (Reward Point) — 課金 / 会員特典で貯まり、景品交換に使う
+// ポイントパック購入 (Stripe) — Fan ポイントを課金で購入する
+//
+// 【2026-07 統合】以前はここで付与される先が「特典ポイント (rewardPoints)」という
+// Fan ポイントとは別枠の通貨だったが、Fan ポイント 1 種類に統合した。
+// モデル名・テーブル名 (RewardPointPack 等) は変更していないが、実際に増減するのは
+// User.points / PointTransaction (Fan ポイント) である。
 // =====================================================================
 
-/// 特典ポイント取引履歴 (増減の単一の真実)。
-/// User.rewardPoints は本テーブルの合計と一致するよう、付与/消費は必ず
-/// $transaction で「履歴作成 + 残高更新」を同時に行う。
-model RewardPointTransaction {
-  id        String            @id @default(uuid()) @db.Uuid
-  userId    String            @map("user_id") @db.Uuid
-  amount    Int // 正=付与, 負=消費
-  balance   Int // 取引後の残高 (監査用スナップショット)
-  reason    RewardPointReason
-  note      String?
-  createdAt DateTime          @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("reward_point_transactions")
-}
-
-/// 特典ポイントの販売パック (管理画面で作成。Stripe Checkout の line item に使う)。
+/// Fan ポイントの販売パック (管理画面で作成。Stripe Checkout の line item に使う)。
 /// 例: 「500pt ¥500」「3,000pt ¥2,800 (お得)」など。
 model RewardPointPack {
   id        String   @id @default(uuid()) @db.Uuid
-  name      String // 表示名 (例: "特典ポイント 500pt パック")
-  points    Int // 付与される特典ポイント数
+  name      String // 表示名 (例: "Fan ポイント 500pt パック")
+  points    Int // 付与される Fan ポイント数
   priceJpy  Int      @map("price_jpy") // 販売価格 (税込想定)
   isActive  Boolean  @default(true) @map("is_active")
   sortOrder Int      @default(0) @map("sort_order")
@@ -1351,9 +1338,9 @@ model RewardPointPack {
   @@map("reward_point_packs")
 }
 
-/// 特典ポイントの Stripe 購入履歴。
+/// Fan ポイントパックの Stripe 購入履歴。
 /// checkout.session.completed / payment_intent.succeeded で SUCCEEDED に遷移し、
-/// 同一トランザクションで RewardPointTransaction を作成 + User.rewardPoints を加算する。
+/// 同一トランザクションで PointTransaction を作成 + User.points を加算する。
 model RewardPointPurchase {
   id                      String                    @id @default(uuid()) @db.Uuid
   userId                  String                    @map("user_id") @db.Uuid
@@ -1375,8 +1362,10 @@ model RewardPointPurchase {
   @@map("reward_point_purchases")
 }
 
-/// 景品カタログ (特典ポイントで交換できる景品)。
+/// 景品カタログ (Fan ポイントで交換できる景品)。
 /// グッズ (発送必要) / 特典会優先枠 / デジタル特典 の 3 種別。
+/// 【2026-07 統合】以前は特典ポイント (旧 rewardPoints) を消費していたが、
+/// Fan ポイント 1 種類への統合により、現在は Fan ポイント (User.points) を消費する。
 model RewardCatalogItem {
   id          String                  @id @default(uuid()) @db.Uuid
   slug        String                  @unique
@@ -1402,7 +1391,7 @@ model RewardCatalogItem {
 
 /// 景品交換履歴 (発送管理を含む)。
 /// 交換確定時に RewardCatalogItem.stock を原子的にデクリメントし、
-/// 同一トランザクションで RewardPointTransaction (消費) を作成する。
+/// 同一トランザクションで PointTransaction (Fan ポイント消費) を作成する。
 /// GOODS は発送フロー (PENDING→PROCESSING→SHIPPED→COMPLETED) を辿り、
 /// CALL_PRIORITY / DIGITAL は運営確認後 COMPLETED に遷移する想定。
 model RewardRedemption {
@@ -1481,9 +1470,12 @@ model MiniGamePlay {
   gameType    MiniGameType   @map("game_type")
   date        String // JST 基準の "YYYY-MM-DD" (1 日の回数制限の集計キー)
   result      MiniGameResult
-  rewardPoint Int            @default(0) @map("reward_point") // 付与 Fan ポイント (勝利時のみ > 0)
-  // 勝利時に付与した特典ポイント (薄い還元率・1日上限あり)。Fan ポイントとは別枠の付与。
-  bonusRewardPoint Int       @default(0) @map("bonus_reward_point")
+  // 付与 Fan ポイント (勝利時のみ > 0)。
+  // 【2026-07 統合】以前は Fan ポイント (rewardPoint) と特典ポイント (bonusRewardPoint、
+  // 薄い還元率・1日上限あり) の 2 枠に分けて付与していたが、Fan ポイント 1 種類への
+  // 統合に伴い bonusRewardPoint は廃止し、この 1 フィールドのみで勝利報酬を表す
+  // (経済性維持のため、廃止分は ACCHI_WIN_REWARD の増額で相殺している)。
+  rewardPoint Int            @default(0) @map("reward_point")
   // 監査・検証用の手の記録 (JSON 文字列)。例: {"jankenPlayer":"ROCK","jankenCpu":"SCISSORS",...}
   detail      String?
   createdAt   DateTime       @default(now()) @map("created_at")
@@ -1495,16 +1487,16 @@ model MiniGamePlay {
   @@map("mini_game_plays")
 }
 
-/// 月次サブスク特典ポイント自動付与の記録。
+/// 月次サブスク Fan ポイント自動付与の記録。
 /// userId + yearMonth のユニーク制約で同月の二重付与を防止する。
 /// 実際の付与処理は POST /api/subscriptions/monthly-bonus (Cron / 管理画面から起動) の
-/// 特典ポイント付与部分で使う (BonusGiftGrant とは別テーブル: ギフト現物 と 特典ポイント は別管理)。
+/// Fan ポイント付与部分で使う (BonusGiftGrant とは別テーブル: ギフト現物 と Fan ポイント は別管理)。
 model MonthlyRewardPointGrant {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
   yearMonth String   @map("year_month") // "YYYY-MM" 形式
   plan      PlanType // 付与時点のプラン
-  points    Int // 付与した特典ポイント数
+  points    Int // 付与した Fan ポイント数
   grantedAt DateTime @default(now()) @map("granted_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

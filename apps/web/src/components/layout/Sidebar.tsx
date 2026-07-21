@@ -335,15 +335,6 @@ function SidebarContent({
                   <span className="ml-0.5 text-xs font-normal text-black/50">pt</span>
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
-                  特典ポイント
-                </span>
-                <span className="text-sm font-bold text-black">
-                  {summary ? summary.rewardPoints.toLocaleString() : '—'}
-                  <span className="ml-0.5 text-xs font-normal text-black/50">pt</span>
-                </span>
-              </div>
             </div>
 
             <div className="flex items-center gap-2 px-3 py-1">
