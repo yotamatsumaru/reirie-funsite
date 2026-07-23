@@ -14,10 +14,10 @@ import {
   PLAN_BENEFITS_TABLE,
   PLAN_HIGHLIGHTS,
   DEFAULT_BONUS_GIFT_SLUG,
-  PLAN_POINT_MULTIPLIER,
-  PLAN_POINT_MULTIPLIER_LABEL,
+  PLAN_PUI_MULTIPLIER,
+  PLAN_PUI_MULTIPLIER_LABEL,
   NEWSLETTER_ISSUES_PER_YEAR,
-  applyPlanPointMultiplier,
+  applyPlanPuiMultiplier,
   canPlayQuality,
   allowedVideoQualities,
   groupedPlanBenefits,
@@ -173,53 +173,53 @@ describe('DEFAULT_BONUS_GIFT_SLUG', () => {
   });
 });
 
-describe('PLAN_POINT_MULTIPLIER', () => {
+describe('PLAN_PUI_MULTIPLIER', () => {
   it('FREE=1.0 / STANDARD=1.2 / PREMIUM=2.0', () => {
-    expect(PLAN_POINT_MULTIPLIER.FREE).toBe(1.0);
-    expect(PLAN_POINT_MULTIPLIER.STANDARD).toBe(1.2);
-    expect(PLAN_POINT_MULTIPLIER.PREMIUM).toBe(2.0);
+    expect(PLAN_PUI_MULTIPLIER.FREE).toBe(1.0);
+    expect(PLAN_PUI_MULTIPLIER.STANDARD).toBe(1.2);
+    expect(PLAN_PUI_MULTIPLIER.PREMIUM).toBe(2.0);
   });
 
   it('PREMIUM が最も付与率が良い', () => {
-    expect(PLAN_POINT_MULTIPLIER.PREMIUM).toBeGreaterThan(PLAN_POINT_MULTIPLIER.STANDARD);
-    expect(PLAN_POINT_MULTIPLIER.STANDARD).toBeGreaterThanOrEqual(PLAN_POINT_MULTIPLIER.FREE);
+    expect(PLAN_PUI_MULTIPLIER.PREMIUM).toBeGreaterThan(PLAN_PUI_MULTIPLIER.STANDARD);
+    expect(PLAN_PUI_MULTIPLIER.STANDARD).toBeGreaterThanOrEqual(PLAN_PUI_MULTIPLIER.FREE);
   });
 
   it('表示ラベルが定義されている', () => {
-    expect(PLAN_POINT_MULTIPLIER_LABEL.FREE).toBe('×1.0');
-    expect(PLAN_POINT_MULTIPLIER_LABEL.STANDARD).toBe('×1.2');
-    expect(PLAN_POINT_MULTIPLIER_LABEL.PREMIUM).toBe('×2.0');
+    expect(PLAN_PUI_MULTIPLIER_LABEL.FREE).toBe('×1.0');
+    expect(PLAN_PUI_MULTIPLIER_LABEL.STANDARD).toBe('×1.2');
+    expect(PLAN_PUI_MULTIPLIER_LABEL.PREMIUM).toBe('×2.0');
   });
 });
 
-describe('applyPlanPointMultiplier', () => {
+describe('applyPlanPuiMultiplier', () => {
   it('FREE はベース額そのまま (整数)', () => {
-    expect(applyPlanPointMultiplier(10, 'FREE')).toBe(10);
-    expect(applyPlanPointMultiplier(30, 'FREE')).toBe(30);
+    expect(applyPlanPuiMultiplier(10, 'FREE')).toBe(10);
+    expect(applyPlanPuiMultiplier(30, 'FREE')).toBe(30);
   });
 
   it('STANDARD は ×1.2 で四捨五入', () => {
-    expect(applyPlanPointMultiplier(10, 'STANDARD')).toBe(12); // 12
-    expect(applyPlanPointMultiplier(30, 'STANDARD')).toBe(36); // 36
-    expect(applyPlanPointMultiplier(5, 'STANDARD')).toBe(6); // 6.0
-    expect(applyPlanPointMultiplier(7, 'STANDARD')).toBe(8); // 8.4 -> 8
+    expect(applyPlanPuiMultiplier(10, 'STANDARD')).toBe(12); // 12
+    expect(applyPlanPuiMultiplier(30, 'STANDARD')).toBe(36); // 36
+    expect(applyPlanPuiMultiplier(5, 'STANDARD')).toBe(6); // 6.0
+    expect(applyPlanPuiMultiplier(7, 'STANDARD')).toBe(8); // 8.4 -> 8
   });
 
   it('PREMIUM は ×2.0', () => {
-    expect(applyPlanPointMultiplier(10, 'PREMIUM')).toBe(20);
-    expect(applyPlanPointMultiplier(30, 'PREMIUM')).toBe(60);
+    expect(applyPlanPuiMultiplier(10, 'PREMIUM')).toBe(20);
+    expect(applyPlanPuiMultiplier(30, 'PREMIUM')).toBe(60);
   });
 
   it('0 以下や非数は 0 を返す', () => {
-    expect(applyPlanPointMultiplier(0, 'PREMIUM')).toBe(0);
-    expect(applyPlanPointMultiplier(-5, 'PREMIUM')).toBe(0);
-    expect(applyPlanPointMultiplier(Number.NaN, 'PREMIUM')).toBe(0);
+    expect(applyPlanPuiMultiplier(0, 'PREMIUM')).toBe(0);
+    expect(applyPlanPuiMultiplier(-5, 'PREMIUM')).toBe(0);
+    expect(applyPlanPuiMultiplier(Number.NaN, 'PREMIUM')).toBe(0);
   });
 
   it('常に整数を返す', () => {
     for (const plan of ['FREE', 'STANDARD', 'PREMIUM'] as const) {
       for (const base of [1, 3, 7, 11, 13, 17, 23]) {
-        expect(Number.isInteger(applyPlanPointMultiplier(base, plan))).toBe(true);
+        expect(Number.isInteger(applyPlanPuiMultiplier(base, plan))).toBe(true);
       }
     }
   });

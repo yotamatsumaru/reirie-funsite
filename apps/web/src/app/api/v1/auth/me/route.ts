@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/auth/me — 現在の認証ユーザー情報とポイント残高を返す
+ * GET /api/v1/auth/me — 現在の認証ユーザー情報と Pui 残高を返す
  *
  * 認証: Bearer トークン (Unity 等) または Cookie セッション (Web) のどちらでも可。
  * Unity 側でトークンの有効性確認・プロフィール取得に使う。
@@ -20,9 +20,9 @@ export const GET = handle(async (req: Request) => {
   if (!env.demoMode) {
     const user = await prisma.user.findUnique({
       where: { id: principal.userId },
-      select: { points: true, displayName: true },
+      select: { pui: true, displayName: true },
     });
-    points = user?.points ?? 0;
+    points = user?.pui ?? 0;
     displayName = user?.displayName ?? null;
   }
 

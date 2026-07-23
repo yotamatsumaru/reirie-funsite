@@ -127,7 +127,7 @@ export default async function AdminRedemptionsPage({
               <th className="px-4 py-2">景品</th>
               <th className="px-4 py-2">会員</th>
               <th className="px-4 py-2">種別</th>
-              <th className="px-4 py-2 text-right">消費pt</th>
+              <th className="px-4 py-2 text-right">消費 Pui</th>
               <th className="px-4 py-2">状態</th>
               <th className="px-4 py-2">申請日時</th>
               <th className="px-4 py-2"></th>
@@ -149,7 +149,7 @@ export default async function AdminRedemptionsPage({
                   <span className="ml-1 text-xs text-slate-400">({r.user?.memberNumber ?? '-'})</span>
                 </td>
                 <td className="px-4 py-2">{REWARD_CATALOG_ITEM_KIND_LABELS[r.itemKind]}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{r.pointCost.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{r.puiCost.toLocaleString()}</td>
                 <td className="px-4 py-2">
                   <Badge tone={STATUS_TONE[r.status as RewardRedemptionStatusLiteral]}>
                     {REWARD_REDEMPTION_STATUS_LABELS[r.status]}

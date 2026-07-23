@@ -5,45 +5,44 @@ import { requireSuperAdmin } from '@/auth';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { getPointRates } from '@/lib/app-setting';
-import { findPointAnomalies } from '@/lib/points';
+import { getPuiRates } from '@/lib/app-setting';
+import { findPuiAnomalies } from '@/lib/points';
 import { RatesForm } from './rates-form';
 
-export const metadata: Metadata = { title: 'ポイント設定 | Super Admin' };
+export const metadata: Metadata = { title: 'Pui 設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminPointsPage() {
   await requireSuperAdmin();
 
   const [rates, totalPoints, txCount, anomalies] = await Promise.all([
-    getPointRates(),
-    prisma.user.aggregate({ _sum: { points: true } }),
-    prisma.pointTransaction.count(),
-    findPointAnomalies(),
+    getPuiRates(),
+    prisma.user.aggregate({ _sum: { pui: true } }),
+    prisma.puiTransaction.count(),
+    findPuiAnomalies(),
   ]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">ポイント設定</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Pui 設定</h1>
         <p className="mt-1 text-sm text-slate-600">
-          会員カードのポイント付与レートを設定します。変更は即時反映され、本番でも永続化されます。
+          会員カードの Pui 付与レートを設定します。変更は即時反映され、本番でも永続化されます。
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardBody>
-            <p className="text-xs font-medium text-slate-500">発行済みポイント総数</p>
+            <p className="text-xs font-medium text-slate-500">発行済み Pui 総数</p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
-              {(totalPoints._sum.points ?? 0).toLocaleString()}
-              <span className="ml-1 text-sm font-normal text-slate-500">pt</span>
+              {(totalPoints._sum.pui ?? 0).toLocaleString()}
             </p>
           </CardBody>
         </Card>
         <Card>
           <CardBody>
-            <p className="text-xs font-medium text-slate-500">ポイント取引件数</p>
+            <p className="text-xs font-medium text-slate-500">Pui 取引件数</p>
             <p className="mt-2 text-2xl font-bold text-slate-900">
               {txCount.toLocaleString()}
               <span className="ml-1 text-sm font-normal text-slate-500">件</span>
@@ -77,14 +76,14 @@ export default async function SuperAdminPointsPage() {
           className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
         >
           <Wallet className="h-5 w-5 text-brand-500" aria-hidden />
-          全ユーザーのポイント状況を見る
+          全ユーザーの Pui 状況を見る
         </Link>
         <Link
           href="/super-admin/points/transactions"
           className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-50"
         >
           <ListChecks className="h-5 w-5 text-brand-500" aria-hidden />
-          ポイント取引ログ・異常検知を見る
+          Pui 取引ログ・異常検知を見る
         </Link>
       </div>
 

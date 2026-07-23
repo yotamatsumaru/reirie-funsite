@@ -308,7 +308,7 @@ function SidebarContent({
               cartCount={cartCount}
             />
 
-            {/* 会員プラン・ランク・保有ポイント */}
+            {/* 会員プラン・ランク・保有 Pui */}
             <div className="mx-1 my-1 space-y-2 rounded-xl bg-twilight-lavender/25 px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
@@ -328,11 +328,10 @@ function SidebarContent({
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-black/40">
-                  Fanポイント
+                  Pui
                 </span>
                 <span className="text-sm font-bold text-black">
                   {summary ? summary.points.toLocaleString() : '—'}
-                  <span className="ml-0.5 text-xs font-normal text-black/50">pt</span>
                 </span>
               </div>
             </div>

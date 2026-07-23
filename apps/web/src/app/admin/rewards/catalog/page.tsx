@@ -31,7 +31,7 @@ export default async function AdminRewardCatalogPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">景品カタログ管理</h1>
           <p className="mt-1 text-sm text-slate-500">
-            特典ポイントと交換できる景品 (グッズ・特典会優先枠・デジタル特典) を管理します。
+            Pui と交換できる景品 (グッズ・特典会優先枠・デジタル特典) を管理します。
           </p>
         </div>
         <div className="flex gap-2">
@@ -71,7 +71,7 @@ export default async function AdminRewardCatalogPage() {
                 <Badge tone={STATUS_TONE[it.status] ?? 'gray'}>
                   {REWARD_CATALOG_ITEM_STATUS_LABELS[it.status]}
                 </Badge>
-                <span className="text-xs text-slate-600">{it.pointCost.toLocaleString()}pt</span>
+                <span className="text-xs text-slate-600">{it.puiCost.toLocaleString()} Pui</span>
                 <span className="text-xs text-slate-500">
                   在庫: {it.stock === null ? '無制限' : it.stock}
                 </span>
@@ -88,7 +88,7 @@ export default async function AdminRewardCatalogPage() {
             <tr>
               <th className="px-4 py-2">名前</th>
               <th className="px-4 py-2">種別</th>
-              <th className="px-4 py-2 text-right">必要pt</th>
+              <th className="px-4 py-2 text-right">必要 Pui</th>
               <th className="px-4 py-2 text-right">在庫</th>
               <th className="px-4 py-2 text-right">交換数</th>
               <th className="px-4 py-2">状態</th>
@@ -108,7 +108,7 @@ export default async function AdminRewardCatalogPage() {
                 <td className="px-4 py-2 font-medium text-slate-800">{it.name}</td>
                 <td className="px-4 py-2">{REWARD_CATALOG_ITEM_KIND_LABELS[it.kind]}</td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {it.pointCost.toLocaleString()}
+                  {it.puiCost.toLocaleString()}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
                   {it.stock === null ? '無制限' : it.stock}

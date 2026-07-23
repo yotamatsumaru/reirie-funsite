@@ -1,5 +1,6 @@
 /**
- * GET /api/me/points — ポイント残高 & 取引履歴 (直近 50 件)
+ * GET /api/me/points — Pui 残高 & 取引履歴 (直近 50 件)
+ * 【2026-07 通貨名変更】URL 自体 (points) は後方互換のため変更していない。
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
@@ -13,9 +14,9 @@ export const GET = handle(async (req: Request) => {
   const [user, transactions] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true },
+      select: { pui: true },
     }),
-    prisma.pointTransaction.findMany({
+    prisma.puiTransaction.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -30,7 +31,7 @@ export const GET = handle(async (req: Request) => {
     }),
   ]);
   return NextResponse.json({
-    balance: user?.points ?? 0,
+    balance: user?.pui ?? 0,
     transactions,
   });
 });

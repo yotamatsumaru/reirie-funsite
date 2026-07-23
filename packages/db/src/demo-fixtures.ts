@@ -27,7 +27,7 @@ const users = [
     role: 'USER',
     avatarUrl: null,
     marketingOptIn: true,
-    points: 1850,
+    pui: 1850,
     deletedAt: null,
     createdAt: daysAgo(45),
     updatedAt: daysAgo(1),
@@ -935,7 +935,7 @@ const rewardPointPack = [
   {
     id: 'rpp-500',
     name: '特典ポイント 500pt パック',
-    points: 500,
+    pui: 500,
     priceJpy: 500,
     isActive: true,
     sortOrder: 0,
@@ -945,7 +945,7 @@ const rewardPointPack = [
   {
     id: 'rpp-1200',
     name: '特典ポイント 1,200pt パック',
-    points: 1200,
+    pui: 1200,
     priceJpy: 1000,
     isActive: true,
     sortOrder: 1,
@@ -955,7 +955,7 @@ const rewardPointPack = [
   {
     id: 'rpp-3000',
     name: '特典ポイント 3,000pt パック (お得)',
-    points: 3000,
+    pui: 3000,
     priceJpy: 2500,
     isActive: true,
     sortOrder: 2,
@@ -965,7 +965,7 @@ const rewardPointPack = [
   {
     id: 'rpp-6500',
     name: '特典ポイント 6,500pt パック (更にお得)',
-    points: 6500,
+    pui: 6500,
     priceJpy: 5000,
     isActive: true,
     sortOrder: 3,
@@ -982,7 +982,7 @@ const rewardPointPurchase = [
     id: 'rppu-1',
     userId: DEMO_USER_ID,
     packId: 'rpp-1200',
-    points: 1200,
+    pui: 1200,
     amountJpy: 1000,
     status: 'SUCCEEDED',
     stripePaymentIntentId: 'pi_demo_reward_1',
@@ -1004,7 +1004,7 @@ const rewardCatalogItem = [
     name: 'REIRIE オリジナルトートバッグ',
     description: 'ライブ会場限定デザインのトートバッグです。',
     imageUrl: 'https://picsum.photos/seed/tote/400/300',
-    pointCost: 2000,
+    puiCost: 2000,
     stock: 25,
     status: 'PUBLISHED',
     sortOrder: 0,
@@ -1018,7 +1018,7 @@ const rewardCatalogItem = [
     name: '特典会 優先案内枠',
     description: '次回の特典会で優先的に呼ばれる枠と交換できます。',
     imageUrl: 'https://picsum.photos/seed/callpriority/400/300',
-    pointCost: 5000,
+    puiCost: 5000,
     stock: null,
     status: 'PUBLISHED',
     sortOrder: 1,
@@ -1032,7 +1032,7 @@ const rewardCatalogItem = [
     name: '限定壁紙セット (デジタル)',
     description: 'スマホ・PC用の限定壁紙5枚セットをダウンロードできます。',
     imageUrl: 'https://picsum.photos/seed/wallpaper/400/300',
-    pointCost: 800,
+    puiCost: 800,
     stock: null,
     status: 'PUBLISHED',
     sortOrder: 2,
@@ -1042,11 +1042,12 @@ const rewardCatalogItem = [
 ];
 
 // =====================================================================
-// Fan ポイント取引履歴 (デモユーザーのサンプル)
+// Pui 取引履歴 (デモユーザーのサンプル)
 //
 // 2026-07 のポイント統合により、旧 rewardPointTransaction (RewardPointTransaction
-// モデル) は廃止された。旧データは PointTransaction 側に MERGE_ADJUST 等の
+// モデル) は廃止された。旧データは PuiTransaction 側に MERGE_ADJUST 等の
 // reason で記録される想定だが、デモ fixtures では簡略化のため省略する。
+// その後の通貨名変更で「Fan ポイント」は「Pui」に改称された。
 // =====================================================================
 
 // =====================================================================

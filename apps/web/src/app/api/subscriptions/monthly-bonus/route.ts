@@ -21,7 +21,7 @@ import { prisma } from '@idol/db';
 import {
   MONTHLY_BONUS_GIFT_COUNT,
   DEFAULT_BONUS_GIFT_SLUG,
-  MONTHLY_REWARD_POINT_BONUS,
+  MONTHLY_PUI_BONUS,
   currentYearMonth,
   type PlanTypeLiteral,
 } from '@idol/shared';
@@ -29,7 +29,7 @@ import { requireApiSession, resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
 import { logAudit } from '@/lib/audit';
-import { grantMonthlyRewardPointBonus } from '@/lib/points';
+import { grantMonthlyPuiBonus } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
@@ -39,8 +39,8 @@ interface GrantResult {
   count: number;
   skipped: boolean;
   reason?: string;
-  rewardPoints?: number;
-  rewardPointsSkipped?: boolean;
+  pui?: number;
+  puiSkipped?: boolean;
 }
 
 export const POST = handle(async (req: Request) => {
@@ -135,20 +135,20 @@ export const POST = handle(async (req: Request) => {
       skipped++;
     }
 
-    // ===== 特典ポイント月次自動付与 (景品カタログ交換に使う方) =====
+    // ===== Pui 月次自動付与 (景品カタログ交換に使う方) =====
     // ギフト付与とは独立した二重付与防止 (MonthlyRewardPointGrant) を持つため、
     // ギフト付与の成否に関わらず個別に試行する。
     try {
-      const rewardResult = await grantMonthlyRewardPointBonus(sub.userId, plan, yearMonth);
+      const puiResult = await grantMonthlyPuiBonus(sub.userId, plan, yearMonth);
       const last = results[results.length - 1];
-      if (rewardResult.granted) {
-        last.rewardPoints = rewardResult.amount;
+      if (puiResult.granted) {
+        last.pui = puiResult.amount;
       } else {
-        last.rewardPointsSkipped = true;
+        last.puiSkipped = true;
       }
     } catch {
       const last = results[results.length - 1];
-      last.rewardPointsSkipped = true;
+      last.puiSkipped = true;
     }
   }
 
@@ -181,7 +181,7 @@ export const GET = handle(async (req: Request) => {
   const plan = session.user.plan;
   const eligibleCount = MONTHLY_BONUS_GIFT_COUNT[plan];
 
-  const [grant, rewardGrant] = await Promise.all([
+  const [grant, puiGrant] = await Promise.all([
     prisma.bonusGiftGrant.findUnique({
       where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
       include: { item: { select: { name: true, iconUrl: true, slug: true } } },
@@ -195,10 +195,10 @@ export const GET = handle(async (req: Request) => {
     yearMonth,
     plan,
     eligibleCount,
-    eligibleRewardPoints: MONTHLY_REWARD_POINT_BONUS[plan] ?? 0,
-    rewardPointsGranted: !!rewardGrant,
-    rewardPointsGrant: rewardGrant
-      ? { points: rewardGrant.points, grantedAt: rewardGrant.grantedAt.toISOString() }
+    eligiblePui: MONTHLY_PUI_BONUS[plan] ?? 0,
+    puiGranted: !!puiGrant,
+    puiGrant: puiGrant
+      ? { pui: puiGrant.pui, grantedAt: puiGrant.grantedAt.toISOString() }
       : null,
     granted: !!grant,
     grant: grant

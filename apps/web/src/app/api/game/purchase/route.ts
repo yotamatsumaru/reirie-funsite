@@ -1,9 +1,9 @@
 /**
  * POST /api/game/purchase
  *   - 章 (GameScenario) または アイテム (GameItem) を購入する
- *   - 決済手段は Stripe (課金) または Fan ポイント (payMethod で指定)
+ *   - 決済手段は Stripe (課金) または Pui (payMethod で指定)
  *     - STRIPE: Checkout Session を作成して返す。確定は webhook (kind=GAME_PURCHASE) で行う。
- *     - FAN_POINT: サーバー側で即時に Fan ポイントを消費し、PlayerInventory に確定付与する。
+ *     - PUI: サーバー側で即時に Pui を消費し、PlayerInventory に確定付与する。
  *   - 確定報酬型 DLC のみ (ガチャ禁止)
  */
 import { NextResponse } from 'next/server';
@@ -12,13 +12,13 @@ import { GamePurchaseInputSchema } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { getStripe } from '@/lib/stripe';
-import { purchaseScenarioWithFanPoints, purchaseItemWithFanPoints } from '@/lib/points';
+import { purchaseScenarioWithPui, purchaseItemWithPui } from '@/lib/points';
 
 export const runtime = 'nodejs';
 
-const FAN_POINT_ERROR_MESSAGES: Record<string, string> = {
+const PUI_ERROR_MESSAGES: Record<string, string> = {
   NOT_FOUND: '対象が見つかりません',
-  NOT_FOR_SALE: 'Fan ポイントでは購入できません',
+  NOT_FOR_SALE: 'Pui では購入できません',
   ALREADY_OWNED: '既に購入済みです',
   OWN_LIMIT_EXCEEDED: '所持上限を超えています',
 };
@@ -29,27 +29,27 @@ export const POST = handle(async (req: Request) => {
   const body = GamePurchaseInputSchema.parse(await req.json());
   const quantity = body.quantity;
 
-  // ===== Fan ポイント決済 (即時確定・Stripe不要) =====
-  if (body.payMethod === 'FAN_POINT') {
+  // ===== Pui 決済 (即時確定・Stripe不要) =====
+  if (body.payMethod === 'PUI') {
     if (body.kind === 'SCENARIO') {
       if (!body.scenarioId) throw errors.badRequest('scenarioId が必要です');
-      const result = await purchaseScenarioWithFanPoints(userId, body.scenarioId);
+      const result = await purchaseScenarioWithPui(userId, body.scenarioId);
       if (!result.ok) {
-        throw errors.conflict(FAN_POINT_ERROR_MESSAGES[result.reason] ?? '購入できません');
+        throw errors.conflict(PUI_ERROR_MESSAGES[result.reason] ?? '購入できません');
       }
       return NextResponse.json({
-        payMethod: 'FAN_POINT',
+        payMethod: 'PUI',
         purchaseId: result.purchaseId,
         balance: result.balance,
       });
     } else if (body.kind === 'ITEM') {
       if (!body.itemId) throw errors.badRequest('itemId が必要です');
-      const result = await purchaseItemWithFanPoints(userId, body.itemId, quantity);
+      const result = await purchaseItemWithPui(userId, body.itemId, quantity);
       if (!result.ok) {
-        throw errors.conflict(FAN_POINT_ERROR_MESSAGES[result.reason] ?? '購入できません');
+        throw errors.conflict(PUI_ERROR_MESSAGES[result.reason] ?? '購入できません');
       }
       return NextResponse.json({
-        payMethod: 'FAN_POINT',
+        payMethod: 'PUI',
         purchaseId: result.purchaseId,
         balance: result.balance,
       });

@@ -24,7 +24,7 @@ type CatalogItem = {
   name: string;
   description: string | null;
   imageUrl: string | null;
-  pointCost: number;
+  puiCost: number;
   stock: number | null;
 };
 
@@ -114,7 +114,7 @@ export function RewardsClient({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {items.map((item) => {
             const outOfStock = item.stock !== null && item.stock <= 0;
-            const affordable = balance >= item.pointCost;
+            const affordable = balance >= item.puiCost;
             return (
               <Card key={item.id} className="flex h-full flex-col overflow-hidden">
                 {item.imageUrl && (
@@ -140,15 +140,14 @@ export function RewardsClient({
                   )}
                   <div className="mt-auto flex items-center justify-between pt-2">
                     <p className="text-lg font-bold text-slate-900">
-                      {item.pointCost.toLocaleString()}
-                      <span className="ml-1 text-xs font-normal text-slate-500">pt</span>
+                      {item.puiCost.toLocaleString()} Pui
                     </p>
                     <Button
                       size="sm"
                       disabled={outOfStock || !affordable}
                       onClick={() => openRedeem(item)}
                     >
-                      {outOfStock ? '在庫切れ' : affordable ? '交換する' : 'ポイント不足'}
+                      {outOfStock ? '在庫切れ' : affordable ? '交換する' : 'Pui 不足'}
                     </Button>
                   </div>
                   {item.stock !== null && !outOfStock && (
@@ -167,7 +166,7 @@ export function RewardsClient({
             <CardBody className="space-y-4">
               <h2 className="text-lg font-semibold text-slate-900">{selected.name} と交換</h2>
               <p className="text-sm text-slate-600">
-                {selected.pointCost.toLocaleString()}pt を消費します。よろしいですか？
+                {selected.puiCost.toLocaleString()} Pui を消費します。よろしいですか？
               </p>
 
               {requiresShipping(selected.kind as RewardCatalogItemKindLiteral) && (

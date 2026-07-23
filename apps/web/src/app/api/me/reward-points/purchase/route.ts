@@ -1,7 +1,8 @@
 /**
  * POST /api/me/reward-points/purchase
- *   - 特典ポイントパック (RewardPointPack) を Stripe Checkout で購入する
+ *   - Pui パック (RewardPointPack) を Stripe Checkout で購入する
  *   - 確定は Stripe Webhook (/api/game/webhook, kind=REWARD_POINT_PURCHASE) で行う
+ *   【2026-07 通貨名変更】URL 自体 (reward-points) は後方互換のため変更していない。
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
@@ -18,14 +19,14 @@ export const POST = handle(async (req: Request) => {
   const body = RewardPointPurchaseInputSchema.parse(await req.json());
 
   const pack = await prisma.rewardPointPack.findUnique({ where: { id: body.packId } });
-  if (!pack || !pack.isActive) throw errors.notFound('ポイントパックが見つかりません');
+  if (!pack || !pack.isActive) throw errors.notFound('Pui パックが見つかりません');
 
-  // 購入レコードを PENDING で作成 (スナップショット価格/ポイント数)
+  // 購入レコードを PENDING で作成 (スナップショット価格/Pui 数)
   const purchase = await prisma.rewardPointPurchase.create({
     data: {
       userId,
       packId: pack.id,
-      points: pack.points,
+      pui: pack.pui,
       amountJpy: pack.priceJpy,
       status: 'PENDING',
     },

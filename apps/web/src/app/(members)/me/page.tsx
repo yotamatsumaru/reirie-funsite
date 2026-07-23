@@ -59,7 +59,7 @@ export default async function MePage() {
   ]);
 
   const sub = user?.subscriptions[0];
-  const memberPoints = user?.points ?? 0;
+  const memberPoints = user?.pui ?? 0;
   const slotLimit = SAVE_SLOT_LIMIT[plan];
   const bonusEligible = MONTHLY_BONUS_GIFT_COUNT[plan];
   const maxQuality = MAX_VIDEO_QUALITY[plan];
@@ -110,11 +110,11 @@ export default async function MePage() {
         </CardBody>
       </Card>
 
-      {/* 会員カード & ポイント */}
+      {/* 会員カード & Pui */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">会員カード・ポイント</h2>
+            <h2 className="text-lg font-semibold">会員カード・Pui</h2>
             <Link href="/me/card" className="text-sm text-brand-600 hover:underline">
               会員カードを表示 →
             </Link>
@@ -122,13 +122,12 @@ export default async function MePage() {
         </CardHeader>
         <CardBody className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs text-slate-500">保有ポイント</p>
+            <p className="text-xs text-slate-500">保有 Pui</p>
             <p className="mt-1 text-3xl font-bold text-slate-900">
               {memberPoints.toLocaleString()}
-              <span className="ml-1 text-base font-normal text-slate-500">pt</span>
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              毎日のログインやSNSシェアでポイントが貯まります
+              毎日のログインやSNSシェアで Pui が貯まります
             </p>
           </div>
           <div className="flex gap-2">
@@ -136,7 +135,7 @@ export default async function MePage() {
               href="/me/card"
               className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
             >
-              ポイントを貯める
+              Pui を貯める
             </Link>
             <Link
               href="/me/points"
@@ -250,7 +249,7 @@ export default async function MePage() {
         </CardHeader>
         <CardBody className="grid gap-3 sm:grid-cols-2">
           <Link href="/me/card" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
-            会員カード・ポイント
+            会員カード・Pui
           </Link>
           <Link href="/contents" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
             限定コンテンツ

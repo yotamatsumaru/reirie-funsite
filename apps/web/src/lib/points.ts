@@ -1,8 +1,11 @@
 /**
- * ポイント & 会員番号のサービス層。
+ * Pui (通貨) & 会員番号のサービス層。
+ *
+ * 【2026-07 通貨名変更】以前は「Fan ポイント」という名称だったが、
+ * 通貨名を「Pui」に変更した (User.pui / PuiTransaction / PuiReason)。
  *
  * 設計上の要点 (本番 EC2 + PM2 cluster + RDS でも安全):
- *  - ポイント残高 (User.points) は PointTransaction の合計と一致させる。
+ *  - Pui 残高 (User.pui) は PuiTransaction の合計と一致させる。
  *    付与/消費は必ず $transaction で「履歴作成 + 残高インクリメント」を同時実行。
  *  - ログインボーナス / SNS シェアの二重付与は LoginBonusGrant / SocialShareGrant の
  *    ユニーク制約 (P2002) で防ぐ。クラスタ間の競合でも DB が一意性を保証する。
@@ -14,19 +17,19 @@ import {
   jstDateKey,
   previousJstDateKey,
   computeLoginBonusAmount,
-  isValidPointAmount,
-  MAX_POINTS_PER_TX as SHARED_MAX_POINTS_PER_TX,
+  isValidPuiAmount,
+  MAX_PUI_PER_TX as SHARED_MAX_PUI_PER_TX,
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
   remainingPlays,
-  applyPlanPointMultiplier,
-  MONTHLY_REWARD_POINT_BONUS,
-  EXTRA_PLAY_COST_FAN_POINTS,
+  applyPlanPuiMultiplier,
+  MONTHLY_PUI_BONUS,
+  EXTRA_PLAY_COST_PUI,
   MAX_EXTRA_PLAYS_PER_DAY,
   requiresShipping,
   canTransitionRedemptionStatus,
   isPromoActive,
-  type PointRateSettings,
+  type PuiRateSettings,
   type PlanTypeLiteral,
   type SocialPlatformLiteral,
   type AcchiResult,
@@ -35,12 +38,13 @@ import {
 } from '@idol/shared';
 
 /**
- * Fan ポイント取引の理由。
+ * Pui 取引の理由。
  * 【2026-07 統合】以前は Fan ポイントと特典ポイント (旧 RewardPointReason) の
  * 2 種類の理由 enum があったが、Fan ポイント 1 種類への統合に伴い、
  * Stripe 購入・サブスク月次特典・景品交換・返還の理由もこの型に統合した。
+ * 【2026-07 通貨名変更】通貨名を「Fan ポイント」から「Pui」へ変更した。
  */
-type PointReasonLiteral =
+type PuiReasonLiteral =
   | 'LOGIN_BONUS'
   | 'LOGIN_STREAK'
   | 'SOCIAL_SHARE'
@@ -57,16 +61,16 @@ type PointReasonLiteral =
   | 'OTHER';
 
 /**
- * 1 取引で動かせるポイントの絶対値上限 (防御的上限)。
+ * 1 取引で動かせる Pui の絶対値上限 (防御的上限)。
  * 共有定義 (@idol/shared) を再エクスポートし、サーバ/クライアントで統一する。
  */
-export const MAX_POINTS_PER_TX = SHARED_MAX_POINTS_PER_TX;
+export const MAX_PUI_PER_TX = SHARED_MAX_PUI_PER_TX;
 
-/** ポイント整合性に関する業務エラー (不正検知時に throw) */
-export class PointIntegrityError extends Error {
+/** Pui 整合性に関する業務エラー (不正検知時に throw) */
+export class PuiIntegrityError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'PointIntegrityError';
+    this.name = 'PuiIntegrityError';
   }
 }
 
@@ -134,63 +138,63 @@ export async function ensureMemberNumber(userId: string): Promise<string> {
 }
 
 /**
- * ポイントを増減し、履歴を残す (内部用)。残高を返す。
+ * Pui を増減し、履歴を残す (内部用)。残高を返す。
  * tx を渡せば既存トランザクションに参加する。
  *
  * セキュリティ上の不変条件:
  *  - amount は整数かつ |amount| <= MAX_POINTS_PER_TX (異常な大量付与をブロック)。
  *  - amount === 0 は無意味なので拒否。
- *  - 残高 (User.points) は `increment` による原子的更新で、cluster 並列でも壊れない。
+ *  - 残高 (User.pui) は `increment` による原子的更新で、cluster 並列でも壊れない。
  *  - allowNegative=false (既定) のとき、更新後に残高が負になる操作を拒否し、
  *    同一トランザクション内なのでロールバックされる (二重消費・残高不足を防止)。
  *  - PointTransaction.balance には「更新後の実残高」を記録 (監査スナップショット)。
  */
-async function applyPoints(
+async function applyPui(
   client: Prisma.TransactionClient,
   params: {
     userId: string;
     amount: number;
-    reason: PointReasonLiteral;
+    reason: PuiReasonLiteral;
     note?: string;
     /** 残高がマイナスになる操作を許可するか (既定 false) */
     allowNegative?: boolean;
   },
 ): Promise<number> {
   // --- 入力値の防御的検証 (整数 / 非ゼロ / 上限以内) ---
-  if (!isValidPointAmount(params.amount)) {
+  if (!isValidPuiAmount(params.amount)) {
     if (!Number.isInteger(params.amount)) {
-      throw new PointIntegrityError('ポイントは整数で指定してください');
+      throw new PuiIntegrityError('Pui は整数で指定してください');
     }
     if (params.amount === 0) {
-      throw new PointIntegrityError('0 ポイントの取引は記録できません');
+      throw new PuiIntegrityError('0 Pui の取引は記録できません');
     }
-    throw new PointIntegrityError(
-      `1 取引で動かせるポイントは ±${MAX_POINTS_PER_TX} までです`,
+    throw new PuiIntegrityError(
+      `1 取引で動かせる Pui は ±${MAX_PUI_PER_TX} までです`,
     );
   }
 
   // increment は DB 側で原子的に実行され、cluster の並列付与でも競合しない。
   const user = await client.user.update({
     where: { id: params.userId },
-    data: { points: { increment: params.amount } },
-    select: { points: true },
+    data: { pui: { increment: params.amount } },
+    select: { pui: true },
   });
 
   // 残高がマイナスになる操作は (許可されていない限り) ロールバックさせる。
-  if (!params.allowNegative && user.points < 0) {
-    throw new PointIntegrityError('ポイント残高が不足しています');
+  if (!params.allowNegative && user.pui < 0) {
+    throw new PuiIntegrityError('Pui 残高が不足しています');
   }
 
-  await client.pointTransaction.create({
+  await client.puiTransaction.create({
     data: {
       userId: params.userId,
       amount: params.amount,
-      balance: user.points,
+      balance: user.pui,
       reason: params.reason,
       note: params.note ?? null,
     },
   });
-  return user.points;
+  return user.pui;
 }
 
 export type LoginBonusResult =
@@ -204,7 +208,7 @@ export type LoginBonusResult =
  */
 export async function grantLoginBonus(
   userId: string,
-  rates: PointRateSettings,
+  rates: PuiRateSettings,
   now: Date = new Date(),
 ): Promise<LoginBonusResult> {
   const today = jstDateKey(now);
@@ -216,13 +220,13 @@ export async function grantLoginBonus(
   if (existingToday) {
     const u = await prisma.user.findUnique({
       where: { id: userId },
-      select: { points: true },
+      select: { pui: true },
     });
     return {
       granted: false,
       alreadyGranted: true,
       streak: existingToday.streak,
-      balance: u?.points ?? 0,
+      balance: u?.pui ?? 0,
     };
   }
 
@@ -238,15 +242,15 @@ export async function grantLoginBonus(
       });
       const computedStreak = (yGrant?.streak ?? 0) + 1;
       const baseAmount = computeLoginBonusAmount(computedStreak, rates);
-      // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+      // プラン別の Pui 付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
       const plan = await getUserPlanTx(tx, userId);
-      const computedAmount = applyPlanPointMultiplier(baseAmount, plan);
+      const computedAmount = applyPlanPuiMultiplier(baseAmount, plan);
 
       // ユニーク制約 (userId+date) で二重付与を防止
       await tx.loginBonusGrant.create({
         data: { userId, date: today, streak: computedStreak, amount: computedAmount },
       });
-      const bal = await applyPoints(tx, {
+      const bal = await applyPui(tx, {
         userId,
         amount: computedAmount,
         // 連続ボーナス節目かどうかは「倍率適用前」のベース額で判定する
@@ -264,13 +268,13 @@ export async function grantLoginBonus(
           where: { userId_date: { userId, date: today } },
           select: { streak: true },
         }),
-        prisma.user.findUnique({ where: { id: userId }, select: { points: true } }),
+        prisma.user.findUnique({ where: { id: userId }, select: { pui: true } }),
       ]);
       return {
         granted: false,
         alreadyGranted: true,
         streak: grant?.streak ?? 0,
-        balance: u?.points ?? 0,
+        balance: u?.pui ?? 0,
       };
     }
     throw e;
@@ -282,13 +286,13 @@ export type SocialShareResult =
   | { granted: false; alreadyGranted: true; balance: number };
 
 /**
- * SNS シェアによるポイント付与。
+ * SNS シェアによる Pui 付与。
  *  - 1 プラットフォーム 1 日 1 回まで (userId+date+platform のユニーク制約)。
  */
 export async function grantSocialShare(
   userId: string,
   platform: SocialPlatformLiteral,
-  rates: PointRateSettings,
+  rates: PuiRateSettings,
   now: Date = new Date(),
 ): Promise<SocialShareResult> {
   const today = jstDateKey(now);
@@ -299,29 +303,29 @@ export async function grantSocialShare(
   if (existing) {
     const u = await prisma.user.findUnique({
       where: { id: userId },
-      select: { points: true },
+      select: { pui: true },
     });
-    return { granted: false, alreadyGranted: true, balance: u?.points ?? 0 };
+    return { granted: false, alreadyGranted: true, balance: u?.pui ?? 0 };
   }
 
   try {
     const { amount, balance } = await prisma.$transaction(async (tx) => {
-      // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+      // プラン別の Pui 付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
       const plan = await getUserPlanTx(tx, userId);
-      const amount = applyPlanPointMultiplier(rates.socialSharePoints, plan);
+      const amount = applyPlanPuiMultiplier(rates.socialSharePui, plan);
 
       await tx.socialShareGrant.create({
         data: { userId, date: today, platform, amount },
       });
-      // レートが 0pt のときは付与記録のみ残し、ポイント取引はスキップ。
+      // レートが 0 Pui のときは付与記録のみ残し、Pui 取引はスキップ。
       if (amount <= 0) {
         const u = await tx.user.findUnique({
           where: { id: userId },
-          select: { points: true },
+          select: { pui: true },
         });
-        return { amount, balance: u?.points ?? 0 };
+        return { amount, balance: u?.pui ?? 0 };
       }
-      const bal = await applyPoints(tx, { userId, amount, reason: 'SOCIAL_SHARE' });
+      const bal = await applyPui(tx, { userId, amount, reason: 'SOCIAL_SHARE' });
       return { amount, balance: bal };
     });
     return { granted: true, amount, balance, alreadyGranted: false };
@@ -329,21 +333,21 @@ export async function grantSocialShare(
     if (isUniqueViolation(e)) {
       const u = await prisma.user.findUnique({
         where: { id: userId },
-        select: { points: true },
+        select: { pui: true },
       });
-      return { granted: false, alreadyGranted: true, balance: u?.points ?? 0 };
+      return { granted: false, alreadyGranted: true, balance: u?.pui ?? 0 };
     }
     throw e;
   }
 }
 
 /**
- * 管理者によるポイント手動調整。amount は正負どちらも可。
- *  - 調整によって残高がマイナスになる場合は PointIntegrityError を投げ、
+ * 管理者による Pui 手動調整。amount は正負どちらも可。
+ *  - 調整によって残高がマイナスになる場合は PuiIntegrityError を投げ、
  *    トランザクションをロールバックする (残高は常に 0 以上を保証)。
  *  - 監査ログは呼び出し側 (API) で記録する。
  */
-export async function adminAdjustPoints(
+export async function adminAdjustPui(
   userId: string,
   amount: number,
   note?: string,
@@ -354,36 +358,36 @@ export async function adminAdjustPoints(
     select: { id: true },
   });
   if (!target) {
-    throw new PointIntegrityError('対象ユーザーが見つかりません');
+    throw new PuiIntegrityError('対象ユーザーが見つかりません');
   }
   return prisma.$transaction((tx) =>
-    applyPoints(tx, { userId, amount, reason: 'ADMIN_ADJUST', note }),
+    applyPui(tx, { userId, amount, reason: 'ADMIN_ADJUST', note }),
   );
 }
 
 // ---------------------------------------------------------------------
-// Fan ポイントでの恋愛ADV購入 (章 / アイテム)
+// Pui での恋愛ADV購入 (章 / アイテム)
 // ---------------------------------------------------------------------
 
-export type FanPointGamePurchaseResult =
+export type PuiGamePurchaseResult =
   | { ok: true; balance: number; purchaseId: string }
   | { ok: false; reason: 'NOT_FOUND' | 'NOT_FOR_SALE' | 'ALREADY_OWNED' | 'OWN_LIMIT_EXCEEDED' };
 
 /**
- * 恋愛ADVの章 (GameScenario) を Fan ポイントで購入する。
- *  - fanPointPrice が null/0 の章は Fan ポイント購入不可。
+ * 恋愛ADVの章 (GameScenario) を Pui で購入する。
+ *  - puiPrice が null/0 の章は Pui 購入不可。
  *  - 既に所持していれば ALREADY_OWNED。
- *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
+ *  - Pui 残高不足時は applyPui が PuiIntegrityError を投げ、
  *    トランザクション全体 (購入記録・所持追加を含む) がロールバックされる。
  */
-export async function purchaseScenarioWithFanPoints(
+export async function purchaseScenarioWithPui(
   userId: string,
   scenarioId: string,
-): Promise<FanPointGamePurchaseResult> {
+): Promise<PuiGamePurchaseResult> {
   return prisma.$transaction(async (tx) => {
     const sc = await tx.gameScenario.findUnique({ where: { id: scenarioId } });
     if (!sc || sc.status !== 'PUBLISHED') return { ok: false, reason: 'NOT_FOUND' };
-    if (!sc.fanPointPrice || sc.fanPointPrice <= 0) {
+    if (!sc.puiPrice || sc.puiPrice <= 0) {
       return { ok: false, reason: 'NOT_FOR_SALE' };
     }
     const owned = await tx.playerInventory.findUnique({
@@ -391,11 +395,11 @@ export async function purchaseScenarioWithFanPoints(
     });
     if (owned) return { ok: false, reason: 'ALREADY_OWNED' };
 
-    const balance = await applyPoints(tx, {
+    const balance = await applyPui(tx, {
       userId,
-      amount: -sc.fanPointPrice,
+      amount: -sc.puiPrice,
       reason: 'ITEM_PURCHASE',
-      note: `${sc.title} を Fan ポイントで購入`,
+      note: `${sc.title} を Pui で購入`,
     });
 
     const purchase = await tx.playerPurchase.create({
@@ -404,9 +408,9 @@ export async function purchaseScenarioWithFanPoints(
         kind: 'SCENARIO',
         scenarioId: sc.id,
         quantity: 1,
-        payMethod: 'FAN_POINT',
+        payMethod: 'PUI',
         amountJpy: 0,
-        fanPointAmount: sc.fanPointPrice,
+        puiAmount: sc.puiPrice,
         paymentStatus: 'SUCCEEDED',
         paidAt: new Date(),
       },
@@ -423,19 +427,19 @@ export async function purchaseScenarioWithFanPoints(
 }
 
 /**
- * 恋愛ADVのアイテム (GameItem) を Fan ポイントで購入する。
- *  - fanPointPrice が null/0 のアイテムは Fan ポイント購入不可。
+ * 恋愛ADVのアイテム (GameItem) を Pui で購入する。
+ *  - puiPrice が null/0 のアイテムは Pui 購入不可。
  *  - maxOwn (所持上限) を超える場合は OWN_LIMIT_EXCEEDED。
  */
-export async function purchaseItemWithFanPoints(
+export async function purchaseItemWithPui(
   userId: string,
   itemId: string,
   quantity: number,
-): Promise<FanPointGamePurchaseResult> {
+): Promise<PuiGamePurchaseResult> {
   return prisma.$transaction(async (tx) => {
     const it = await tx.gameItem.findUnique({ where: { id: itemId } });
     if (!it || !it.isActive) return { ok: false, reason: 'NOT_FOUND' };
-    if (!it.fanPointPrice || it.fanPointPrice <= 0) {
+    if (!it.puiPrice || it.puiPrice <= 0) {
       return { ok: false, reason: 'NOT_FOR_SALE' };
     }
     if (it.maxOwn) {
@@ -447,12 +451,12 @@ export async function purchaseItemWithFanPoints(
       }
     }
 
-    const totalCost = it.fanPointPrice * quantity;
-    const balance = await applyPoints(tx, {
+    const totalCost = it.puiPrice * quantity;
+    const balance = await applyPui(tx, {
       userId,
       amount: -totalCost,
       reason: 'ITEM_PURCHASE',
-      note: `${it.name} × ${quantity} を Fan ポイントで購入`,
+      note: `${it.name} × ${quantity} を Pui で購入`,
     });
 
     const purchase = await tx.playerPurchase.create({
@@ -461,9 +465,9 @@ export async function purchaseItemWithFanPoints(
         kind: 'ITEM',
         itemId: it.id,
         quantity,
-        payMethod: 'FAN_POINT',
+        payMethod: 'PUI',
         amountJpy: 0,
-        fanPointAmount: totalCost,
+        puiAmount: totalCost,
         paymentStatus: 'SUCCEEDED',
         paidAt: new Date(),
       },
@@ -486,14 +490,14 @@ export async function purchaseItemWithFanPoints(
 }
 
 // ---------------------------------------------------------------------
-// 整合性検証 / 異常検知 (管理者がポイントの不正・バグを監視するための土台)
+// 整合性検証 / 異常検知 (管理者が Pui の不正・バグを監視するための土台)
 // ---------------------------------------------------------------------
 
-export type PointIntegrityRow = {
+export type PuiIntegrityRow = {
   userId: string;
   email: string | null;
   memberNumber: string | null;
-  /** User.points に記録された残高 */
+  /** User.pui に記録された残高 */
   storedBalance: number;
   /** PointTransaction.amount の合計 (本来あるべき残高) */
   ledgerSum: number;
@@ -504,15 +508,15 @@ export type PointIntegrityRow = {
 };
 
 /**
- * 全ユーザーについて「User.points」と「PointTransaction の合計」を突き合わせ、
+ * 全ユーザーについて「User.pui」と「PuiTransaction の合計」を突き合わせ、
  * 不整合 (diff !== 0) または残高がマイナスのユーザーを返す。
  *
  * これにより、バグ・不正・手動 DB 改変などで残高が台帳とズレた場合に
  * 管理者が検知できる。台帳 (PointTransaction) を信頼の基点とする。
  */
-export async function findPointAnomalies(): Promise<PointIntegrityRow[]> {
+export async function findPuiAnomalies(): Promise<PuiIntegrityRow[]> {
   // 台帳の合計をユーザー単位で集計
-  const sums = await prisma.pointTransaction.groupBy({
+  const sums = await prisma.puiTransaction.groupBy({
     by: ['userId'],
     _sum: { amount: true },
     _count: { _all: true },
@@ -525,30 +529,30 @@ export async function findPointAnomalies(): Promise<PointIntegrityRow[]> {
   const users = await prisma.user.findMany({
     where: {
       OR: [
-        { points: { not: 0 } },
+        { pui: { not: 0 } },
         { id: { in: Array.from(ledgerByUser.keys()) } },
       ],
     },
-    select: { id: true, email: true, memberNumber: true, points: true },
+    select: { id: true, email: true, memberNumber: true, pui: true },
   });
 
-  const anomalies: PointIntegrityRow[] = [];
+  const anomalies: PuiIntegrityRow[] = [];
   for (const u of users) {
     const ledger = ledgerByUser.get(u.id) ?? { sum: 0, count: 0 };
-    const diff = u.points - ledger.sum;
-    if (diff !== 0 || u.points < 0) {
+    const diff = u.pui - ledger.sum;
+    if (diff !== 0 || u.pui < 0) {
       anomalies.push({
         userId: u.id,
         email: u.email,
         memberNumber: u.memberNumber,
-        storedBalance: u.points,
+        storedBalance: u.pui,
         ledgerSum: ledger.sum,
         diff,
         txCount: ledger.count,
       });
     }
   }
-  // 台帳にだけ存在しユーザーが集計対象外だったケース (points===0 だが ledgerSum!==0)
+  // 台帳にだけ存在しユーザーが集計対象外だったケース (pui===0 だが ledgerSum!==0)
   for (const [userId, ledger] of ledgerByUser) {
     if (!users.some((u) => u.id === userId) && ledger.sum !== 0) {
       anomalies.push({
@@ -568,17 +572,17 @@ export async function findPointAnomalies(): Promise<PointIntegrityRow[]> {
 /**
  * 単一ユーザーの整合性を検証する。diff === 0 なら整合。
  */
-export async function verifyUserPointsIntegrity(
+export async function verifyUserPuiIntegrity(
   userId: string,
 ): Promise<{ ok: boolean; storedBalance: number; ledgerSum: number; diff: number }> {
   const [user, agg] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { points: true } }),
-    prisma.pointTransaction.aggregate({
+    prisma.user.findUnique({ where: { id: userId }, select: { pui: true } }),
+    prisma.puiTransaction.aggregate({
       where: { userId },
       _sum: { amount: true },
     }),
   ]);
-  const storedBalance = user?.points ?? 0;
+  const storedBalance = user?.pui ?? 0;
   const ledgerSum = agg._sum.amount ?? 0;
   const diff = storedBalance - ledgerSum;
   return { ok: diff === 0 && storedBalance >= 0, storedBalance, ledgerSum, diff };
@@ -587,29 +591,29 @@ export async function verifyUserPointsIntegrity(
 /**
  * 不整合を台帳 (PointTransaction) 基準で是正する (管理者操作)。
  *
- * 台帳を信頼の基点とし、User.points を台帳合計に一致させる。
+ * 台帳を信頼の基点とし、User.pui を台帳合計に一致させる。
  * 台帳自体は正しい前提なので新たな取引は作らず、残高スナップショットのみ修正する。
  * 監査ログは呼び出し側 (API) で記録する。
  */
-export async function reconcileUserPoints(
+export async function reconcileUserPui(
   userId: string,
 ): Promise<{ before: number; after: number; diff: number }> {
   return prisma.$transaction(async (tx) => {
     const [user, agg] = await Promise.all([
-      tx.user.findUnique({ where: { id: userId }, select: { points: true } }),
-      tx.pointTransaction.aggregate({ where: { userId }, _sum: { amount: true } }),
+      tx.user.findUnique({ where: { id: userId }, select: { pui: true } }),
+      tx.puiTransaction.aggregate({ where: { userId }, _sum: { amount: true } }),
     ]);
-    if (!user) throw new PointIntegrityError('対象ユーザーが見つかりません');
-    const before = user.points;
+    if (!user) throw new PuiIntegrityError('対象ユーザーが見つかりません');
+    const before = user.pui;
     const ledgerSum = agg._sum.amount ?? 0;
 
     if (before !== ledgerSum) {
       const updated = await tx.user.update({
         where: { id: userId },
-        data: { points: ledgerSum },
-        select: { points: true },
+        data: { pui: ledgerSum },
+        select: { pui: true },
       });
-      return { before, after: updated.points, diff: ledgerSum - before };
+      return { before, after: updated.pui, diff: ledgerSum - before };
     }
     return { before, after: before, diff: 0 };
   });
@@ -629,10 +633,10 @@ export async function reconcileUserPoints(
  *    上限未満なら create」で行うが、PostgreSQL の既定分離レベル READ COMMITTED
  *    では、同一ユーザーの並列リクエスト (二重送信 / 連打 / PM2 cluster の別プロセス)
  *    が両方とも同じ count を読み、両方が create を通してしまう「Read-Modify-Write
- *    競合」が起こり得る。→ 上限を超えたプレイ = 無料報酬 (Fan/特典ポイント) の
+ *    競合」が起こり得る。→ 上限を超えたプレイ = 無料報酬 (Pui) の
  *    超過付与という不正が成立してしまう。
  *  - 追加プレイ購入 (buyAcchiExtraPlay) も同様に、並列だと購入上限
- *    (MAX_EXTRA_PLAYS_PER_DAY) を超えて購入 (=Fan ポイント多重消費) され得る。
+ *    (MAX_EXTRA_PLAYS_PER_DAY) を超えて購入 (=Pui 多重消費) され得る。
  *
  * 対策:
  *  - pg_advisory_xact_lock(key1, key2) を使い、(userId, gameType) をキーに
@@ -780,15 +784,15 @@ export type AcchiPlayPersistResult = {
   promoActive: boolean;
   /** ゲーム結果 (受理時のみ意味を持つ) */
   result: AcchiResult;
-  /** 付与ポイント (勝利時のみ > 0) */
+  /** 付与 Pui (勝利時のみ > 0) */
   reward: number;
-  /** プレイ後の残高 (Fan ポイント) */
+  /** プレイ後の残高 (Pui) */
   balance: number;
   /** プレイ後の本日プレイ回数 */
   playedToday: number;
-  /** プレイ後の本日残り回数 (Fan ポイント購入分の追加回数を含む) */
+  /** プレイ後の本日残り回数 (Pui 購入分の追加回数を含む) */
   remaining: number;
-  /** 本日の上限回数 (標準上限 + Fan ポイント購入分) */
+  /** 本日の上限回数 (標準上限 + Pui 購入分) */
   maxPerDay: number;
 };
 
@@ -806,7 +810,7 @@ export async function getAcchiPlayCountToday(
 }
 
 /**
- * 本日、Fan ポイントで購入済みの追加プレイ回数を取得する (JST 基準)。
+ * 本日、Pui で購入済みの追加プレイ回数を取得する (JST 基準)。
  */
 export async function getAcchiExtraPlaysToday(
   userId: string,
@@ -820,7 +824,7 @@ export async function getAcchiExtraPlaysToday(
 }
 
 /**
- * 本日の実効上限 (標準上限 + Fan ポイント購入分) を取得する。
+ * 本日の実効上限 (標準上限 + Pui 購入分) を取得する。
  */
 export async function getAcchiEffectiveMaxPerDay(
   userId: string,
@@ -835,10 +839,10 @@ export async function getAcchiEffectiveMaxPerDay(
  *
  * セキュリティ上の不変条件:
  *  - 勝敗 (result) は API ハンドラ側がサーバー生成の乱数で確定したものを受け取る。
- *    クライアントから結果やポイントを直接受け取らない (改ざん不可)。
- *  - 「1 日 N 回まで」の上限チェック、プレイ記録の作成、ポイント付与を
+ *    クライアントから結果や Pui を直接受け取らない (改ざん不可)。
+ *  - 「1 日 N 回まで」の上限チェック、プレイ記録の作成、Pui 付与を
  *    すべて同一トランザクション内で実行し、cluster 並列でも超過付与を防ぐ。
- *  - 上限は「標準上限 (ACCHI_MAX_PLAYS_PER_DAY) + Fan ポイントで購入した追加回数」。
+ *  - 上限は「標準上限 (ACCHI_MAX_PLAYS_PER_DAY) + Pui で購入した追加回数」。
  *  - 上限到達時は accepted=false を返し、記録も付与も行わない。
  *  - 付与は result==='WIN' のときのみ。それ以外は 0pt (記録のみ)。
  *
@@ -873,12 +877,12 @@ export async function recordAcchiPlay(
     // 両方が上限判定を通過して上限超過プレイ (無料報酬の超過付与) が成立し得る。
     await acquireUserGameLock(tx, userId, 'ACCHI_MUITE_HOI:play');
 
-    // プラン別のポイント付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+    // プラン別の Pui 付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
     const plan = await getUserPlanTx(tx, userId);
     const reward =
-      result === 'WIN' ? applyPlanPointMultiplier(ACCHI_WIN_REWARD, plan) : 0;
+      result === 'WIN' ? applyPlanPuiMultiplier(ACCHI_WIN_REWARD, plan) : 0;
 
-    // トランザクション内で当日プレイ数・Fan ポイント購入済み追加回数を数え、
+    // トランザクション内で当日プレイ数・Pui 購入済み追加回数を数え、
     // 上限チェック (競合に強い)。
     // ※ promo_until はトランザクション外で取得済み (上記コメント参照)。
     const [playedBefore, extraRow] = await Promise.all([
@@ -893,14 +897,14 @@ export async function recordAcchiPlay(
     if (!promoActive && playedBefore >= maxPerDay) {
       const u = await tx.user.findUnique({
         where: { id: userId },
-        select: { points: true },
+        select: { pui: true },
       });
       return {
         accepted: false,
         promoActive: false,
         result,
         reward: 0,
-        balance: u?.points ?? 0,
+        balance: u?.pui ?? 0,
         playedToday: playedBefore,
         remaining: 0,
         maxPerDay,
@@ -913,7 +917,7 @@ export async function recordAcchiPlay(
         gameType: 'ACCHI_MUITE_HOI',
         date,
         result,
-        rewardPoint: reward,
+        rewardPui: reward,
         detail: detail ?? null,
       },
       select: { id: true },
@@ -921,7 +925,7 @@ export async function recordAcchiPlay(
 
     let balance: number;
     if (reward > 0) {
-      balance = await applyPoints(tx, {
+      balance = await applyPui(tx, {
         userId,
         amount: reward,
         reason: 'GAME_REWARD',
@@ -930,9 +934,9 @@ export async function recordAcchiPlay(
     } else {
       const u = await tx.user.findUnique({
         where: { id: userId },
-        select: { points: true },
+        select: { pui: true },
       });
-      balance = u?.points ?? 0;
+      balance = u?.pui ?? 0;
     }
 
     const playedToday = playedBefore + 1;
@@ -956,9 +960,9 @@ export type BuyExtraPlayResult =
   | { ok: false; reason: 'LIMIT_REACHED' };
 
 /**
- * ミニゲーム (あっちむいてPUI) の追加プレイ回数を Fan ポイントで購入する。
+ * ミニゲーム (あっちむいてPUI) の追加プレイ回数を Pui で購入する。
  *  - 1 日に購入できる追加回数には上限がある (MAX_EXTRA_PLAYS_PER_DAY)。
- *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
+ *  - Pui 残高不足時は applyPui が PuiIntegrityError を投げ、
  *    トランザクション全体 (購入回数の加算を含む) がロールバックされる。
  */
 export async function buyAcchiExtraPlay(
@@ -968,7 +972,7 @@ export async function buyAcchiExtraPlay(
   const date = jstDateKey(now);
 
   return prisma.$transaction(async (tx) => {
-    // 【競合対策】追加プレイ購入も並列だと購入上限を超えて購入 (Fan ポイント多重消費)
+    // 【競合対策】追加プレイ購入も並列だと購入上限を超えて購入 (Pui 多重消費)
     // され得るため、同一ユーザー・同一ゲームで直列化する。
     // (プレイ記録と同じロックキーを使い、購入とプレイの相互の競合もまとめて排他する)
     await acquireUserGameLock(tx, userId, 'ACCHI_MUITE_HOI:play');
@@ -982,9 +986,9 @@ export async function buyAcchiExtraPlay(
       return { ok: false, reason: 'LIMIT_REACHED' as const };
     }
 
-    const balance = await applyPoints(tx, {
+    const balance = await applyPui(tx, {
       userId,
-      amount: -EXTRA_PLAY_COST_FAN_POINTS,
+      amount: -EXTRA_PLAY_COST_PUI,
       reason: 'EXTRA_PLAY_PURCHASE',
       note: 'あっちむいてPUI 追加プレイ購入',
     });
@@ -994,7 +998,7 @@ export async function buyAcchiExtraPlay(
         where: { id: existing.id },
         data: {
           purchasedCount: { increment: 1 },
-          totalFanPointsSpent: { increment: EXTRA_PLAY_COST_FAN_POINTS },
+          totalPuiSpent: { increment: EXTRA_PLAY_COST_PUI },
         },
       });
     } else {
@@ -1004,7 +1008,7 @@ export async function buyAcchiExtraPlay(
           gameType: 'ACCHI_MUITE_HOI',
           date,
           purchasedCount: 1,
-          totalFanPointsSpent: EXTRA_PLAY_COST_FAN_POINTS,
+          totalPuiSpent: EXTRA_PLAY_COST_PUI,
         },
       });
     }
@@ -1020,28 +1024,28 @@ export async function buyAcchiExtraPlay(
 }
 
 // ---------------------------------------------------------------------
-// Fan ポイント購入 (Stripe) / サブスク月次特典 / 景品交換
+// Pui 購入 (Stripe) / サブスク月次特典 / 景品交換
 //
 // 【2026-07 統合】以前はここで「特典ポイント (User.rewardPoints /
 // RewardPointTransaction)」という Fan ポイントとは別枠の通貨を増減していたが、
-// Fan ポイント 1 種類への統合により、以下の関数はすべて applyPoints
-// (User.points / PointTransaction) を使うようになった。関数名・テーブル名
+// Fan ポイント 1 種類への統合により、以下の関数はすべて applyPui
+// (User.pui / PuiTransaction) を使うようになった。関数名・テーブル名
 // (RewardPointPurchase 等) は変更していない。
 // ---------------------------------------------------------------------
 
-export type RewardPointPurchaseConfirmResult =
+export type PuiPackPurchaseConfirmResult =
   | { ok: true; balance: number }
   | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_PROCESSED' };
 
 /**
- * Stripe 決済確定 (webhook) を受けて特典ポイントを付与する。
+ * Stripe 決済確定 (webhook) を受けて Pui を付与する。
  *  - RewardPointPurchase.status が既に SUCCEEDED なら二重付与しない。
  *  - purchaseId は RewardPointPurchase.id (checkout 作成時に発行済み)。
  */
-export async function grantRewardPointsFromStripePurchase(
+export async function grantPuiFromStripePurchase(
   purchaseId: string,
   opts?: { stripePaymentIntentId?: string | null },
-): Promise<RewardPointPurchaseConfirmResult> {
+): Promise<PuiPackPurchaseConfirmResult> {
   return prisma.$transaction(async (tx) => {
     const purchase = await tx.rewardPointPurchase.findUnique({ where: { id: purchaseId } });
     if (!purchase) return { ok: false, reason: 'NOT_FOUND' };
@@ -1056,32 +1060,32 @@ export async function grantRewardPointsFromStripePurchase(
       },
     });
 
-    const balance = await applyPoints(tx, {
+    const balance = await applyPui(tx, {
       userId: purchase.userId,
-      amount: purchase.points,
+      amount: purchase.pui,
       reason: 'STRIPE_PURCHASE',
-      note: `Fan ポイントパック購入 (${purchase.points}pt / ¥${purchase.amountJpy.toLocaleString()})`,
+      note: `Pui パック購入 (${purchase.pui} Pui / ¥${purchase.amountJpy.toLocaleString()})`,
     });
 
     return { ok: true, balance };
   });
 }
 
-export type MonthlyRewardPointGrantResult =
+export type MonthlyPuiGrantResult =
   | { granted: true; amount: number; balance: number }
   | { granted: false; reason: 'NO_BONUS_FOR_PLAN' | 'ALREADY_GRANTED' };
 
 /**
- * サブスクプランに応じた月次特典ポイントを自動付与する。
- *  - MonthlyRewardPointGrant (userId, yearMonth) のユニーク制約で二重付与を防止。
+ * サブスクプランに応じた月次 Pui 特典を自動付与する。
+ *  - MonthlyRewardPointGrant (userId, yearMonth) のユニーク制約で二重付与を防止 (モデル名は維持)。
  *  - FREE プランは付与額 0 のため NO_BONUS_FOR_PLAN を返す。
  */
-export async function grantMonthlyRewardPointBonus(
+export async function grantMonthlyPuiBonus(
   userId: string,
   plan: PlanTypeLiteral,
   yearMonth: string,
-): Promise<MonthlyRewardPointGrantResult> {
-  const amount = MONTHLY_REWARD_POINT_BONUS[plan] ?? 0;
+): Promise<MonthlyPuiGrantResult> {
+  const amount = MONTHLY_PUI_BONUS[plan] ?? 0;
   if (amount <= 0) return { granted: false, reason: 'NO_BONUS_FOR_PLAN' };
 
   try {
@@ -1092,14 +1096,14 @@ export async function grantMonthlyRewardPointBonus(
       if (existing) throw new Error('ALREADY_GRANTED');
 
       await tx.monthlyRewardPointGrant.create({
-        data: { userId, yearMonth, plan, points: amount },
+        data: { userId, yearMonth, plan, pui: amount },
       });
 
-      return applyPoints(tx, {
+      return applyPui(tx, {
         userId,
         amount,
         reason: 'SUBSCRIPTION_BONUS',
-        note: `${plan} プラン ${yearMonth} 月次 Fan ポイント特典`,
+        note: `${plan} プラン ${yearMonth} 月次 Pui 特典`,
       });
     });
     return { granted: true, amount, balance };
@@ -1122,10 +1126,10 @@ export type RedeemCatalogItemResult =
     };
 
 /**
- * 景品カタログ交換 (Fan ポイント消費)。
+ * 景品カタログ交換 (Pui 消費)。
  *  - stock が設定されている場合は在庫を原子的にデクリメントする。
  *  - GOODS (発送必要) は配送先情報が必須。
- *  - Fan ポイント残高不足時は applyPoints が PointIntegrityError を投げ、
+ *  - Pui 残高不足時は applyPui が PuiIntegrityError を投げ、
  *    トランザクション全体 (在庫デクリメント・交換記録を含む) がロールバックされる。
  */
 export async function redeemRewardCatalogItem(
@@ -1160,9 +1164,9 @@ export async function redeemRewardCatalogItem(
       if (updated.count === 0) return { ok: false, reason: 'OUT_OF_STOCK' };
     }
 
-    const balance = await applyPoints(tx, {
+    const balance = await applyPui(tx, {
       userId,
-      amount: -item.pointCost,
+      amount: -item.puiCost,
       reason: 'REDEMPTION',
       note: `${item.name} と交換`,
     });
@@ -1173,7 +1177,7 @@ export async function redeemRewardCatalogItem(
         catalogItemId: item.id,
         itemName: item.name,
         itemKind: item.kind,
-        pointCost: item.pointCost,
+        puiCost: item.puiCost,
         status: 'PENDING',
         shippingName: needsShipping ? shipping?.shippingName : undefined,
         shippingPhone: needsShipping ? shipping?.shippingPhone : undefined,
@@ -1195,7 +1199,7 @@ export type UpdateRedemptionStatusResult =
 /**
  * 景品交換の発送ステータスを更新する (管理者操作)。
  *  - 許可されたステータス遷移のみ受け付ける (REWARD_REDEMPTION_STATUS_TRANSITIONS)。
- *  - CANCELED へ遷移する場合は特典ポイントを返還する (REFUND)。
+ *  - CANCELED へ遷移する場合は Pui を返還する (REFUND)。
  *  - SHIPPED/COMPLETED/CANCELED への遷移時は対応する日時カラムを記録する。
  */
 export async function updateRedemptionStatus(
@@ -1225,11 +1229,11 @@ export async function updateRedemptionStatus(
       },
     });
 
-    // キャンセル時は Fan ポイントを返還する
+    // キャンセル時は Pui を返還する
     if (next === 'CANCELED') {
-      await applyPoints(tx, {
+      await applyPui(tx, {
         userId: redemption.userId,
-        amount: redemption.pointCost,
+        amount: redemption.puiCost,
         reason: 'REFUND',
         note: `${redemption.itemName} の交換キャンセルによる返還`,
       });

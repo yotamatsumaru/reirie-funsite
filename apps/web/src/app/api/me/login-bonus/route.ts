@@ -10,7 +10,7 @@ import { jstDateKey } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import { getPointRates } from '@/lib/app-setting';
+import { getPuiRates } from '@/lib/app-setting';
 import { grantLoginBonus } from '@/lib/points';
 
 export const runtime = 'nodejs';
@@ -24,7 +24,7 @@ export const GET = handle(async (req: Request) => {
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true },
+      select: { pui: true },
     }),
   ]);
   return NextResponse.json({
@@ -32,13 +32,13 @@ export const GET = handle(async (req: Request) => {
     claimedToday: Boolean(grant),
     streak: grant?.streak ?? 0,
     amount: grant?.amount ?? 0,
-    balance: user?.points ?? 0,
+    balance: user?.pui ?? 0,
   });
 });
 
 export const POST = handle(async (req: Request) => {
   const session = await requireApiSession(req);
-  const rates = await getPointRates();
+  const rates = await getPuiRates();
   const result = await grantLoginBonus(session.user.id, rates);
 
   if (result.granted) {

@@ -1,13 +1,14 @@
 /**
- * 景品カタログ・交換・Fan ポイント購入 (Stripe) 関連の Zod スキーマ・定数・ラベル定義。
+ * 景品カタログ・交換・Pui 購入 (Stripe) 関連の Zod スキーマ・定数・ラベル定義。
  *
  * 【2026-07 統合】以前は Fan ポイントと特典ポイント (Stripe 購入 / サブスク月次自動付与で貯まり
  * 景品カタログ交換に使う別枠の通貨。旧 User.rewardPoints / RewardPointTransaction /
  * RewardPointReason) の 2 種類があったが、Fan ポイント 1 種類に統合した。
- * 特典ポイント取引理由 (旧 RewardPointReason) は PointReason (packages/shared/src/membership.ts)
+ * 特典ポイント取引理由 (旧 RewardPointReason) は PuiReason (packages/shared/src/membership.ts)
  * に統合済みのため、このファイルにあった REWARD_POINT_REASONS 等は削除した。
+ * 【2026-07 通貨名変更】さらに通貨名を「Fan ポイント」から「Pui」へ変更した。
  * 景品カタログ・交換・購入パック等の型/テーブル名 (RewardCatalogItem 等) はそのまま維持し、
- * 実際に増減するのは User.points / PointTransaction (Fan ポイント) である。
+ * 実際に増減するのは User.pui / PuiTransaction (Pui) である。
  */
 import { z } from 'zod';
 import { PLAN_TYPES, type PlanTypeLiteral } from '../constants';
@@ -84,7 +85,7 @@ export function canTransitionRedemptionStatus(
 }
 
 // ---------------------------------------------------------------------
-// 特典ポイント購入 (Stripe)
+// Pui 購入 (Stripe)
 // ---------------------------------------------------------------------
 
 export const REWARD_POINT_PURCHASE_STATUSES = [
@@ -96,34 +97,34 @@ export const REWARD_POINT_PURCHASE_STATUSES = [
 export type RewardPointPurchaseStatusLiteral = (typeof REWARD_POINT_PURCHASE_STATUSES)[number];
 
 // ---------------------------------------------------------------------
-// ゲーム内購入の決済手段 (Fan ポイント / Stripe)
+// ゲーム内購入の決済手段 (Pui / Stripe)
 // ---------------------------------------------------------------------
 
-export const GAME_PURCHASE_PAY_METHODS = ['STRIPE', 'FAN_POINT'] as const;
+export const GAME_PURCHASE_PAY_METHODS = ['STRIPE', 'PUI'] as const;
 export type GamePurchasePayMethodLiteral = (typeof GAME_PURCHASE_PAY_METHODS)[number];
 
 // ---------------------------------------------------------------------
-// サブスク月次 特典ポイント自動付与
+// サブスク月次 Pui 自動付与
 // ---------------------------------------------------------------------
 
 /**
- * サブスクプラン別の月次 Fan ポイント自動付与量。
+ * サブスクプラン別の月次 Pui 自動付与量。
  *  - FREE     : 0 (対象外)
- *  - STANDARD : 300pt/月
- *  - PREMIUM  : 1000pt/月
+ *  - STANDARD : 300 Pui/月
+ *  - PREMIUM  : 1000 Pui/月
  */
-export const MONTHLY_REWARD_POINT_BONUS: Record<PlanTypeLiteral, number> = {
+export const MONTHLY_PUI_BONUS: Record<PlanTypeLiteral, number> = {
   FREE: 0,
   STANDARD: 300,
   PREMIUM: 1000,
 };
 
 // ---------------------------------------------------------------------
-// ミニゲーム追加プレイ購入 (Fan ポイント)
+// ミニゲーム追加プレイ購入 (Pui)
 // ---------------------------------------------------------------------
 
-/** 1 回の追加プレイ購入で消費する Fan ポイント */
-export const EXTRA_PLAY_COST_FAN_POINTS = 50;
+/** 1 回の追加プレイ購入で消費する Pui */
+export const EXTRA_PLAY_COST_PUI = 50;
 
 /** 1 日に追加購入できる最大回数 (通常の無料プレイ回数とは別枠) */
 export const MAX_EXTRA_PLAYS_PER_DAY = 5;
@@ -132,17 +133,17 @@ export const MAX_EXTRA_PLAYS_PER_DAY = 5;
 // API 入力スキーマ
 // ---------------------------------------------------------------------
 
-/** Fan ポイントパックの管理 (作成・編集) */
+/** Pui パックの管理 (作成・編集) */
 export const AdminRewardPointPackInputSchema = z.object({
   name: z.string().min(1).max(80),
-  points: z.number().int().min(1).max(1_000_000),
+  pui: z.number().int().min(1).max(1_000_000),
   priceJpy: z.number().int().min(1).max(1_000_000),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(9999).default(0),
 });
 export type AdminRewardPointPackInput = z.infer<typeof AdminRewardPointPackInputSchema>;
 
-/** Fan ポイント購入 (Stripe Checkout Session 作成) */
+/** Pui 購入 (Stripe Checkout Session 作成) */
 export const RewardPointPurchaseInputSchema = z.object({
   packId: z.uuid(),
   successUrl: z.url(),
@@ -157,7 +158,7 @@ export const AdminRewardCatalogItemInputSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   imageUrl: z.url().optional(),
-  pointCost: z.number().int().min(1).max(1_000_000),
+  puiCost: z.number().int().min(1).max(1_000_000),
   stock: z.number().int().min(0).max(1_000_000).nullable().optional(),
   status: z.enum(REWARD_CATALOG_ITEM_STATUSES).default('DRAFT'),
   sortOrder: z.number().int().min(0).max(9999).default(0),
@@ -185,7 +186,7 @@ export const AdminUpdateRedemptionStatusSchema = z.object({
 });
 export type AdminUpdateRedemptionStatusInput = z.infer<typeof AdminUpdateRedemptionStatusSchema>;
 
-/** ミニゲーム追加プレイの購入 (Fan ポイント消費) */
+/** ミニゲーム追加プレイの購入 (Pui 消費) */
 export const BuyExtraPlayInputSchema = z.object({
   gameType: z.literal('ACCHI_MUITE_HOI').default('ACCHI_MUITE_HOI'),
 });
@@ -194,8 +195,8 @@ export type BuyExtraPlayInput = z.infer<typeof BuyExtraPlayInputSchema>;
 /** 恋愛ADVの章/アイテム購入時の決済手段指定 (GamePurchaseInputSchema の拡張フィールド) */
 export const GamePurchasePayMethodSchema = z.enum(GAME_PURCHASE_PAY_METHODS).default('STRIPE');
 
-// 全プラン分を必須にした月次特典ポイントのスキーマ（管理画面での設定変更に備え定義のみ用意）
-export const MonthlyRewardPointBonusSchema = z.object(
+// 全プラン分を必須にした月次 Pui 付与のスキーマ（管理画面での設定変更に備え定義のみ用意）
+export const MonthlyPuiBonusSchema = z.object(
   Object.fromEntries(
     PLAN_TYPES.map((p) => [p, z.number().int().min(0).max(1_000_000)]),
   ) as Record<PlanTypeLiteral, z.ZodNumber>,

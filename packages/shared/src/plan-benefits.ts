@@ -6,8 +6,8 @@
  *
  * 仕様確定: 2026-06-26 (3 プラン体制へ刷新)
  * - FREE     : 無料 (アカウント作成のみ)
- * - STANDARD : 月額 ¥666 (税込) / 会報誌なし / ポイント付与率ひかえめ
- * - PREMIUM  : 年額 ¥7,920 (税込) / 会報誌 年2回送付 / ポイント付与率が一番良い
+ * - STANDARD : 月額 ¥666 (税込) / 会報誌なし / Pui 付与率ひかえめ
+ * - PREMIUM  : 年額 ¥7,920 (税込) / 会報誌 年2回送付 / Pui 付与率が一番良い
  */
 import type { PlanTypeLiteral } from './constants';
 
@@ -50,41 +50,41 @@ export const MONTHLY_BONUS_GIFT_COUNT: Record<PlanTypeLiteral, number> = {
 };
 
 /**
- * サイト内ポイント付与率の倍率 (プラン別)。
+ * サイト内 Pui 付与率の倍率 (プラン別)。
  *
  * ログインボーナス / SNS シェア / ミニゲーム勝利報酬などで獲得できる
- * ベースポイントに対して、この倍率を掛けて実際の付与量を決める。
+ * ベース Pui に対して、この倍率を掛けて実際の付与量を決める。
  *
  * - FREE     : 1.0 倍 (ベース)
  * - STANDARD : 1.2 倍 (少し優遇)
  * - PREMIUM  : 2.0 倍 (付与率が一番良い)
  *
  * 倍率適用後は必ず整数へ丸める (Math.round)。具体的な丸めは
- * applyPlanPointMultiplier() を使うこと。
+ * applyPlanPuiMultiplier() を使うこと。
  */
-export const PLAN_POINT_MULTIPLIER: Record<PlanTypeLiteral, number> = {
+export const PLAN_PUI_MULTIPLIER: Record<PlanTypeLiteral, number> = {
   FREE: 1.0,
   STANDARD: 1.2,
   PREMIUM: 2.0,
 };
 
 /**
- * ベースポイントにプラン倍率を適用し、整数へ丸めて返す。
+ * ベース Pui にプラン倍率を適用し、整数へ丸めて返す。
  *  - amount が 0 以下のときは 0 を返す (倍率は掛けない)。
  *  - 丸めは四捨五入 (Math.round)。
  */
-export function applyPlanPointMultiplier(
+export function applyPlanPuiMultiplier(
   amount: number,
   plan: PlanTypeLiteral,
 ): number {
   if (!Number.isFinite(amount) || amount <= 0) return 0;
-  return Math.round(amount * (PLAN_POINT_MULTIPLIER[plan] ?? 1));
+  return Math.round(amount * (PLAN_PUI_MULTIPLIER[plan] ?? 1));
 }
 
 /**
  * 倍率の表示用ラベル (例: "×2.0")。プラン紹介ページで使用。
  */
-export const PLAN_POINT_MULTIPLIER_LABEL: Record<PlanTypeLiteral, string> = {
+export const PLAN_PUI_MULTIPLIER_LABEL: Record<PlanTypeLiteral, string> = {
   FREE: '×1.0',
   STANDARD: '×1.2',
   PREMIUM: '×2.0',
@@ -233,7 +233,7 @@ export const PLAN_BENEFITS_TABLE: PlanBenefitRow[] = [
   // ===== 会員特典 (目玉) =====
   {
     category: '会員特典',
-    label: 'サイト内ポイント付与率',
+    label: 'サイト内 Pui 付与率',
     free: '×1.0',
     standard: '×1.2',
     premium: '×2.0',
@@ -306,12 +306,12 @@ export const PLAN_HIGHLIGHTS: Record<PlanTypeLiteral, string[]> = {
   FREE: [
     'アカウント作成のみで利用可能',
     '基本コンテンツの閲覧',
-    'ポイント付与率 ×1.0',
+    'Pui 付与率 ×1.0',
     'プロローグ章の試遊',
   ],
   STANDARD: [
     '会員限定記事 / 動画 (720p)',
-    'ポイント付与率 ×1.2',
+    'Pui 付与率 ×1.2',
     '会員価格で物販購入',
     'スタンダード先行予約',
     'コメント投稿',
@@ -319,7 +319,7 @@ export const PLAN_HIGHLIGHTS: Record<PlanTypeLiteral, string[]> = {
     '※ 会報誌の送付はありません',
   ],
   PREMIUM: [
-    'ポイント付与率 ×2.0 (一番お得)',
+    'Pui 付与率 ×2.0 (一番お得)',
     '会報誌を年2回お届け',
     'プレミアム限定コンテンツすべて',
     '動画 1080p 高画質',

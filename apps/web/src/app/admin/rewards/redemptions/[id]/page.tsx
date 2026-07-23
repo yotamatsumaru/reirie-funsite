@@ -78,8 +78,8 @@ export default async function RedemptionDetailPage({
               {redemption.user?.email}
             </p>
             <p>
-              <span className="text-slate-500">消費特典ポイント: </span>
-              {redemption.pointCost.toLocaleString()}pt
+              <span className="text-slate-500">消費 Pui: </span>
+              {redemption.puiCost.toLocaleString()} Pui
             </p>
             <p>
               <span className="text-slate-500">申請日時: </span>

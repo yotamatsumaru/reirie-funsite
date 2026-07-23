@@ -22,7 +22,7 @@ import {
   isAcchiDirection,
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
-  EXTRA_PLAY_COST_FAN_POINTS,
+  EXTRA_PLAY_COST_PUI,
   MAX_EXTRA_PLAYS_PER_DAY,
   resolveAcchiSettingForPlan,
   isPromoActive,
@@ -77,7 +77,7 @@ export async function handleAcchiGet(req: Request): Promise<Response> {
     getAcchiExtraPlaysToday(principal.userId),
     prisma.user.findUnique({
       where: { id: principal.userId },
-      select: { points: true },
+      select: { pui: true },
     }),
     // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
     safeGetPromoUntil(prisma, principal.userId),
@@ -97,11 +97,11 @@ export async function handleAcchiGet(req: Request): Promise<Response> {
     remaining: promoActive
       ? PROMO_UNLIMITED_REMAINING
       : remainingPlays(playedToday, maxPerDay),
-    balance: user?.points ?? 0,
+    balance: user?.pui ?? 0,
     extraPlay: {
       purchasedToday: purchasedExtra,
       maxPurchasesPerDay: MAX_EXTRA_PLAYS_PER_DAY,
-      costFanPoints: EXTRA_PLAY_COST_FAN_POINTS,
+      costPui: EXTRA_PLAY_COST_PUI,
       canBuyMore: purchasedExtra < MAX_EXTRA_PLAYS_PER_DAY,
     },
   });
@@ -176,9 +176,9 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
 
 /**
  * POST /api/{me,v1}/games/acchi/buy-extra-play の共通実装。
- *  - あっち向いてホイの本日の追加プレイ回数を Fan ポイントで購入する
+ *  - あっち向いてホイの本日の追加プレイ回数を Pui で購入する
  *  - 1 日に購入できる追加回数には上限がある (MAX_EXTRA_PLAYS_PER_DAY)
- *  - Fan ポイント残高不足時は 422 (POINT_INTEGRITY) を返す
+ *  - Pui 残高不足時は 422 (PUI_INTEGRITY) を返す
  */
 export async function handleAcchiBuyExtraPlay(req: Request): Promise<Response> {
   const principal = await requireApiPrincipal(req);
@@ -196,7 +196,7 @@ export async function handleAcchiBuyExtraPlay(req: Request): Promise<Response> {
     resource: `user:${principal.userId}`,
     metadata: {
       game: 'ACCHI_MUITE_HOI',
-      cost: EXTRA_PLAY_COST_FAN_POINTS,
+      cost: EXTRA_PLAY_COST_PUI,
       purchasedToday: result.purchasedToday,
       via: principal.source,
     },
@@ -206,6 +206,6 @@ export async function handleAcchiBuyExtraPlay(req: Request): Promise<Response> {
     balance: result.balance,
     purchasedToday: result.purchasedToday,
     maxPerDay: result.maxPerDay,
-    cost: EXTRA_PLAY_COST_FAN_POINTS,
+    cost: EXTRA_PLAY_COST_PUI,
   });
 }

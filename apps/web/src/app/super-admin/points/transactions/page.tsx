@@ -11,9 +11,9 @@ import { requireSuperAdmin } from '@/auth';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { findPointAnomalies } from '@/lib/points';
+import { findPuiAnomalies } from '@/lib/points';
 
-export const metadata: Metadata = { title: 'ポイント取引ログ | Super Admin' };
+export const metadata: Metadata = { title: 'Pui 取引ログ | Super Admin' };
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 50;
@@ -66,8 +66,8 @@ export default async function PointsTransactionsPage({
   };
 
   const [anomalies, transactions, total] = await Promise.all([
-    findPointAnomalies(),
-    prisma.pointTransaction.findMany({
+    findPuiAnomalies(),
+    prisma.puiTransaction.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
@@ -76,7 +76,7 @@ export default async function PointsTransactionsPage({
         user: { select: { email: true, displayName: true, memberNumber: true } },
       },
     }),
-    prisma.pointTransaction.count({ where }),
+    prisma.puiTransaction.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -85,9 +85,9 @@ export default async function PointsTransactionsPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">ポイント取引ログ</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Pui 取引ログ</h1>
           <p className="mt-1 text-sm text-slate-600">
-            全ユーザーのポイント増減履歴と整合性チェックを確認できます。
+            全ユーザーの Pui 増減履歴と整合性チェックを確認できます。
           </p>
         </div>
         <div className="flex gap-2 text-sm">
@@ -113,7 +113,7 @@ export default async function PointsTransactionsPage({
         <CardBody>
           {anomalies.length === 0 ? (
             <p className="text-sm text-slate-500">
-              すべてのユーザーで「保有ポイント = 取引台帳の合計」が一致しています。
+              すべてのユーザーで「保有 Pui = 取引台帳の合計」が一致しています。
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -121,7 +121,7 @@ export default async function PointsTransactionsPage({
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-400">
                     <th className="px-3 py-2">ユーザー</th>
-                    <th className="px-3 py-2 text-right">保有pt</th>
+                    <th className="px-3 py-2 text-right">保有 Pui</th>
                     <th className="px-3 py-2 text-right">台帳合計</th>
                     <th className="px-3 py-2 text-right">差分</th>
                     <th className="px-3 py-2 text-right">取引数</th>

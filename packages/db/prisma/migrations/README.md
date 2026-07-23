@@ -151,3 +151,62 @@ psql "$DATABASE_URL" -f prisma/migrations/20260721002000_drop_reward_point_curre
    このマイグレーションとは無関係に差分として出る既知の仕様であり問題ない)。
 4. `pnpm --filter @idol/db exec prisma generate` が成功し、Prisma Client が
    新スキーマ (rewardPoints フィールド無し) で再生成されることを確認。
+
+## 通貨名変更マイグレーション: Fan ポイント → Pui (2026-07)
+
+`20260723000000_rename_points_to_pui/migration.sql` は、上記の Fan ポイント/
+特典ポイント統合が完了した後、通貨名そのものを「Fan ポイント」から「Pui」へ
+変更するリネーム専用マイグレーションです。**データ移行は発生せず**、既存の
+enum / テーブル / カラムを `RENAME` するのみです (値は一切変更しない)。
+
+リネーム対象 (前提: 20260721002000_drop_reward_point_currency_columns 適用済み):
+
+- `PointReason` (enum) → `PuiReason`
+- `GamePurchasePayMethod` の値 `'FAN_POINT'` → `'PUI'`
+- `point_transactions` (table) → `pui_transactions`
+  (付随する PK 制約・FK 制約・インデックス名も追随してリネーム)
+- `users.points` → `users.pui`
+- `game_scenarios.fan_point_price` → `game_scenarios.pui_price`
+- `game_items.fan_point_price` → `game_items.pui_price`
+- `player_purchases.fan_point_amount` → `player_purchases.pui_amount`
+- `reward_point_packs.points` → `reward_point_packs.pui`
+- `reward_point_purchases.points` → `reward_point_purchases.pui`
+- `reward_catalog_items.point_cost` → `reward_catalog_items.pui_cost`
+- `reward_redemptions.point_cost` → `reward_redemptions.pui_cost`
+- `mini_game_plays.reward_point` → `mini_game_plays.reward_pui`
+- `monthly_reward_point_grants.points` → `monthly_reward_point_grants.pui`
+- `mini_game_extra_play_purchases.total_fan_points_spent` →
+  `mini_game_extra_play_purchases.total_pui_spent`
+
+**重要**: `RewardPointPack` / `RewardPointPurchase` / `RewardCatalogItem` /
+`RewardRedemption` / `MonthlyRewardPointGrant` といったモデル名・テーブル名
+自体 (`reward_point_packs` 等) は意図的に変更していません (既存の設計判断を
+維持)。変更したのはこれらモデル内部の通貨系カラムのみです。
+
+### 適用方法
+
+```bash
+psql "$DATABASE_URL" -f prisma/migrations/20260723000000_rename_points_to_pui/migration.sql
+```
+
+`_prisma_migrations` 管理テーブルを使っている環境では、適用後に
+`prisma migrate resolve --applied 20260723000000_rename_points_to_pui` を実行して記録を揃えること。
+
+### 検証済み事項 (ローカル PostgreSQL 15 で確認)
+
+1. 上記マイグレーションを適用し、`\dt` / `\dT` で `pui_transactions` テーブルと
+   `PuiReason` enum が期待通り存在することを確認。
+2. `prisma migrate diff --from-url <db> --to-schema-datamodel prisma/schema.prisma --script`
+   の差分が `promo_until` (schema.prisma 管理外の既知の差分) のみであることを確認。
+3. `pnpm --filter @idol/db exec prisma generate` が成功し、Prisma Client が
+   新スキーマ (`user.pui` / `tx.puiTransaction` 等) で再生成されることを確認。
+
+### 未対応の既知リスク (このマイグレーションでは対応していない)
+
+`packages/shared/src/membership.ts` の `AppSetting` 設定キー
+`POINT_RATES_SETTING_KEY` (旧値 `'points.rates'`) は `PUI_RATES_SETTING_KEY`
+(新値 `'pui.rates'`) にコード上リネームされたが、既存の `AppSetting` 行の
+`key` 列自体はこのマイグレーションでは書き換えていない。本番導入前に、
+`UPDATE "app_settings" SET key = 'pui.rates' WHERE key = 'points.rates';`
+相当のデータ移行を追加するか、アプリ側で旧キーからのフォールバック読み込みを
+実装する必要がある。

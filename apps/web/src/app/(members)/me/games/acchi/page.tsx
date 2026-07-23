@@ -21,7 +21,7 @@ export default async function AcchiGamePage() {
     getAcchiPlayCountToday(session.user.id),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true },
+      select: { pui: true },
     }),
     getAcchiVoiceUrlMap(),
     getCharacterImageUrlMap(),
@@ -43,7 +43,7 @@ export default async function AcchiGamePage() {
             ? PROMO_UNLIMITED_REMAINING
             : remainingPlays(playedToday),
           promoActive,
-          balance: user?.points ?? 0,
+          balance: user?.pui ?? 0,
         }}
         voiceUrls={voiceUrls}
         characterImageUrls={characterImageUrls}
