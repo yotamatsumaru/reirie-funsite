@@ -13,7 +13,7 @@ import { SocialShareInputSchema, SOCIAL_PLATFORMS, jstDateKey } from '@idol/shar
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import { getPointRates } from '@/lib/app-setting';
+import { getPuiRates } from '@/lib/app-setting';
 import { grantSocialShare } from '@/lib/points';
 
 export const runtime = 'nodejs';
@@ -42,7 +42,7 @@ export const POST = handle(async (req: Request) => {
     throw errors.unprocessable('プラットフォームを指定してください', body.error.flatten());
   }
 
-  const rates = await getPointRates();
+  const rates = await getPuiRates();
   const result = await grantSocialShare(session.user.id, body.data.platform, rates);
 
   if (result.granted) {

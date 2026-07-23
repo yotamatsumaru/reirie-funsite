@@ -4,7 +4,7 @@
  * あっちむいてPUI ミニゲーム (クライアント UI)。
  *
  * 重要: このコンポーネントは「演出」のみを担当する。
- * 勝敗・CPU の方向・ポイント付与はすべてサーバー (POST /api/me/games/acchi) が確定する。
+ * 勝敗・CPU の方向・Pui 付与はすべてサーバー (POST /api/me/games/acchi) が確定する。
  * 送信するのはプレイヤーが指した「方向」だけ。
  *
  * === ルール (方向対決 1 ラウンドのみ) ===
@@ -145,7 +145,7 @@ export function AcchiGameClient({
   // 2. 演出 (reveal):
   //      方向一致 (プレイヤー勝ち) → win + voiceWin → 「結果を確認」ボタン待ち → 結果へ
   //      方向不一致 (プレイヤー負け) → lose + voiceLose → 「結果を確認」ボタン待ち → 結果へ
-  // 3. 結果 (result): 勝利時のみポイント音 (point)。
+  // 3. 結果 (result): 勝利時のみ Pui 獲得音 (point)。
   //      もう一度 → もう一戦を促す音声 (voiceAgain) → スタート画面へ
   //      終了     → またね音声 (voiceBye) → 会員カードへ
 
@@ -166,7 +166,7 @@ export function AcchiGameClient({
     setAwaitingAction(true);
   }, [phase, outcome, sound]);
 
-  // 結果フェーズに入ったら、勝利報酬のポイント獲得音のみ鳴らす。
+  // 結果フェーズに入ったら、勝利報酬の Pui 獲得音のみ鳴らす。
   // 勝敗ボイス/効果音は reveal フェーズで既に再生済み。
   useEffect(() => {
     if (phase !== 'result' || !outcome) return;
@@ -187,7 +187,7 @@ export function AcchiGameClient({
   }
 
   // 【方向選択】トリガーで方向を選んで離す → サーバーが方向対決を確定
-  // (プレイ回数消費・ポイント付与も同時に行われる)。
+  // (プレイ回数消費・Pui 付与も同時に行われる)。
   async function selectDirection(dir: AcchiDirection) {
     // 二重送信ガード (ref を同期チェック)。
     if (!canPlay || loading || submittingRef.current) return;
@@ -285,7 +285,7 @@ export function AcchiGameClient({
         </div>
         <p className="mt-1 text-sm text-white/80">
           {CHARACTER_NAME} と勝負！勝てば{' '}
-          <span className="font-bold text-amber-300">{initial.winReward}pt</span> ゲット！
+          <span className="font-bold text-amber-300">{initial.winReward} Pui</span> ゲット！
         </p>
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="rounded-full bg-white/15 px-3 py-1">
@@ -303,7 +303,7 @@ export function AcchiGameClient({
             )}
           </span>
           <span className="rounded-full bg-white/15 px-3 py-1">
-            保有ポイント <span className="font-bold text-amber-300">{balance.toLocaleString()}</span>pt
+            保有 Pui <span className="font-bold text-amber-300">{balance.toLocaleString()}</span>
           </span>
         </div>
       </div>
@@ -331,7 +331,7 @@ export function AcchiGameClient({
           </p>
           <p className="mb-6 text-sm text-slate-500">
             方向を当てたらキミの勝ち！勝てば{' '}
-            <span className="font-bold text-amber-600">{initial.winReward}pt</span> ゲット！
+            <span className="font-bold text-amber-600">{initial.winReward} Pui</span> ゲット！
           </p>
           <Button onClick={startGame} variant="primary" size="lg">
             タップしてスタート
@@ -491,10 +491,10 @@ function ResultCard({
 
       {win ? (
         <p className="mt-4 rounded-full bg-amber-200 px-4 py-2 font-bold text-amber-900">
-          +{outcome.reward}pt 獲得！ (残高 {outcome.balance.toLocaleString()}pt)
+          +{outcome.reward} Pui 獲得！ (残高 {outcome.balance.toLocaleString()} Pui)
         </p>
       ) : (
-        <p className="mt-4 text-sm text-slate-500">残高 {outcome.balance.toLocaleString()}pt</p>
+        <p className="mt-4 text-sm text-slate-500">残高 {outcome.balance.toLocaleString()} Pui</p>
       )}
 
       <p className="mt-3 text-xs text-slate-400">

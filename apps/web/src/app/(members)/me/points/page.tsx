@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
-import type { PointTransaction, RewardRedemption } from '@idol/db';
+import type { PuiTransaction, RewardRedemption } from '@idol/db';
 import {
   REWARD_REDEMPTION_STATUS_LABELS,
   type RewardRedemptionStatusLiteral,
@@ -11,15 +11,15 @@ import { auth } from '@/auth';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
-export const metadata: Metadata = { title: 'ポイント履歴' };
+export const metadata: Metadata = { title: 'Pui 履歴' };
 export const dynamic = 'force-dynamic';
 
 /**
- * Fan ポイント取引の理由ラベル。
+ * Pui 取引の理由ラベル。
  *
  * 【2026-07 統合】以前は Fan ポイントと特典ポイント (旧 RewardPointReason) の
- * 2 種類の理由 enum があったが、Fan ポイント 1 種類への統合により
- * PointReason に一本化された。STRIPE_PURCHASE/SUBSCRIPTION_BONUS/REDEMPTION/
+ * 2 種類の理由 enum があったが、Pui 1 種類への統合により
+ * PuiReason に一本化された。STRIPE_PURCHASE/SUBSCRIPTION_BONUS/REDEMPTION/
  * REFUND は旧 RewardPointReason から移ってきた理由。
  */
 const FAN_REASON_LABELS: Record<string, string> = {
@@ -29,9 +29,9 @@ const FAN_REASON_LABELS: Record<string, string> = {
   ADMIN_ADJUST: '運営による調整',
   SIGNUP_BONUS: '新規登録ボーナス',
   GAME_REWARD: 'ミニゲーム勝利報酬',
-  ITEM_PURCHASE: '恋愛ADV購入 (Fanポイント)',
+  ITEM_PURCHASE: '恋愛ADV購入 (Pui)',
   EXTRA_PLAY_PURCHASE: 'ミニゲーム追加プレイ購入',
-  STRIPE_PURCHASE: 'ポイントパック購入',
+  STRIPE_PURCHASE: 'Pui パック購入',
   SUBSCRIPTION_BONUS: 'サブスク月次特典',
   REDEMPTION: '景品交換',
   REFUND: '交換キャンセル返還',
@@ -57,9 +57,9 @@ export default async function PointsHistoryPage() {
   const [user, fanTransactions, redemptions] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { points: true },
+      select: { pui: true },
     }),
-    prisma.pointTransaction.findMany({
+    prisma.puiTransaction.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -71,14 +71,14 @@ export default async function PointsHistoryPage() {
     }),
   ]);
 
-  const fanBalance = user?.points ?? 0;
+  const fanBalance = user?.pui ?? 0;
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-10">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">ポイント履歴</h1>
-          <p className="mt-1 text-sm text-slate-500">Fan ポイントの残高と履歴</p>
+          <h1 className="text-2xl font-bold text-slate-800">Pui 履歴</h1>
+          <p className="mt-1 text-sm text-slate-500">Pui の残高と履歴</p>
         </div>
         <Link href="/me/card" className="text-sm text-brand-600 hover:underline">
           会員カードへ戻る
@@ -88,10 +88,9 @@ export default async function PointsHistoryPage() {
       {/* 残高サマリー */}
       <Card>
         <CardBody>
-          <p className="text-sm text-slate-500">Fan ポイント</p>
+          <p className="text-sm text-slate-500">Pui</p>
           <p className="mt-1 text-3xl font-bold text-slate-900">
             {fanBalance.toLocaleString()}
-            <span className="ml-1 text-base font-normal text-slate-500">pt</span>
           </p>
           <p className="mt-2 text-xs text-slate-500">
             ログイン・SNSシェア・ミニゲームで貯まり、購入 or サブスク月次特典でも増えます。
@@ -102,7 +101,7 @@ export default async function PointsHistoryPage() {
               ゲームで使う →
             </Link>
             <Link href="/me/rewards/buy" className="inline-block text-xs text-brand-600 hover:underline">
-              ポイントを購入する →
+              Pui を購入する →
             </Link>
             <Link href="/me/rewards" className="inline-block text-xs text-brand-600 hover:underline">
               景品と交換する →
@@ -111,19 +110,19 @@ export default async function PointsHistoryPage() {
         </CardBody>
       </Card>
 
-      {/* Fan ポイント履歴 */}
+      {/* Pui 履歴 */}
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">Fan ポイント 取引履歴</h2>
+          <h2 className="text-lg font-semibold">Pui 取引履歴</h2>
         </CardHeader>
         <CardBody className="p-0">
           {fanTransactions.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-slate-500">
-              まだ Fan ポイント履歴はありません。会員カードからログインボーナスやSNSシェアでポイントを貯めましょう。
+              まだ Pui 履歴はありません。会員カードからログインボーナスやSNSシェアで Pui を貯めましょう。
             </p>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {fanTransactions.map((t: PointTransaction) => (
+              {fanTransactions.map((t: PuiTransaction) => (
                 <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -148,9 +147,9 @@ export default async function PointsHistoryPage() {
                       }`}
                     >
                       {t.amount > 0 ? '+' : ''}
-                      {t.amount.toLocaleString()}pt
+                      {t.amount.toLocaleString()} Pui
                     </p>
-                    <p className="text-xs text-slate-400">残高 {t.balance.toLocaleString()}pt</p>
+                    <p className="text-xs text-slate-400">残高 {t.balance.toLocaleString()} Pui</p>
                   </div>
                 </li>
               ))}
@@ -188,7 +187,7 @@ export default async function PointsHistoryPage() {
                       {REWARD_REDEMPTION_STATUS_LABELS[r.status as RewardRedemptionStatusLiteral]}
                     </Badge>
                     <p className="mt-1 text-xs text-slate-400">
-                      -{r.pointCost.toLocaleString()}pt
+                      -{r.puiCost.toLocaleString()} Pui
                     </p>
                   </div>
                 </li>

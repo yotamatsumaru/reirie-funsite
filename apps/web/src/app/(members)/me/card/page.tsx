@@ -14,7 +14,7 @@ import { auth } from '@/auth';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { ensureMemberNumber } from '@/lib/points';
-import { getPointRates } from '@/lib/app-setting';
+import { getPuiRates } from '@/lib/app-setting';
 import { getMemberRank } from '@/lib/membership-rank';
 import { env } from '@/lib/env';
 import { PointActions } from './point-actions';
@@ -59,7 +59,7 @@ export default async function MemberCardPage() {
       where: { id: userId },
       select: { displayName: true, email: true, points: true, createdAt: true },
     }),
-    getPointRates(),
+    getPuiRates(),
     // 連続日数算出のため前日の付与を見る
     prisma.loginBonusGrant.findUnique({
       where: { userId_date: { userId, date: previousJstDateKey(today) } },
@@ -76,7 +76,7 @@ export default async function MemberCardPage() {
   ]);
 
   const theme = CARD_THEME[plan];
-  const points = user?.points ?? 0;
+  const points = user?.pui ?? 0;
   const joinedAt = user?.createdAt ?? new Date();
 
   // 連続ログイン日数: 今日受取済みなら今日の streak、
@@ -161,13 +161,13 @@ export default async function MemberCardPage() {
         </div>
       </div>
 
-      {/* ポイント獲得アクション */}
+      {/* Pui 獲得アクション */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">ポイントを貯める</h2>
+            <h2 className="text-lg font-semibold">Pui を貯める</h2>
             <Link href="/me/points" className="text-sm text-brand-600 hover:underline">
-              ポイント履歴 →
+              Pui 履歴 →
             </Link>
           </div>
         </CardHeader>

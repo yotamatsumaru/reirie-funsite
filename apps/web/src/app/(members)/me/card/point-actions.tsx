@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * 会員カードページのポイント獲得アクション。
+ * 会員カードページの Pui 獲得アクション。
  *  - ログインボーナス受取 (1日1回)
  *  - SNS シェア (X / Instagram, 各1日1回)
  *
@@ -35,7 +35,7 @@ export function PointActions({
     loginBonusBase: number;
     loginStreakBonus: number;
     loginStreakThreshold: number;
-    socialSharePoints: number;
+    socialSharePui: number;
   };
 }) {
   const router = useRouter();
@@ -61,7 +61,7 @@ export function PointActions({
       if (j.granted) {
         setMessage({
           tone: 'ok',
-          text: `ログインボーナス ${j.amount}pt を獲得！（連続 ${j.streak} 日）`,
+          text: `ログインボーナス ${j.amount} Pui を獲得！（連続 ${j.streak} 日）`,
         });
       } else {
         setMessage({ tone: 'err', text: '本日のログインボーナスは受取済みです' });
@@ -90,9 +90,9 @@ export function PointActions({
       };
       if (!res.ok) throw new Error(j.error?.message ?? '付与に失敗しました');
       if (j.granted) {
-        setMessage({ tone: 'ok', text: `シェアありがとう！ ${j.amount}pt を獲得しました` });
+        setMessage({ tone: 'ok', text: `シェアありがとう！ ${j.amount} Pui を獲得しました` });
       } else {
-        setMessage({ tone: 'err', text: '本日このSNSのシェアポイントは受取済みです' });
+        setMessage({ tone: 'err', text: '本日このSNSのシェア Pui は受取済みです' });
       }
       router.refresh();
     } catch (e) {
@@ -152,8 +152,8 @@ export function PointActions({
           <div>
             <p className="text-sm font-semibold text-slate-800">毎日のログインボーナス</p>
             <p className="mt-0.5 text-xs text-slate-500">
-              毎日 {rates.loginBonusBase}pt ／ {rates.loginStreakThreshold}日連続で +
-              {rates.loginStreakBonus}pt
+              毎日 {rates.loginBonusBase} Pui ／ {rates.loginStreakThreshold}日連続で +
+              {rates.loginStreakBonus} Pui
             </p>
             {loginStreak > 0 && (
               <p className="mt-1 text-xs font-semibold text-brand-600">
@@ -187,9 +187,9 @@ export function PointActions({
 
       {/* SNS シェア */}
       <div className="rounded-lg border border-slate-200 p-4">
-        <p className="text-sm font-semibold text-slate-800">SNSでシェアしてポイント獲得</p>
+        <p className="text-sm font-semibold text-slate-800">SNSでシェアして Pui 獲得</p>
         <p className="mt-0.5 text-xs text-slate-500">
-          各SNS 1日1回まで ／ 1回 {rates.socialSharePoints}pt
+          各SNS 1日1回まで ／ 1回 {rates.socialSharePui} Pui
         </p>
 
         <div className="mt-3 space-y-3">
@@ -208,7 +208,7 @@ export function PointActions({
                   loading={busy === 'X'}
                   onClick={() => reportShare('X')}
                 >
-                  +{rates.socialSharePoints}pt 受取
+                  +{rates.socialSharePui} Pui 受取
                 </Button>
               )}
             </div>
@@ -229,14 +229,14 @@ export function PointActions({
                   loading={busy === 'INSTAGRAM'}
                   onClick={() => reportShare('INSTAGRAM')}
                 >
-                  +{rates.socialSharePoints}pt 受取
+                  +{rates.socialSharePui} Pui 受取
                 </Button>
               )}
             </div>
           </div>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-          ※ シェアボタンで投稿後、「受取」を押すとポイントが付与されます。
+          ※ シェアボタンで投稿後、「受取」を押すと Pui が付与されます。
         </p>
       </div>
     </div>

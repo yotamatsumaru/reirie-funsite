@@ -1,15 +1,15 @@
 /**
  * 永続アプリ設定 (AppSetting) の読み書きヘルパ。
  *  - value は JSON 文字列で保存される。
- *  - 現状はポイント付与レート (points.rates) を保持する。
+ *  - 現状は Pui 付与レート (pui.rates) を保持する。
  *  - 本番 (RDS) で永続し、PM2 cluster の全プロセスが同じ値を参照する。
  */
 import { prisma } from '@idol/db';
 import {
-  DEFAULT_POINT_RATES,
-  POINT_RATES_SETTING_KEY,
-  PointRateSettingsSchema,
-  type PointRateSettings,
+  DEFAULT_PUI_RATES,
+  PUI_RATES_SETTING_KEY,
+  PuiRateSettingsSchema,
+  type PuiRateSettings,
   ACCHI_WIN_SETTINGS_KEY,
   DEFAULT_ACCHI_WIN_SETTINGS,
   AcchiWinSettingsByPlanSchema,
@@ -30,28 +30,41 @@ import {
 } from '@idol/shared';
 
 /**
- * ポイント付与レートを取得する。
+ * Pui 付与レートを取得する。
  * 未設定 / 破損時はデフォルト値を返す (安全側)。
+ * 【2026-07 通貨名変更】設定キーは旧 'points.rates' から 'pui.rates' に変更した。
+ * 旧キーで保存された既存行からのフォールバック読み込みにも対応する。
  */
-export async function getPointRates(): Promise<PointRateSettings> {
+export async function getPuiRates(): Promise<PuiRateSettings> {
   try {
     const row = await prisma.appSetting.findUnique({
-      where: { key: POINT_RATES_SETTING_KEY },
+      where: { key: PUI_RATES_SETTING_KEY },
     });
-    if (!row) return DEFAULT_POINT_RATES;
-    const parsed = PointRateSettingsSchema.safeParse(JSON.parse(row.value));
-    return parsed.success ? parsed.data : DEFAULT_POINT_RATES;
+    if (row) {
+      const parsed = PuiRateSettingsSchema.safeParse(JSON.parse(row.value));
+      if (parsed.success) return parsed.data;
+    } else {
+      // 旧キー ('points.rates') に残っている可能性のある設定を読み込む (移行未実施環境向け)。
+      const legacyRow = await prisma.appSetting.findUnique({
+        where: { key: 'points.rates' },
+      });
+      if (legacyRow) {
+        const parsedLegacy = PuiRateSettingsSchema.safeParse(JSON.parse(legacyRow.value));
+        if (parsedLegacy.success) return parsedLegacy.data;
+      }
+    }
+    return DEFAULT_PUI_RATES;
   } catch {
-    return DEFAULT_POINT_RATES;
+    return DEFAULT_PUI_RATES;
   }
 }
 
-/** ポイント付与レートを保存する (バリデーション済みの値を渡すこと) */
-export async function setPointRates(rates: PointRateSettings): Promise<PointRateSettings> {
-  const value = JSON.stringify(PointRateSettingsSchema.parse(rates));
+/** Pui 付与レートを保存する (バリデーション済みの値を渡すこと) */
+export async function setPuiRates(rates: PuiRateSettings): Promise<PuiRateSettings> {
+  const value = JSON.stringify(PuiRateSettingsSchema.parse(rates));
   await prisma.appSetting.upsert({
-    where: { key: POINT_RATES_SETTING_KEY },
-    create: { key: POINT_RATES_SETTING_KEY, value },
+    where: { key: PUI_RATES_SETTING_KEY },
+    create: { key: PUI_RATES_SETTING_KEY, value },
     update: { value },
   });
   return rates;

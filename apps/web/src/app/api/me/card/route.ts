@@ -17,7 +17,7 @@ export const GET = handle(async (req: Request) => {
     select: {
       displayName: true,
       email: true,
-      points: true,
+      pui: true,
       createdAt: true,
     },
   });
@@ -25,7 +25,7 @@ export const GET = handle(async (req: Request) => {
     memberNumber,
     displayName: user?.displayName ?? null,
     email: user?.email ?? null,
-    points: user?.points ?? 0,
+    points: user?.pui ?? 0,
     plan: session.user.plan,
     joinedAt: user?.createdAt ?? null,
   });
