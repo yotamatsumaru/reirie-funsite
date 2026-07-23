@@ -700,7 +700,7 @@ paths:
   /api/me/points:
     get:
       tags: [Me]
-      summary: ポイント残高 & 取引履歴 (直近50件)
+      summary: Pui 残高 & 取引履歴 (直近50件)
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200': { description: 成功 }
@@ -729,7 +729,7 @@ paths:
         '200': { description: 成功 }
     post:
       tags: [Me]
-      summary: SNS シェアを報告してポイント付与 (X / Instagram, 1日1回まで)
+      summary: SNS シェアを報告して Pui 付与 (X / Instagram, 1日1回まで)
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
@@ -796,10 +796,10 @@ paths:
   /api/me/reward-points/purchase:
     post:
       tags: [Me]
-      summary: Fan ポイントパックを Stripe Checkout で購入
+      summary: Pui パックを Stripe Checkout で購入
       description: |
         確定は Stripe Webhook (`/api/game/webhook`) で行う。
-        2026-07 のポイント統合により、購入されたポイントは Fan ポイント (`User.points`) に
+        2026-07 のポイント統合により、購入されたポイントは Pui (`User.pui`) に
         直接加算される (残高取得は `/api/me/points` を使用)。
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
@@ -813,7 +813,7 @@ paths:
                 packId: { type: string }
       responses:
         '200': { description: Checkout URL 発行成功 }
-        '404': { description: ポイントパックが見つからない }
+        '404': { description: Pui パックが見つからない }
 
   /api/me/reward-redemptions:
     get:
@@ -824,7 +824,7 @@ paths:
         '200': { description: 成功 }
     post:
       tags: [Me]
-      summary: 景品交換申請 (特典ポイント消費)
+      summary: 景品交換申請 (Pui 消費)
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
@@ -947,7 +947,7 @@ paths:
   /api/game/purchase:
     post:
       tags: [Game]
-      summary: 章/アイテムを購入 (Stripe課金 または Fanポイント)
+      summary: 章/アイテムを購入 (Stripe課金 または Pui)
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       requestBody:
         required: true
@@ -958,13 +958,13 @@ paths:
               required: [kind, payMethod]
               properties:
                 kind: { type: string, enum: [SCENARIO, ITEM] }
-                payMethod: { type: string, enum: [STRIPE, FAN_POINT] }
+                payMethod: { type: string, enum: [STRIPE, PUI] }
                 scenarioId: { type: string }
                 itemId: { type: string }
                 quantity: { type: integer, minimum: 1 }
       responses:
         '200': { description: 成功 (STRIPE の場合は checkoutUrl を含む) }
-        '409': { description: 既に購入済み/所持上限超過/ポイント不足 }
+        '409': { description: 既に購入済み/所持上限超過/Pui 不足 }
 
   # ─── Call (1on1 通話) ───────────────────────────────────────────────
   /api/call/redeem:
@@ -1211,7 +1211,7 @@ paths:
   /api/v1/auth/me:
     get:
       tags: [API v1 (Mobile/Unity)]
-      summary: 現在のユーザー情報とポイント残高
+      summary: 現在のユーザー情報と Pui 残高
       security: [{ bearerAuth: [] }, { sessionCookie: [] }]
       responses:
         '200':
@@ -1226,7 +1226,7 @@ paths:
                   displayName: { type: string, nullable: true }
                   role: { type: string }
                   plan: { type: string }
-                  points: { type: integer }
+                  pui: { type: integer }
                   authSource: { type: string, enum: [bearer, cookie] }
         '401': { description: 未認証 }
 
@@ -1258,8 +1258,8 @@ paths:
       summary: あっち向いてホイ — 1 プレイ実行
       description: |
         プレイヤーの「指す方向」を送信する。
-        CPU の向く方向・勝敗・ポイント付与はすべてサーバーで確定する
-        (クライアントから結果やポイントは受け取らない)。
+        CPU の向く方向・勝敗・Pui 付与はすべてサーバーで確定する
+        (クライアントから結果や Pui は受け取らない)。
         本日の上限 (5 回) に達している場合は 429 を返す。
 
         2026年7月〜: じゃんけんフェーズを廃止し、方向対決のみの単一ラウンド制。
@@ -1295,7 +1295,7 @@ paths:
                   result:
                     type: string
                     enum: [WIN, LOSE]
-                  reward: { type: integer, description: 付与ポイント (勝利時のみ > 0) }
+                  reward: { type: integer, description: 付与 Pui (勝利時のみ > 0) }
                   balance: { type: integer }
                   playedToday: { type: integer }
                   remaining: { type: integer }

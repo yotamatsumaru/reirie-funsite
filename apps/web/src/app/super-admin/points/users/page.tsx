@@ -1,8 +1,8 @@
 /**
- * /super-admin/points/users — 全ユーザーのポイント状況監視
+ * /super-admin/points/users — 全ユーザーの Pui 状況監視
  *
- * SUPER_ADMIN 限定。各ユーザーの保有ポイント・会員番号・台帳合計・整合性を一覧表示し、
- * 検索・ページングできる。台帳 (PointTransaction) との差分 (diff) も併記し、
+ * SUPER_ADMIN 限定。各ユーザーの保有 Pui ・会員番号・台帳合計・整合性を一覧表示し、
+ * 検索・ページングできる。台帳 (PuiTransaction) との差分 (diff) も併記し、
  * 不整合があれば視覚的に警告する。
  */
 import type { Metadata } from 'next';
@@ -13,7 +13,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { PointAdjustButton } from './adjust-button';
 
-export const metadata: Metadata = { title: 'ポイント状況 (全ユーザー) | Super Admin' };
+export const metadata: Metadata = { title: 'Pui 状況 (全ユーザー) | Super Admin' };
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 30;
@@ -48,10 +48,10 @@ export default async function PointsUsersPage({
         email: true,
         displayName: true,
         memberNumber: true,
-        points: true,
+        pui: true,
         role: true,
       },
-      orderBy: { points: 'desc' },
+      orderBy: { pui: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
@@ -61,7 +61,7 @@ export default async function PointsUsersPage({
   // 台帳合計を一括取得して整合性チェック
   const userIds = users.map((u) => u.id);
   const sums = userIds.length
-    ? await prisma.pointTransaction.groupBy({
+    ? await prisma.puiTransaction.groupBy({
         by: ['userId'],
         where: { userId: { in: userIds } },
         _sum: { amount: true },
@@ -75,14 +75,14 @@ export default async function PointsUsersPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">ポイント状況 (全ユーザー)</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Pui 状況 (全ユーザー)</h1>
           <p className="mt-1 text-sm text-slate-600">
-            保有ポイントと台帳合計を突き合わせて監視します。差分があるユーザーは警告表示されます。
+            保有 Pui と台帳合計を突き合わせて監視します。差分があるユーザーは警告表示されます。
           </p>
         </div>
         <div className="flex gap-2 text-sm">
           <Link href="/super-admin/points" className="text-slate-500 hover:underline">
-            ポイント設定
+            Pui 設定
           </Link>
           <Link href="/super-admin/points/transactions" className="text-brand-600 hover:underline">
             取引ログ →
@@ -115,7 +115,7 @@ export default async function PointsUsersPage({
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-400">
                   <th className="px-4 py-3">ユーザー</th>
                   <th className="px-4 py-3">会員番号</th>
-                  <th className="px-4 py-3 text-right">保有pt</th>
+                  <th className="px-4 py-3 text-right">保有 Pui</th>
                   <th className="px-4 py-3 text-right">台帳合計</th>
                   <th className="px-4 py-3 text-center">整合性</th>
                   <th className="px-4 py-3 text-right">操作</th>
@@ -131,8 +131,8 @@ export default async function PointsUsersPage({
                 ) : (
                   users.map((u) => {
                     const ledger = ledgerByUser.get(u.id) ?? 0;
-                    const diff = u.points - ledger;
-                    const consistent = diff === 0 && u.points >= 0;
+                    const diff = u.pui - ledger;
+                    const consistent = diff === 0 && u.pui >= 0;
                     return (
                       <tr key={u.id} className={consistent ? '' : 'bg-rose-50/60'}>
                         <td className="px-4 py-3">
@@ -145,7 +145,7 @@ export default async function PointsUsersPage({
                           {u.memberNumber ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">
-                          {u.points.toLocaleString()}
+                          {u.pui.toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-600">
                           {ledger.toLocaleString()}
@@ -161,7 +161,7 @@ export default async function PointsUsersPage({
                           <PointAdjustButton
                             userId={u.id}
                             label={u.displayName || u.email || u.id}
-                            currentBalance={u.points}
+                            currentBalance={u.pui}
                             inconsistent={!consistent}
                           />
                         </td>

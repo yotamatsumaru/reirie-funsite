@@ -1,5 +1,5 @@
 /**
- * 特典ポイントパック フォーム (作成 / 編集)
+ * Pui パック フォーム (作成 / 編集)
  */
 'use client';
 
@@ -11,7 +11,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 
 interface PackInitial {
   name: string;
-  points: number;
+  pui: number;
   priceJpy: number;
   isActive: boolean;
   sortOrder: number;
@@ -29,7 +29,7 @@ export function PackForm({ mode, id, initial }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: initial?.name ?? '',
-    points: initial?.points ?? 500,
+    pui: initial?.pui ?? 500,
     priceJpy: initial?.priceJpy ?? 500,
     isActive: initial?.isActive ?? true,
     sortOrder: initial?.sortOrder ?? 0,
@@ -45,7 +45,7 @@ export function PackForm({ mode, id, initial }: Props) {
     try {
       const body = {
         name: form.name,
-        points: Number(form.points),
+        pui: Number(form.pui),
         priceJpy: Number(form.priceJpy),
         isActive: form.isActive,
         sortOrder: Number(form.sortOrder),
@@ -104,10 +104,10 @@ export function PackForm({ mode, id, initial }: Props) {
               required
             />
             <Input
-              label="付与ポイント数"
+              label="付与 Pui 数"
               type="number"
-              value={form.points}
-              onChange={(e) => onChange('points', e.target.value)}
+              value={form.pui}
+              onChange={(e) => onChange('pui', e.target.value)}
               inputMode="numeric"
               required
             />

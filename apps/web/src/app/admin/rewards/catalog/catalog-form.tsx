@@ -15,7 +15,7 @@ interface CatalogInitial {
   name: string;
   description?: string | null;
   imageUrl?: string | null;
-  pointCost: number;
+  puiCost: number;
   stock?: number | null;
   status: string;
   sortOrder: number;
@@ -37,7 +37,7 @@ export function CatalogForm({ mode, id, initial }: Props) {
     name: initial?.name ?? '',
     description: initial?.description ?? '',
     imageUrl: initial?.imageUrl ?? '',
-    pointCost: initial?.pointCost ?? 1000,
+    puiCost: initial?.puiCost ?? 1000,
     stock: initial?.stock ?? '',
     status: initial?.status ?? 'DRAFT',
     sortOrder: initial?.sortOrder ?? 0,
@@ -57,7 +57,7 @@ export function CatalogForm({ mode, id, initial }: Props) {
         name: form.name,
         description: form.description || undefined,
         imageUrl: form.imageUrl || undefined,
-        pointCost: Number(form.pointCost),
+        puiCost: Number(form.puiCost),
         stock: form.stock === '' ? null : Number(form.stock),
         status: form.status,
         sortOrder: Number(form.sortOrder),
@@ -134,10 +134,10 @@ export function CatalogForm({ mode, id, initial }: Props) {
               <option value="ARCHIVED">アーカイブ</option>
             </Select>
             <Input
-              label="必要特典ポイント"
+              label="必要 Pui"
               type="number"
-              value={form.pointCost}
-              onChange={(e) => onChange('pointCost', e.target.value)}
+              value={form.puiCost}
+              onChange={(e) => onChange('puiCost', e.target.value)}
               inputMode="numeric"
               required
             />

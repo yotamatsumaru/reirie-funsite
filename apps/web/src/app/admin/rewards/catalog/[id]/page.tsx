@@ -32,7 +32,7 @@ export default async function EditCatalogItemPage({
           name: item.name,
           description: item.description,
           imageUrl: item.imageUrl,
-          pointCost: item.pointCost,
+          puiCost: item.puiCost,
           stock: item.stock,
           status: item.status,
           sortOrder: item.sortOrder,

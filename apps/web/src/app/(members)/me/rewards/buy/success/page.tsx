@@ -1,8 +1,8 @@
 /**
- * /me/rewards/buy/success — Fan ポイント購入完了 (Stripe Checkout からのリダイレクト先)
+ * /me/rewards/buy/success — Pui 購入完了 (Stripe Checkout からのリダイレクト先)
  *
- * 実際のポイント付与は Stripe Webhook (checkout.session.completed) 側の
- * grantRewardPointsFromStripePurchase() で確定するため、
+ * 実際の Pui 付与は Stripe Webhook (checkout.session.completed) 側の
+ * grantPuiFromStripePurchase() で確定するため、
  * このページ表示時点では反映が数秒遅れる場合がある旨を案内する。
  */
 import type { Metadata } from 'next';
@@ -21,9 +21,9 @@ export default async function BuyRewardPointsSuccessPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { points: true },
+    select: { pui: true },
   });
-  const balance = user?.points ?? 0;
+  const balance = user?.pui ?? 0;
 
   return (
     <div className="mx-auto max-w-xl px-4 py-16">
@@ -33,14 +33,14 @@ export default async function BuyRewardPointsSuccessPage() {
             ご購入ありがとうございました
           </h1>
           <p className="mb-6 text-sm text-slate-600">
-            決済が完了しました。Fan ポイントは通常すぐに反映されますが、
+            決済が完了しました。Pui は通常すぐに反映されますが、
             <br />
             反映まで数分かかる場合があります。
           </p>
           <p className="mb-6 text-sm text-slate-500">
-            現在の保有 Fan ポイント：
+            現在の保有 Pui：
             <span className="ml-1 text-lg font-bold text-slate-900">
-              {balance.toLocaleString()}pt
+              {balance.toLocaleString()} Pui
             </span>
           </p>
           <div className="flex justify-center gap-3">

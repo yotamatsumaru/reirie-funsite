@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * 特典ポイントパック購入ボタン (Stripe Checkout 起動)
+ * Pui パック購入ボタン (Stripe Checkout 起動)
  */
 import { useState } from 'react';
 
 type Pack = {
   id: string;
   name: string;
-  points: number;
+  pui: number;
   priceJpy: number;
 };
 
@@ -50,7 +50,7 @@ export function BuyPointsClient({ packs }: { packs: Pack[] }) {
   if (packs.length === 0) {
     return (
       <p className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
-        現在購入可能な特典ポイントパックはありません。
+        現在購入可能な Pui パックはありません。
       </p>
     );
   }
@@ -64,7 +64,7 @@ export function BuyPointsClient({ packs }: { packs: Pack[] }) {
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {packs.map((pack) => {
-          const unitPrice = pack.points > 0 ? pack.priceJpy / pack.points : 0;
+          const unitPrice = pack.pui > 0 ? pack.priceJpy / pack.pui : 0;
           return (
             <div
               key={pack.id}
@@ -73,11 +73,10 @@ export function BuyPointsClient({ packs }: { packs: Pack[] }) {
               <div>
                 <p className="text-sm font-semibold text-slate-600">{pack.name}</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">
-                  {pack.points.toLocaleString()}
-                  <span className="ml-1 text-base font-normal text-slate-500">pt</span>
+                  {pack.pui.toLocaleString()} Pui
                 </p>
                 <p className="mt-1 text-xs text-slate-400">
-                  1pt あたり ¥{unitPrice.toFixed(1)}
+                  1 Pui あたり ¥{unitPrice.toFixed(1)}
                 </p>
               </div>
               <button
@@ -95,7 +94,7 @@ export function BuyPointsClient({ packs }: { packs: Pack[] }) {
         })}
       </div>
       <p className="text-xs text-slate-400">
-        決済は Stripe の安全な決済ページで行われます。購入完了後、特典ポイントは自動的に付与されます。
+        決済は Stripe の安全な決済ページで行われます。購入完了後、Pui は自動的に付与されます。
       </p>
     </div>
   );

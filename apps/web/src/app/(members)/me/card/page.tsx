@@ -57,7 +57,7 @@ export default async function MemberCardPage() {
   const [user, rates, loginGrant, todayGrant, shareGrants] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { displayName: true, email: true, points: true, createdAt: true },
+      select: { displayName: true, email: true, pui: true, createdAt: true },
     }),
     getPuiRates(),
     // 連続日数算出のため前日の付与を見る

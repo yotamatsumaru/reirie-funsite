@@ -28,7 +28,7 @@ export default async function EditRewardPointPackPage({
         id={pack.id}
         initial={{
           name: pack.name,
-          points: pack.points,
+          pui: pack.pui,
           priceJpy: pack.priceJpy,
           isActive: pack.isActive,
           sortOrder: pack.sortOrder,

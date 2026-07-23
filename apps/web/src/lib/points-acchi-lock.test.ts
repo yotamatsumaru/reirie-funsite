@@ -67,16 +67,16 @@ function makeTx() {
     user: {
       findUnique: () => {
         calls.push({ op: 'user.findUnique', args: [] });
-        return Promise.resolve({ points: 100 });
+        return Promise.resolve({ pui: 100 });
       },
       update: () => {
         calls.push({ op: 'user.update', args: [] });
-        return Promise.resolve({ points: 90 });
+        return Promise.resolve({ pui: 90 });
       },
     },
-    pointTransaction: {
+    puiTransaction: {
       create: () => {
-        calls.push({ op: 'pointTransaction.create', args: [] });
+        calls.push({ op: 'puiTransaction.create', args: [] });
         return Promise.resolve({});
       },
     },

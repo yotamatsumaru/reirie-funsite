@@ -6,10 +6,10 @@ import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getPuiRates } from '@/lib/app-setting';
-import { findPointAnomalies } from '@/lib/points';
+import { findPuiAnomalies } from '@/lib/points';
 import { RatesForm } from './rates-form';
 
-export const metadata: Metadata = { title: 'ポイント設定 | Super Admin' };
+export const metadata: Metadata = { title: 'Pui 設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminPointsPage() {
@@ -17,17 +17,17 @@ export default async function SuperAdminPointsPage() {
 
   const [rates, totalPoints, txCount, anomalies] = await Promise.all([
     getPuiRates(),
-    prisma.user.aggregate({ _sum: { points: true } }),
+    prisma.user.aggregate({ _sum: { pui: true } }),
     prisma.puiTransaction.count(),
-    findPointAnomalies(),
+    findPuiAnomalies(),
   ]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">ポイント設定</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Pui 設定</h1>
         <p className="mt-1 text-sm text-slate-600">
-          会員カードのポイント付与レートを設定します。変更は即時反映され、本番でも永続化されます。
+          会員カードの Pui 付与レートを設定します。変更は即時反映され、本番でも永続化されます。
         </p>
       </div>
 

@@ -12,7 +12,7 @@ export const GET = handle(async (req: Request) => {
   await requireApiSession(req);
   const items = await prisma.rewardCatalogItem.findMany({
     where: { status: 'PUBLISHED' },
-    orderBy: [{ sortOrder: 'asc' }, { pointCost: 'asc' }],
+    orderBy: [{ sortOrder: 'asc' }, { puiCost: 'asc' }],
     select: {
       id: true,
       slug: true,
@@ -20,7 +20,7 @@ export const GET = handle(async (req: Request) => {
       name: true,
       description: true,
       imageUrl: true,
-      pointCost: true,
+      puiCost: true,
       stock: true,
     },
   });

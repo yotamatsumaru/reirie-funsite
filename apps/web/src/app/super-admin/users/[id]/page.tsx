@@ -190,7 +190,7 @@ export default async function SuperAdminUserDetailPage({
               <Field label="最終ログイン" value={formatDateTime(user.lastLoginAt)} />
               <Field label="ログイン日数" value={`${metrics.loginDays} 日`} />
               <Field label="買い物回数" value={`${metrics.purchaseCount} 回`} />
-              <Field label="保有 Fan ポイント" value={`${user.points.toLocaleString()} pt`} />
+              <Field label="保有 Pui" value={`${user.pui.toLocaleString()}`} />
               <Field
                 label="サブスクリプション"
                 value={subscription ? `${subscription.planType} (${subscription.status})` : 'なし'}
