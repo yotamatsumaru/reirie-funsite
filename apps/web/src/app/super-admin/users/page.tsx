@@ -13,12 +13,13 @@
 import Link from 'next/link';
 import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
-import { Card, CardBody } from '@/components/ui/Card';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { type UserRoleLiteral } from '@idol/shared';
 import { UserRowActions } from './user-row-actions';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { RankTiersClient } from './rank-tiers-client';
+import { CreateFanUserForm } from './create-fan-user-form';
 import { getMemberRankTiers } from '@/lib/app-setting';
 import { getMemberRanksForUsers } from '@/lib/membership-rank';
 
@@ -93,6 +94,21 @@ export default async function SuperAdminUsersPage({
           管理者の管理へ →
         </Link>
       </header>
+
+      {/* ファンユーザーを直接登録 (会員番号を指定可能) */}
+      <Card className="mb-4">
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">
+            ファンユーザーを直接登録
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            記念会員番号 (例: RR-000000) を割り当てたい場合など、管理画面からその場でアカウントを作成します。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <CreateFanUserForm />
+        </CardBody>
+      </Card>
 
       {/* 会員ランク 昇格条件 (非公開・管理者専用) */}
       <RankTiersClient initial={rankTiers} />
