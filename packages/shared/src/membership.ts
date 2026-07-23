@@ -1,8 +1,8 @@
 /**
- * 会員カード & ポイント機能の共有定義。
+ * 会員カード & Pui 機能の共有定義。
  *  - 会員番号フォーマット (RR-000123)
  *  - JST 基準の日付キー (ログインボーナス/シェアの 1 日判定)
- *  - ポイント付与レートのデフォルト値 & 設定スキーマ (管理画面で変更可能)
+ *  - Pui 付与レートのデフォルト値 & 設定スキーマ (管理画面で変更可能)
  */
 import { z } from 'zod';
 
@@ -59,44 +59,44 @@ export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatformLiteral, string> = {
 };
 
 // ---------------------------------------------------------------------
-// ポイント付与レート設定 (管理画面で変更可能・DB に永続化)
+// Pui 付与レート設定 (管理画面で変更可能・DB に永続化)
 // ---------------------------------------------------------------------
 
 /**
- * ポイントレート設定。
- *  - loginBonusBase: 毎日のログインで付与する基本ポイント
- *  - loginStreakBonus: 連続ログインが streakThreshold 日に到達した日に上乗せするポイント
+ * Pui レート設定。
+ *  - loginBonusBase: 毎日のログインで付与する基本 Pui
+ *  - loginStreakBonus: 連続ログインが streakThreshold 日に到達した日に上乗せする Pui
  *  - loginStreakThreshold: 連続ボーナスを付与する日数 (例: 7 日連続で +bonus)
- *  - socialSharePoints: SNS シェア 1 回 (1プラットフォーム1日) で付与するポイント
+ *  - socialSharePui: SNS シェア 1 回 (1プラットフォーム1日) で付与する Pui
  */
-export const PointRateSettingsSchema = z.object({
+export const PuiRateSettingsSchema = z.object({
   loginBonusBase: z.number().int().min(0).max(100000),
   loginStreakBonus: z.number().int().min(0).max(100000),
   loginStreakThreshold: z.number().int().min(2).max(365),
-  socialSharePoints: z.number().int().min(0).max(100000),
+  socialSharePui: z.number().int().min(0).max(100000),
 });
 
-export type PointRateSettings = z.infer<typeof PointRateSettingsSchema>;
+export type PuiRateSettings = z.infer<typeof PuiRateSettingsSchema>;
 
-/** デフォルトのポイントレート (ユーザー指定値) */
-export const DEFAULT_POINT_RATES: PointRateSettings = {
-  loginBonusBase: 10, // ログイン 10pt/日
-  loginStreakBonus: 50, // 7 日連続で +50pt
+/** デフォルトの Pui レート (ユーザー指定値) */
+export const DEFAULT_PUI_RATES: PuiRateSettings = {
+  loginBonusBase: 10, // ログイン 10 Pui/日
+  loginStreakBonus: 50, // 7 日連続で +50 Pui
   loginStreakThreshold: 7,
-  socialSharePoints: 20, // シェア 20pt/日
+  socialSharePui: 20, // シェア 20 Pui/日
 };
 
 /** AppSetting に保存する際のキー */
-export const POINT_RATES_SETTING_KEY = 'points.rates';
+export const PUI_RATES_SETTING_KEY = 'pui.rates';
 
 /**
- * ある連続ログイン日数 (streak) のときに付与すべきポイントを計算する。
+ * ある連続ログイン日数 (streak) のときに付与すべき Pui を計算する。
  * - 基本 loginBonusBase
  * - streak が loginStreakThreshold の倍数に到達したら loginStreakBonus を上乗せ
  */
 export function computeLoginBonusAmount(
   streak: number,
-  rates: PointRateSettings,
+  rates: PuiRateSettings,
 ): number {
   let amount = rates.loginBonusBase;
   if (
@@ -119,7 +119,7 @@ export type LoginBonusDayState = 'claimed' | 'today' | 'upcoming';
 export type LoginBonusDay = {
   /** サイクル内の日番号 (1..threshold) */
   day: number;
-  /** その日に付与されるポイント */
+  /** その日に付与される Pui */
   amount: number;
   /** 連続ボーナスが上乗せされる節目の日か (threshold 日目) */
   isMilestone: boolean;
@@ -141,12 +141,12 @@ export type LoginBonusDay = {
  * @param streak       連続ログイン日数。今日受取済みなら今日を含む値、
  *                     未受取なら「受け取れば到達する見込みの値」を渡す。
  * @param claimedToday 今日のログインボーナスを受取済みか
- * @param rates        ポイントレート設定
+ * @param rates        Pui レート設定
  */
 export function buildLoginBonusCalendar(
   streak: number,
   claimedToday: boolean,
-  rates: PointRateSettings,
+  rates: PuiRateSettings,
 ): LoginBonusDay[] {
   const cycle = Math.max(1, rates.loginStreakThreshold);
 
@@ -173,25 +173,25 @@ export function buildLoginBonusCalendar(
 }
 
 // ---------------------------------------------------------------------
-// ポイント整合性 (台帳 vs 残高) の判定ロジック
+// Pui 整合性 (台帳 vs 残高) の判定ロジック
 // ---------------------------------------------------------------------
 
 /**
- * 1 取引で動かせるポイントの絶対値上限 (防御的上限)。
+ * 1 取引で動かせる Pui の絶対値上限 (防御的上限)。
  * サーバ側 (apps/web/src/lib/points.ts) でも同じ値を用いて、
  * バグや不正なレート設定による異常な大量付与をブロックする。
  */
-export const MAX_POINTS_PER_TX = 1_000_000;
+export const MAX_PUI_PER_TX = 1_000_000;
 
 /**
- * ポイント取引の amount が安全な範囲か検証する。
+ * Pui 取引の amount が安全な範囲か検証する。
  *  - 整数であること
  *  - 0 でないこと
- *  - |amount| <= MAX_POINTS_PER_TX
+ *  - |amount| <= MAX_PUI_PER_TX
  */
-export function isValidPointAmount(amount: number): boolean {
+export function isValidPuiAmount(amount: number): boolean {
   return (
-    Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= MAX_POINTS_PER_TX
+    Number.isInteger(amount) && amount !== 0 && Math.abs(amount) <= MAX_PUI_PER_TX
   );
 }
 
@@ -200,7 +200,7 @@ export function isValidPointAmount(amount: number): boolean {
  *  - storedBalance === ledgerSum (台帳と一致)
  *  - かつ storedBalance >= 0 (残高はマイナスにならない)
  */
-export function isPointBalanceConsistent(
+export function isPuiBalanceConsistent(
   storedBalance: number,
   ledgerSum: number,
 ): boolean {
@@ -216,10 +216,10 @@ export const SocialShareInputSchema = z.object({
 });
 export type SocialShareInput = z.infer<typeof SocialShareInputSchema>;
 
-/** 管理者によるポイント手動調整 */
-export const AdminAdjustPointsSchema = z.object({
+/** 管理者による Pui 手動調整 */
+export const AdminAdjustPuiSchema = z.object({
   userId: z.string().uuid(),
   amount: z.number().int().refine((n) => n !== 0, '0 以外を指定してください'),
   note: z.string().max(200).optional(),
 });
-export type AdminAdjustPoints = z.infer<typeof AdminAdjustPointsSchema>;
+export type AdminAdjustPui = z.infer<typeof AdminAdjustPuiSchema>;

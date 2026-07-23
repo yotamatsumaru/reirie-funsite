@@ -7,13 +7,13 @@ import {
   previousJstDateKey,
   computeLoginBonusAmount,
   buildLoginBonusCalendar,
-  DEFAULT_POINT_RATES,
-  PointRateSettingsSchema,
+  DEFAULT_PUI_RATES,
+  PuiRateSettingsSchema,
   SocialShareInputSchema,
-  AdminAdjustPointsSchema,
-  isValidPointAmount,
-  isPointBalanceConsistent,
-  MAX_POINTS_PER_TX,
+  AdminAdjustPuiSchema,
+  isValidPuiAmount,
+  isPuiBalanceConsistent,
+  MAX_PUI_PER_TX,
 } from './membership';
 
 describe('formatMemberNumber', () => {
@@ -51,7 +51,7 @@ describe('previousJstDateKey', () => {
 });
 
 describe('computeLoginBonusAmount', () => {
-  const rates = DEFAULT_POINT_RATES;
+  const rates = DEFAULT_PUI_RATES;
   it('通常日は基本ポイント', () => {
     expect(computeLoginBonusAmount(1, rates)).toBe(10);
     expect(computeLoginBonusAmount(6, rates)).toBe(10);
@@ -69,20 +69,20 @@ describe('computeLoginBonusAmount', () => {
   });
 });
 
-describe('DEFAULT_POINT_RATES', () => {
+describe('DEFAULT_PUI_RATES', () => {
   it('ユーザー指定のデフォルト値', () => {
-    expect(DEFAULT_POINT_RATES.loginBonusBase).toBe(10);
-    expect(DEFAULT_POINT_RATES.loginStreakBonus).toBe(50);
-    expect(DEFAULT_POINT_RATES.loginStreakThreshold).toBe(7);
-    expect(DEFAULT_POINT_RATES.socialSharePoints).toBe(20);
+    expect(DEFAULT_PUI_RATES.loginBonusBase).toBe(10);
+    expect(DEFAULT_PUI_RATES.loginStreakBonus).toBe(50);
+    expect(DEFAULT_PUI_RATES.loginStreakThreshold).toBe(7);
+    expect(DEFAULT_PUI_RATES.socialSharePui).toBe(20);
   });
   it('スキーマでパース可能', () => {
-    expect(PointRateSettingsSchema.safeParse(DEFAULT_POINT_RATES).success).toBe(true);
+    expect(PuiRateSettingsSchema.safeParse(DEFAULT_PUI_RATES).success).toBe(true);
   });
 });
 
 describe('buildLoginBonusCalendar', () => {
-  const rates = DEFAULT_POINT_RATES; // threshold 7, base 10, bonus 50
+  const rates = DEFAULT_PUI_RATES; // threshold 7, base 10, bonus 50
 
   it('7 日分を返す', () => {
     expect(buildLoginBonusCalendar(1, false, rates)).toHaveLength(7);
@@ -138,10 +138,10 @@ describe('SocialShareInputSchema', () => {
   });
 });
 
-describe('AdminAdjustPointsSchema', () => {
+describe('AdminAdjustPuiSchema', () => {
   it('0 以外の増減を許可', () => {
     expect(
-      AdminAdjustPointsSchema.safeParse({
+      AdminAdjustPuiSchema.safeParse({
         userId: '00000000-0000-0000-0000-000000000000',
         amount: 100,
       }).success,
@@ -149,7 +149,7 @@ describe('AdminAdjustPointsSchema', () => {
   });
   it('0 は拒否', () => {
     expect(
-      AdminAdjustPointsSchema.safeParse({
+      AdminAdjustPuiSchema.safeParse({
         userId: '00000000-0000-0000-0000-000000000000',
         amount: 0,
       }).success,
@@ -157,41 +157,41 @@ describe('AdminAdjustPointsSchema', () => {
   });
 });
 
-describe('isValidPointAmount', () => {
+describe('isValidPuiAmount', () => {
   it('通常の正の整数を許可', () => {
-    expect(isValidPointAmount(10)).toBe(true);
-    expect(isValidPointAmount(1)).toBe(true);
+    expect(isValidPuiAmount(10)).toBe(true);
+    expect(isValidPuiAmount(1)).toBe(true);
   });
   it('負の整数も許可 (消費/管理者調整)', () => {
-    expect(isValidPointAmount(-50)).toBe(true);
+    expect(isValidPuiAmount(-50)).toBe(true);
   });
   it('0 は拒否', () => {
-    expect(isValidPointAmount(0)).toBe(false);
+    expect(isValidPuiAmount(0)).toBe(false);
   });
   it('小数は拒否', () => {
-    expect(isValidPointAmount(10.5)).toBe(false);
+    expect(isValidPuiAmount(10.5)).toBe(false);
   });
   it('NaN / Infinity は拒否', () => {
-    expect(isValidPointAmount(NaN)).toBe(false);
-    expect(isValidPointAmount(Infinity)).toBe(false);
+    expect(isValidPuiAmount(NaN)).toBe(false);
+    expect(isValidPuiAmount(Infinity)).toBe(false);
   });
   it('上限ちょうどは許可、超過は拒否', () => {
-    expect(isValidPointAmount(MAX_POINTS_PER_TX)).toBe(true);
-    expect(isValidPointAmount(-MAX_POINTS_PER_TX)).toBe(true);
-    expect(isValidPointAmount(MAX_POINTS_PER_TX + 1)).toBe(false);
+    expect(isValidPuiAmount(MAX_PUI_PER_TX)).toBe(true);
+    expect(isValidPuiAmount(-MAX_PUI_PER_TX)).toBe(true);
+    expect(isValidPuiAmount(MAX_PUI_PER_TX + 1)).toBe(false);
   });
 });
 
-describe('isPointBalanceConsistent', () => {
+describe('isPuiBalanceConsistent', () => {
   it('残高と台帳合計が一致し 0 以上なら整合', () => {
-    expect(isPointBalanceConsistent(100, 100)).toBe(true);
-    expect(isPointBalanceConsistent(0, 0)).toBe(true);
+    expect(isPuiBalanceConsistent(100, 100)).toBe(true);
+    expect(isPuiBalanceConsistent(0, 0)).toBe(true);
   });
   it('残高と台帳合計が不一致なら不整合', () => {
-    expect(isPointBalanceConsistent(100, 90)).toBe(false);
-    expect(isPointBalanceConsistent(90, 100)).toBe(false);
+    expect(isPuiBalanceConsistent(100, 90)).toBe(false);
+    expect(isPuiBalanceConsistent(90, 100)).toBe(false);
   });
   it('残高がマイナスなら (一致していても) 不整合扱い', () => {
-    expect(isPointBalanceConsistent(-10, -10)).toBe(false);
+    expect(isPuiBalanceConsistent(-10, -10)).toBe(false);
   });
 });
