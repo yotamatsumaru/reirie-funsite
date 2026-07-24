@@ -5,6 +5,7 @@ import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { getStripe, getPriceId } from '@/lib/stripe';
 import { logAudit } from '@/lib/audit';
+import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
@@ -13,12 +14,31 @@ export const POST = handle(async (req: Request) => {
   const body = await req.json();
   const input = CreateCheckoutSessionSchema.parse(body);
 
-  const priceId = await getPriceId(input.plan, input.interval);
-  if (!priceId) {
-    throw errors.badRequest(`Stripe Price ID が未設定です: ${input.plan} / ${input.interval}`);
+  // デモモードでは Stripe / DB を無効化しているため、決済フローを実行できない。
+  // 生の例外で 500 (「サーバーエラー」) にならないよう、明示的な案内を返す。
+  if (env.demoMode) {
+    throw errors.badRequest(
+      'デモ環境では決済 (プラン加入) はご利用いただけません。本番環境でお試しください。',
+    );
   }
 
-  const stripe = await getStripe();
+  const priceId = await getPriceId(input.plan, input.interval);
+  if (!priceId) {
+    throw errors.badRequest(
+      `このプランはただいま受付を準備中です (${input.plan} / ${input.interval})。時間をおいて再度お試しください。`,
+    );
+  }
+
+  // Stripe シークレットキー未設定時は getStripe() が生の Error を投げて 500 になるため、
+  // 事前に検知して分かりやすいエラーを返す。
+  let stripe;
+  try {
+    stripe = await getStripe();
+  } catch {
+    throw errors.badRequest(
+      '決済機能がただいまご利用いただけません。しばらくしてから再度お試しください。',
+    );
+  }
 
   // 既存の Customer を再利用 (1ユーザー1顧客)
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });

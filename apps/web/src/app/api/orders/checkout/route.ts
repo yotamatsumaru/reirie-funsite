@@ -23,6 +23,14 @@ export const POST = handle(async (req: Request) => {
   const plan = session.user.plan;
   const body = CheckoutSchema.parse(await req.json());
 
+  // デモモードでは Stripe / DB を無効化しているため、決済フローを実行できない。
+  // 生の例外で 500 (「サーバーエラー」) にならないよう、明示的な案内を返す。
+  if (env.demoMode) {
+    throw errors.badRequest(
+      'デモ環境では決済 (お支払い) はご利用いただけません。本番環境でお試しください。',
+    );
+  }
+
   // 1) カート読み込み
   const cart = await prisma.cart.findFirst({
     where: { userId },
@@ -102,7 +110,16 @@ export const POST = handle(async (req: Request) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw errors.notFound('ユーザーが見つかりません');
 
-  const stripe = await getStripe();
+  // Stripe シークレットキー未設定時は getStripe() が生の Error を投げて 500 になるため、
+  // 在庫予約 (副作用) を行う前に検知して分かりやすいエラーを返す。
+  let stripe;
+  try {
+    stripe = await getStripe();
+  } catch {
+    throw errors.badRequest(
+      '決済機能がただいまご利用いただけません。しばらくしてから再度お試しください。',
+    );
+  }
   let customerId = user.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -205,8 +222,6 @@ export const POST = handle(async (req: Request) => {
     resource: `order:${order.id}`,
     metadata: { orderNumber, totalAmount: totals.totalAmount },
   });
-
-  void env; // env import keepalive
 
   return NextResponse.json({
     orderId: order.id,
