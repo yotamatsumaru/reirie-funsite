@@ -30,15 +30,14 @@ export const PATCH = handle(async (req: Request) => {
     throw errors.unprocessable('入力値が不正です');
   }
 
-  const prev = await getSiteSectionVisibility();
-  const next = await setSiteSectionVisibility({ ...prev, ...parsed.data });
+  const { before, after } = await setSiteSectionVisibility(parsed.data);
 
   await logAudit({
     userId: session.user.id,
     action: 'setting.site_visibility_update',
     resource: 'setting:site.sectionVisibility',
-    metadata: { from: prev, to: next },
+    metadata: { from: before, to: after },
   });
 
-  return NextResponse.json({ visibility: next });
+  return NextResponse.json({ visibility: after });
 });

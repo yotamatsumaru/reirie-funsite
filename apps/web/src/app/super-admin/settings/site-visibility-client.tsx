@@ -40,6 +40,10 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
 
   async function toggle(key: keyof SiteSectionVisibility) {
+    // 保存中は (このトグルに限らず) 他のトグルも含めて操作をブロックする。
+    // サーバー側は advisory lock で排他しているため lost update は起きないが、
+    // 連打時に「押した順で画面に反映されない」体感を避けるための UX 上の保険。
+    if (saving !== null) return;
     const nextValue = !visibility[key];
     setSaving(key);
     try {
@@ -92,6 +96,8 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
         {ITEMS.map((item) => {
           const isVisible = visibility[item.key];
           const isSaving = saving === item.key;
+          // 他のトグルが保存中でもこのボタンを無効化する (連打による表示ズレ防止)。
+          const isDisabled = saving !== null;
           return (
             <div
               key={item.key}
@@ -114,7 +120,7 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
                   role="switch"
                   aria-checked={isVisible}
                   onClick={() => toggle(item.key)}
-                  disabled={isSaving}
+                  disabled={isDisabled}
                   className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
                     isVisible ? 'bg-emerald-500' : 'bg-rose-500'
                   }`}
