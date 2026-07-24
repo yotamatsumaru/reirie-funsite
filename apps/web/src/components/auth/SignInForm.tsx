@@ -84,6 +84,13 @@ export function SignInForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
+      {!needsTotp && (
+        <div className="text-right">
+          <Link href="/forgot-password" className="text-xs text-brand-600 hover:underline">
+            パスワードをお忘れですか？
+          </Link>
+        </div>
+      )}
       {needsTotp && (
         <div className="space-y-1">
           <Input
