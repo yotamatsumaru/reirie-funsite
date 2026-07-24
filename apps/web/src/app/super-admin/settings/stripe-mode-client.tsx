@@ -26,14 +26,16 @@ type Props = {
   initialUsable: boolean;
 };
 
+// 実際にアプリが利用するプランは STANDARD=月額 / PREMIUM=年額 の 2 パターンのみ
+// (packages/shared/src/constants.ts の PLAN_BILLING_INTERVAL)。
+// 使わない STANDARD/年額・PREMIUM/月額 の Price ID 欄はフォームに表示しない。
+// (スキーマ側の priceStandardYearly / pricePremiumMonthly は互換のため残置し、空欄で保存される)
 const CRED_FIELDS: { key: keyof StripeTestCredentials; label: string; placeholder: string }[] = [
   { key: 'secretKey', label: 'Secret Key (必須)', placeholder: 'sk_test_...' },
   { key: 'publishableKey', label: 'Publishable Key', placeholder: 'pk_test_...' },
   { key: 'webhookSecret', label: 'Webhook Secret (必須)', placeholder: 'whsec_...' },
-  { key: 'priceStandardMonthly', label: 'Price ID: STANDARD / 月額', placeholder: 'price_...' },
-  { key: 'priceStandardYearly', label: 'Price ID: STANDARD / 年額', placeholder: 'price_...' },
-  { key: 'pricePremiumMonthly', label: 'Price ID: PREMIUM / 月額', placeholder: 'price_...' },
-  { key: 'pricePremiumYearly', label: 'Price ID: PREMIUM / 年額', placeholder: 'price_...' },
+  { key: 'priceStandardMonthly', label: 'Price ID: スタンダード (月額)', placeholder: 'price_...' },
+  { key: 'pricePremiumYearly', label: 'Price ID: プレミアム (年額)', placeholder: 'price_...' },
 ];
 
 export function StripeModeClient({ initialMode, initialCredentials, initialUsable }: Props) {
@@ -167,6 +169,9 @@ export function StripeModeClient({ initialMode, initialCredentials, initialUsabl
           <p className="mt-1 text-[11px] text-slate-400">
             Stripe Dashboard の「テスト環境」から取得した値を入力してください。本番キーとは別物です。
             未入力のまま保存すると、その項目は空欄として保存されます。
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            ※ 会員プランは「スタンダード＝月額」「プレミアム＝年額」の 2 種類のみを使用します。
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {CRED_FIELDS.map((f) => (
