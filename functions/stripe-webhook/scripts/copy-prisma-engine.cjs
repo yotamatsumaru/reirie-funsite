@@ -92,11 +92,23 @@ function main() {
     process.exit(1);
   }
 
-  const dest = path.join(distDir, ENGINE_FILE);
-  fs.copyFileSync(engine, dest);
-  const size = (fs.statSync(dest).size / (1024 * 1024)).toFixed(1);
-  console.log(`[copy-prisma-engine] コピー完了: ${engine}`);
-  console.log(`[copy-prisma-engine]        -> ${dest} (${size} MB)`);
+  // バンドルされた Prisma Client は index.js の隣の ".prisma/client/" を
+  // 探索するため、そこへ配置する (CloudWatch の searched paths で確認済み)。
+  // 併せて ZIP ルート直下にも置き、環境差異に対するフェイルセーフとする。
+  const nestedDir = path.join(distDir, '.prisma', 'client');
+  fs.mkdirSync(nestedDir, { recursive: true });
+
+  const dests = [
+    path.join(nestedDir, ENGINE_FILE), // 主: /var/task/.prisma/client/...
+    path.join(distDir, ENGINE_FILE), // 副: /var/task/...
+  ];
+
+  for (const dest of dests) {
+    fs.copyFileSync(engine, dest);
+    const size = (fs.statSync(dest).size / (1024 * 1024)).toFixed(1);
+    console.log(`[copy-prisma-engine] コピー完了 -> ${dest} (${size} MB)`);
+  }
+  console.log(`[copy-prisma-engine] 元ファイル: ${engine}`);
 }
 
 main();
