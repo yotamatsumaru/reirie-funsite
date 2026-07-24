@@ -15,6 +15,7 @@ import {
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
+import { getUnifiedOrderHistory } from '@/lib/order-history';
 import { ManageSubscriptionButtons } from '@/components/auth/ManageSubscriptionButtons';
 import { WithdrawSection } from './withdraw-section';
 
@@ -28,7 +29,7 @@ export default async function MePage() {
   const plan = session.user.plan as PlanTypeLiteral;
   const yearMonth = currentYearMonth();
 
-  const [user, orders, saveSlotCount, bonusGrant] = await Promise.all([
+  const [user, recentHistory, saveSlotCount, bonusGrant] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
@@ -39,24 +40,16 @@ export default async function MePage() {
         },
       },
     }),
-    prisma.order.findMany({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      select: {
-        id: true,
-        orderNumber: true,
-        status: true,
-        totalAmount: true,
-        createdAt: true,
-      },
-    }),
+    // EC 注文 (グッズ) とサブスク課金を統合した「最近の注文」表示用の履歴。
+    // 全件取得後にマージ済みなので、ここでは先頭 5 件だけ使う。
+    getUnifiedOrderHistory(session.user.id, 5),
     prisma.playerSaveSlot.count({ where: { userId: session.user.id } }),
     prisma.bonusGiftGrant.findUnique({
       where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
       include: { item: { select: { name: true, iconUrl: true } } },
     }),
   ]);
+  const orders = recentHistory.slice(0, 5);
 
   const sub = user?.subscriptions[0];
   const memberPoints = user?.pui ?? 0;
@@ -222,22 +215,44 @@ export default async function MePage() {
             <p className="text-sm text-slate-500">注文履歴はまだありません</p>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {orders.map((o) => (
-                <li key={o.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="font-mono text-sm text-slate-700">{o.orderNumber}</p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(o.createdAt).toLocaleString('ja-JP')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-800">
-                      {formatJpy(o.totalAmount)}
-                    </p>
-                    <Badge tone={o.status === 'PAID' ? 'success' : 'gray'}>{o.status}</Badge>
-                  </div>
-                </li>
-              ))}
+              {orders.map((entry) => {
+                const href =
+                  entry.type === 'ORDER'
+                    ? `/me/orders/${entry.id}`
+                    : `/me/orders/subscription/${entry.id}`;
+                const label =
+                  entry.type === 'ORDER'
+                    ? entry.documentNumber
+                    : `${entry.planLabel} プラン (${entry.intervalLabel})`;
+                const isSuccess =
+                  entry.type === 'ORDER' ? entry.status === 'PAID' : entry.status === 'SUCCEEDED';
+                return (
+                  <li key={`${entry.type}-${entry.id}`}>
+                    <Link
+                      href={href}
+                      className="flex items-center justify-between py-3 hover:bg-slate-50"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge tone={entry.type === 'ORDER' ? 'brand' : 'info'}>
+                            {entry.type === 'ORDER' ? 'EC注文' : 'サブスク'}
+                          </Badge>
+                          <p className="text-sm text-slate-700">{label}</p>
+                        </div>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {new Date(entry.createdAt).toLocaleString('ja-JP')}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {formatJpy(entry.amount)}
+                        </p>
+                        <Badge tone={isSuccess ? 'success' : 'gray'}>{entry.status}</Badge>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardBody>
