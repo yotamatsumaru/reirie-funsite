@@ -62,19 +62,32 @@ export function StripeModeClient({ initialMode, initialCredentials, initialUsabl
     return json as { mode: StripeMode; testCredentials: StripeTestCredentials; testCredentialsUsable: boolean };
   }
 
+  // フォーム上で必須項目 (Secret Key / Webhook Secret) が入力されているか。
+  // 保存済みかどうか (usable) に関わらず、今フォームに入っている値で判定する。
+  const formUsable =
+    credentials.secretKey.trim() !== '' && credentials.webhookSecret.trim() !== '';
+
   async function toggleMode() {
     const nextMode: StripeMode = mode === 'LIVE' ? 'TEST' : 'LIVE';
-    if (nextMode === 'TEST' && !usable) {
+    // テストへ切り替える場合は、フォームに入力済みの資格情報を「同時に」送信して
+    // サーバ側で保存 → 切り替えを一括で行う (未保存でも切り替えられるようにする)。
+    // これにより「保存し忘れ」「保存とトグルの競合」で切り替え失敗する問題を防ぐ。
+    if (nextMode === 'TEST' && !formUsable && !usable) {
       toast.error(
-        'テストモードに切り替える前に、Secret Key と Webhook Secret を入力・保存してください',
+        'テストモードに切り替えるには、Secret Key と Webhook Secret を入力してください',
         '切り替え不可',
       );
       return;
     }
     setSavingMode(true);
     try {
-      const json = await patch({ mode: nextMode });
+      // テストへ切り替えるときは、現在のフォーム値もあわせて送る (保存 + 切り替えを原子的に)。
+      const body: Record<string, unknown> =
+        nextMode === 'TEST' ? { ...credentials, mode: nextMode } : { mode: nextMode };
+      const json = await patch(body);
       setMode(json.mode);
+      setCredentials(json.testCredentials);
+      setUsable(json.testCredentialsUsable);
       toast.success(
         `Stripe を ${STRIPE_MODE_LABELS[json.mode]} モードに切り替えました`,
         json.mode === 'TEST' ? '⚠️ テストモード有効' : '本番モードに復帰',
@@ -157,10 +170,17 @@ export function StripeModeClient({ initialMode, initialCredentials, initialUsabl
           </span>
         </div>
 
-        {!usable ? (
+        {!usable && !formUsable ? (
           <p className="mt-2 text-xs text-rose-600">
-            ※ テスト資格情報 (Secret Key / Webhook Secret) が未設定のため、現在テストモードには
-            切り替えられません。下のフォームから設定してください。
+            ※ テスト資格情報 (Secret Key / Webhook Secret) が未入力のため、現在テストモードには
+            切り替えられません。下のフォームに入力してください (保存を押さなくても、トグルで
+            切り替える際に自動保存されます)。
+          </p>
+        ) : null}
+        {!usable && formUsable && !isTest ? (
+          <p className="mt-2 text-xs text-slate-500">
+            ※ 入力済みの資格情報は、上のトグルでテストモードに切り替えると自動的に保存されます
+            (先に「テスト資格情報を保存」を押しても構いません)。
           </p>
         ) : null}
 

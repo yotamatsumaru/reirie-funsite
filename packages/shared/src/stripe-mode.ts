@@ -36,14 +36,23 @@ export const StripeModeSchema = z.enum(STRIPE_MODES);
  * 未入力のフィールドは空文字のまま保存を許容する (段階的に設定できるようにするため)。
  * ただし実際にテストモードへ切り替える際は secretKey / webhookSecret は必須にする。
  */
+// 貼り付け時の前後空白・改行が原因で「必須項目が未設定」と誤判定されるのを防ぐため、
+// 保存前に各値を trim する。空文字は許容 (段階的に設定できるようにするため)。
+const trimmedString = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((v) => v.trim())
+    .default('');
+
 export const StripeTestCredentialsSchema = z.object({
-  secretKey: z.string().max(500).default(''),
-  publishableKey: z.string().max(500).default(''),
-  webhookSecret: z.string().max(500).default(''),
-  priceStandardMonthly: z.string().max(200).default(''),
-  priceStandardYearly: z.string().max(200).default(''),
-  pricePremiumMonthly: z.string().max(200).default(''),
-  pricePremiumYearly: z.string().max(200).default(''),
+  secretKey: trimmedString(500),
+  publishableKey: trimmedString(500),
+  webhookSecret: trimmedString(500),
+  priceStandardMonthly: trimmedString(200),
+  priceStandardYearly: trimmedString(200),
+  pricePremiumMonthly: trimmedString(200),
+  pricePremiumYearly: trimmedString(200),
 });
 
 export type StripeTestCredentials = z.infer<typeof StripeTestCredentialsSchema>;
