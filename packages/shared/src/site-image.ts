@@ -10,7 +10,11 @@
  */
 
 /** 画像スロット識別子 (DB SiteImage.slot に保存する値)。 */
-export const SITE_IMAGE_SLOTS = ['home.hero', 'game.acchi.thumbnail'] as const;
+export const SITE_IMAGE_SLOTS = [
+  'home.hero',
+  'home.hero.desktop',
+  'game.acchi.thumbnail',
+] as const;
 
 export type SiteImageSlot = (typeof SITE_IMAGE_SLOTS)[number];
 
@@ -42,9 +46,17 @@ export type SiteImageSlotMeta = {
 export const SITE_IMAGE_SLOT_META: Record<SiteImageSlot, SiteImageSlotMeta> = {
   'home.hero': {
     slot: 'home.hero',
-    label: 'トップページ ヒーロー画像',
-    description: 'トップページ最上部に表示されるメインビジュアル画像です。',
+    label: 'トップページ ヒーロー画像 (スマホ用・縦長)',
+    description:
+      'トップページ最上部に表示されるメインビジュアルです。スマートフォン表示で使われます (PC用が未設定の場合はPCでもこの画像を使用)。',
     recommendedAspect: '縦長 4:5 推奨 (例: 1200×1500px)',
+  },
+  'home.hero.desktop': {
+    slot: 'home.hero.desktop',
+    label: 'トップページ ヒーロー画像 (PC用・横長)',
+    description:
+      'トップページ最上部に表示されるメインビジュアルです。パソコン表示で使われます (未設定の場合はスマホ用の縦長画像を使用)。',
+    recommendedAspect: '横長 16:9〜21:9 推奨 (例: 2400×1000px)',
   },
   'game.acchi.thumbnail': {
     slot: 'game.acchi.thumbnail',
