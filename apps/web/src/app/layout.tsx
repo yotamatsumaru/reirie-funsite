@@ -34,12 +34,16 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { contentsVisible, productsVisible } = await getSiteSectionVisibility();
+  const { contentsVisible, productsVisible, dmVisible } = await getSiteSectionVisibility();
   return (
     <html lang="ja" className={zenKaku.variable}>
       <body className="min-h-screen">
         <Providers>
-          <Sidebar contentsVisible={contentsVisible} productsVisible={productsVisible} />
+          <Sidebar
+            contentsVisible={contentsVisible}
+            productsVisible={productsVisible}
+            dmVisible={dmVisible}
+          />
           {/* PC ではサイドバー幅 (w-64 = 16rem) 分だけ右にオフセット */}
           <div className="flex min-h-screen flex-col md:pl-64">
             <main className="flex-1">{children}</main>

@@ -80,10 +80,12 @@ const MEMBER_GROUP: NavGroup = {
 export function Sidebar({
   contentsVisible = true,
   productsVisible = true,
+  dmVisible = true,
 }: {
   /** /super-admin/settings のトグルで OFF の場合、対応するナビ項目を非表示にする */
   contentsVisible?: boolean;
   productsVisible?: boolean;
+  dmVisible?: boolean;
 } = {}) {
   const { data: session, status } = useSession();
   const cartCount = useCartItemCount();
@@ -100,6 +102,14 @@ export function Sidebar({
       return true;
     }),
   })).filter((group) => group.items.length > 0);
+
+  const memberGroup: NavGroup = {
+    ...MEMBER_GROUP,
+    items: MEMBER_GROUP.items.filter((item) => {
+      if (item.href === '/me/dm') return dmVisible;
+      return true;
+    }),
+  };
 
   // ログイン中はプラン/ランク/ポイントを取得し、ログアウトしたらクリア
   useEffect(() => {
@@ -156,6 +166,7 @@ export function Sidebar({
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:w-64 md:flex-col md:border-r-2 md:border-black md:bg-white">
         <SidebarContent
           navGroups={navGroups}
+          memberGroup={memberGroup}
           cartCount={cartCount}
           status={status}
           session={session}
@@ -195,6 +206,7 @@ export function Sidebar({
           </button>
           <SidebarContent
             navGroups={navGroups}
+            memberGroup={memberGroup}
             cartCount={cartCount}
             status={status}
             session={session}
@@ -211,6 +223,7 @@ export function Sidebar({
 /* ===== サイドバー中身（PC / モバイル共通） ===== */
 function SidebarContent({
   navGroups,
+  memberGroup,
   cartCount,
   status,
   session,
@@ -219,6 +232,7 @@ function SidebarContent({
   pathname,
 }: {
   navGroups: NavGroup[];
+  memberGroup: NavGroup;
   cartCount: number;
   status: string;
   session: ReturnType<typeof useSession>['data'];
@@ -263,13 +277,13 @@ function SidebarContent({
         ))}
 
         {/* 会員メニュー（ログイン時のみ） */}
-        {session?.user && (
+        {session?.user && memberGroup.items.length > 0 && (
           <div>
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
-              {MEMBER_GROUP.title}
+              {memberGroup.title}
             </p>
             <ul className="space-y-1">
-              {MEMBER_GROUP.items.map((item) => (
+              {memberGroup.items.map((item) => (
                 <li key={item.href}>
                   <NavLink
                     item={item}

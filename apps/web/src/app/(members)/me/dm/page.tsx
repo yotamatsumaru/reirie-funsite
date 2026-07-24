@@ -1,15 +1,19 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { resolvePreferredName } from '@idol/shared';
 import { auth } from '@/auth';
 import { listMyDirectMessages, getNgWords } from '@/lib/dm';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 import { DmClient } from './dm-client';
 
 export const metadata: Metadata = { title: 'REIRIE への DM' };
 export const dynamic = 'force-dynamic';
 
 export default async function DmPage() {
+  const { dmVisible } = await getSiteSectionVisibility();
+  if (!dmVisible) notFound();
+
   const session = await auth();
   if (!session?.user) {
     redirect('/signin?callbackUrl=/me/dm');
