@@ -4,7 +4,7 @@
  *  - 現状は Pui 付与レート (pui.rates) を保持する。
  *  - 本番 (RDS) で永続し、PM2 cluster の全プロセスが同じ値を参照する。
  */
-import { prisma } from '@idol/db';
+import { prisma, Prisma } from '@idol/db';
 import {
   DEFAULT_PUI_RATES,
   PUI_RATES_SETTING_KEY,
@@ -215,16 +215,97 @@ export async function getSiteSectionVisibility(): Promise<SiteSectionVisibility>
   }
 }
 
-/** コンテンツ / グッズ セクションのサイト全体公開設定を保存する (SUPER_ADMIN 限定で呼び出すこと) */
+/**
+ * 任意の文字列を符号付き 32bit 整数 (PostgreSQL int4 の範囲) に決定論的に変換する。
+ * advisory lock のキー用。points.ts の hashStringToInt32 と同一の FNV-1a アルゴリズム。
+ * (AppSetting 用に独立して持つことで、points.ts への依存を作らないようにしている。)
+ */
+function hashKeyToInt32(input: string): number {
+  let hash = 0x811c9dc5; // FNV-1a offset basis
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0) | 0;
+}
+
+/**
+ * AppSetting の指定キーに対する更新を直列化するための
+ * トランザクションスコープ advisory lock を取得する。
+ *
+ * なぜ必要か:
+ *  - AppSetting の各種 set 系関数は「read → JS 上でマージ → write」という
+ *    Read-Modify-Write を行うが、ロックなしだと PostgreSQL の既定分離レベル
+ *    (READ COMMITTED) 下で、同一キーに対するほぼ同時の 2 リクエスト
+ *    (例: 管理画面のトグルを連続でクリック) が両方とも「更新前」の同じ行を読み、
+ *    片方の変更がもう片方の書き込みで上書き・消失する (lost update)。
+ *  - 例: サイト公開設定でコンテンツを OFF にした直後に DM を ON にすると、
+ *    2 つの PATCH リクエストが競合し、DM の ON だけが保存されて
+ *    コンテンツの OFF が消えてしまう、という不具合が実際に発生した。
+ *
+ * 対策:
+ *  - pg_advisory_xact_lock(key1, key2) を使い、(固定の namespace, 設定キー) を
+ *    キーにトランザクションを直列化する。ロックはトランザクション終了時
+ *    (COMMIT/ROLLBACK) に自動解放されるため、明示的な解放漏れが起きない。
+ *  - advisory lock は DB (RDS) 全体で有効なので、PM2 cluster の複数プロセス間でも
+ *    確実に排他できる (points.ts の acquireUserGameLock と同じ手法)。
+ *
+ * @param tx        トランザクションクライアント (必ず $transaction 内で呼ぶこと)
+ * @param settingKey ロック対象の AppSetting.key (例: 'site.sectionVisibility')
+ */
+async function acquireAppSettingLock(
+  tx: Prisma.TransactionClient,
+  settingKey: string,
+): Promise<void> {
+  const key1 = hashKeyToInt32('app_setting');
+  const key2 = hashKeyToInt32(settingKey);
+  // int8 バインド値を pg_advisory_xact_lock(int4, int4) の範囲に安全に収める
+  // (points.ts の acquireUserGameLock と同じキャスト方式。詳細はそちら参照)。
+  await tx.$executeRaw`
+    SELECT pg_advisory_xact_lock(
+      (((${key1}::bigint & 4294967295) + 2147483648) % 4294967296 - 2147483648)::int,
+      (((${key2}::bigint & 4294967295) + 2147483648) % 4294967296 - 2147483648)::int
+    )`;
+}
+
+/**
+ * コンテンツ / グッズ / DM セクションのサイト全体公開設定を「部分更新」する
+ * (SUPER_ADMIN 限定で呼び出すこと)。
+ *
+ * 【重要 / 競合対策】渡された patch のみを対象キーで読み直した最新値にマージし、
+ * advisory lock で直列化した 1 つのトランザクション内で read → merge → write を
+ * 行う。これにより、ほぼ同時に届いた複数の PATCH リクエスト (トグルの連打等) でも
+ * 更新の取りこぼしが起きない (詳細は acquireAppSettingLock のコメント参照)。
+ *
+ * @param patch 変更したいフィールドのみを含む部分オブジェクト
+ * @returns 更新前 (before) と更新後 (after) の完全な設定値
+ */
 export async function setSiteSectionVisibility(
-  visibility: SiteSectionVisibility,
-): Promise<SiteSectionVisibility> {
-  const validated = SiteSectionVisibilitySchema.parse(visibility);
-  const value = JSON.stringify(validated);
-  await prisma.appSetting.upsert({
-    where: { key: SITE_SECTION_VISIBILITY_KEY },
-    create: { key: SITE_SECTION_VISIBILITY_KEY, value },
-    update: { value },
+  patch: Partial<SiteSectionVisibility>,
+): Promise<{ before: SiteSectionVisibility; after: SiteSectionVisibility }> {
+  return prisma.$transaction(async (tx) => {
+    await acquireAppSettingLock(tx, SITE_SECTION_VISIBILITY_KEY);
+
+    const row = await tx.appSetting.findUnique({
+      where: { key: SITE_SECTION_VISIBILITY_KEY },
+    });
+    let before: SiteSectionVisibility = DEFAULT_SITE_SECTION_VISIBILITY;
+    if (row) {
+      try {
+        const parsed = SiteSectionVisibilitySchema.safeParse(JSON.parse(row.value));
+        if (parsed.success) before = parsed.data;
+      } catch {
+        // 破損データはデフォルト値扱い (安全側)
+      }
+    }
+
+    const after = SiteSectionVisibilitySchema.parse({ ...before, ...patch });
+    const value = JSON.stringify(after);
+    await tx.appSetting.upsert({
+      where: { key: SITE_SECTION_VISIBILITY_KEY },
+      create: { key: SITE_SECTION_VISIBILITY_KEY, value },
+      update: { value },
+    });
+    return { before, after };
   });
-  return validated;
 }
