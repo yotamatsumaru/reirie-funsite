@@ -1,30 +1,45 @@
 /**
  * Stripe price.id → 内部の PlanType / BillingInterval マッピング
  *
- * 環境変数で設定された Price ID と一致するか判定。
- * 一致しない場合は STANDARD / MONTH を fallback として返す
- * (運用ではアラート対象とすべき)。
+ * 通常は環境変数で設定された本番 Price ID と一致するか判定する。
+ * ただし TEST モード時は AppSetting のテスト用 Price ID が渡されるため、
+ * その場合は渡された PriceMap を優先して判定する。
+ * 一致しない場合は null を返す (呼び出し側で STANDARD / MONTH を fallback)。
  */
 export type PlanType = 'STANDARD' | 'PREMIUM';
 export type BillingInterval = 'MONTH' | 'YEAR';
 
-export function planFromPriceId(priceId: string): PlanType | null {
-  const sm = process.env.STRIPE_PRICE_STANDARD_MONTHLY;
-  const sy = process.env.STRIPE_PRICE_STANDARD_YEARLY;
-  const pm = process.env.STRIPE_PRICE_PREMIUM_MONTHLY;
-  const py = process.env.STRIPE_PRICE_PREMIUM_YEARLY;
-  if (priceId === sm || priceId === sy) return 'STANDARD';
-  if (priceId === pm || priceId === py) return 'PREMIUM';
+/** TEST モード時に AppSetting から渡される Price ID セット */
+export interface PriceMap {
+  standardMonthly?: string;
+  standardYearly?: string;
+  premiumMonthly?: string;
+  premiumYearly?: string;
+}
+
+/** 引数の PriceMap が無ければ環境変数 (本番 Price ID) を採用する */
+function resolvePrices(overrides?: PriceMap): Required<
+  Record<keyof PriceMap, string | undefined>
+> {
+  return {
+    standardMonthly: overrides?.standardMonthly ?? process.env.STRIPE_PRICE_STANDARD_MONTHLY,
+    standardYearly: overrides?.standardYearly ?? process.env.STRIPE_PRICE_STANDARD_YEARLY,
+    premiumMonthly: overrides?.premiumMonthly ?? process.env.STRIPE_PRICE_PREMIUM_MONTHLY,
+    premiumYearly: overrides?.premiumYearly ?? process.env.STRIPE_PRICE_PREMIUM_YEARLY,
+  };
+}
+
+export function planFromPriceId(priceId: string, prices?: PriceMap): PlanType | null {
+  const p = resolvePrices(prices);
+  if (priceId === p.standardMonthly || priceId === p.standardYearly) return 'STANDARD';
+  if (priceId === p.premiumMonthly || priceId === p.premiumYearly) return 'PREMIUM';
   return null;
 }
 
-export function intervalFromPriceId(priceId: string): BillingInterval | null {
-  const sm = process.env.STRIPE_PRICE_STANDARD_MONTHLY;
-  const pm = process.env.STRIPE_PRICE_PREMIUM_MONTHLY;
-  const sy = process.env.STRIPE_PRICE_STANDARD_YEARLY;
-  const py = process.env.STRIPE_PRICE_PREMIUM_YEARLY;
-  if (priceId === sm || priceId === pm) return 'MONTH';
-  if (priceId === sy || priceId === py) return 'YEAR';
+export function intervalFromPriceId(priceId: string, prices?: PriceMap): BillingInterval | null {
+  const p = resolvePrices(prices);
+  if (priceId === p.standardMonthly || priceId === p.premiumMonthly) return 'MONTH';
+  if (priceId === p.standardYearly || priceId === p.premiumYearly) return 'YEAR';
   return null;
 }
 
