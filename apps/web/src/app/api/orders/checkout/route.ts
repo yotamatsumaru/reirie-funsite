@@ -11,7 +11,7 @@ import { CheckoutSchema, canAccess } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { calculateOrderTotals, effectiveUnitPrice, generateOrderNumber } from '@/lib/pricing';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, verifyStripeCustomer } from '@/lib/stripe';
 import { env } from '@/lib/env';
 import { logAudit } from '@/lib/audit';
 
@@ -120,7 +120,8 @@ export const POST = handle(async (req: Request) => {
       '決済機能がただいまご利用いただけません。しばらくしてから再度お試しください。',
     );
   }
-  let customerId = user.stripeCustomerId;
+  // テスト→本番の切り替え等で残った実在しない顧客ID (resource_missing) は作り直す
+  let customerId = await verifyStripeCustomer(stripe, user.stripeCustomerId);
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: user.email,

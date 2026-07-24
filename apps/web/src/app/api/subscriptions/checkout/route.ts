@@ -3,7 +3,7 @@ import { prisma } from '@idol/db';
 import { CreateCheckoutSessionSchema } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
-import { getStripe, getPriceId } from '@/lib/stripe';
+import { getStripe, getPriceId, verifyStripeCustomer } from '@/lib/stripe';
 import { logAudit } from '@/lib/audit';
 import { env } from '@/lib/env';
 
@@ -44,7 +44,12 @@ export const POST = handle(async (req: Request) => {
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!user) throw errors.notFound();
 
-  let customerId = user.stripeCustomerId;
+  // DB に保存済みの stripeCustomerId が「現在の Stripe モード」に実在するか検証する。
+  //   テストモード(sk_test_) で作成した顧客IDが残ったまま本番(sk_live_) に
+  //   切り替えると、その顧客IDは本番には存在せず Stripe が
+  //   `resource_missing (param: customer)` を返して 400 になる。
+  //   実在しない / 削除済みの場合は作り直して DB を更新する (自己回復)。
+  let customerId = await verifyStripeCustomer(stripe, user.stripeCustomerId);
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: user.email,
