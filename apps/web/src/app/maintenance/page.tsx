@@ -9,6 +9,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Sparkles, Info } from 'lucide-react';
 import { DEFAULT_MAINTENANCE_MESSAGE } from '@idol/shared';
 import { getMaintenanceSetting } from '@/lib/app-setting';
 
@@ -25,18 +26,23 @@ export default async function MaintenancePage() {
   const message = setting.message.trim() || DEFAULT_MAINTENANCE_MESSAGE;
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 px-4 py-12">
-      <div className="max-w-lg rounded-2xl border border-amber-200 bg-white p-8 text-center shadow-sm sm:p-12">
-        <p className="text-6xl">🔧</p>
-        <h1 className="mt-4 text-2xl font-bold text-slate-900 sm:text-3xl">
+    <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-gradient-to-br from-brand-50 via-white to-brand-100 px-4 py-12">
+      <div className="max-w-lg rounded-2xl border border-brand-200 bg-white p-8 text-center shadow-sm sm:p-12">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+          <Sparkles className="h-8 w-8" strokeWidth={1.75} />
+        </div>
+        <h1 className="mt-5 text-2xl font-bold text-slate-900 sm:text-3xl">
           ただいまメンテナンス中です
         </h1>
         <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600 sm:text-base">
           {message}
         </p>
 
-        <div className="mt-8 rounded-lg bg-slate-50 p-4 text-left text-xs text-slate-600 sm:text-sm">
-          <p className="font-semibold text-slate-800">📌 お知らせ</p>
+        <div className="mt-8 rounded-lg border border-brand-100 bg-brand-50 p-4 text-left text-xs text-slate-600 sm:text-sm">
+          <p className="flex items-center gap-1.5 font-semibold text-brand-800">
+            <Info className="h-4 w-4" strokeWidth={2} />
+            お知らせ
+          </p>
           <ul className="mt-2 space-y-1 list-disc pl-5">
             <li>メンテナンス中は一部の機能がご利用いただけません</li>
             <li>復旧時刻は公式X(旧Twitter)でお知らせします</li>
@@ -44,7 +50,9 @@ export default async function MaintenancePage() {
           </ul>
         </div>
 
-        <p className="mt-6 text-xs text-slate-400">IDOL FAN SITE</p>
+        <p className="mt-6 text-xs font-black uppercase tracking-wide text-slate-400">
+          IDOL FAN SITE
+        </p>
 
         <div className="mt-2 flex items-center justify-center gap-3 text-xs">
           <Link href="/" className="text-brand-600 hover:underline">
