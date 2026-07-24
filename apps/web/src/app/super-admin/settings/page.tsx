@@ -11,13 +11,19 @@ import { Badge } from '@/components/ui/Badge';
 import { listSettings } from '@/lib/demo-store';
 import { requireSuperAdmin } from '@/auth';
 import { listSiteImages } from '@/lib/site-image';
-import { getStripeMode, getStripeTestCredentials, getSiteSectionVisibility } from '@/lib/app-setting';
+import {
+  getStripeMode,
+  getStripeTestCredentials,
+  getSiteSectionVisibility,
+  getMaintenanceSetting,
+} from '@/lib/app-setting';
 import { isStripeTestCredentialsUsable } from '@idol/shared';
 import { SettingRow } from './setting-row';
 import { SiteImageClient, type SiteImageItem } from './site-image-client';
 import { StripeModeClient } from './stripe-mode-client';
 import { TotpSetupClient } from './totp-setup-client';
 import { SiteVisibilityClient } from './site-visibility-client';
+import { MaintenanceClient } from './maintenance-client';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -52,6 +58,7 @@ export default async function SuperAdminSettingsPage() {
   const stripeTestCredentials = await getStripeTestCredentials();
   const stripeTestCredentialsUsable = isStripeTestCredentialsUsable(stripeTestCredentials);
   const siteSectionVisibility = await getSiteSectionVisibility();
+  const maintenanceSetting = await getMaintenanceSetting();
 
   // TOTP (2段階認証) 現在の状態 — SUPER_ADMIN 自身の設定なので session.user.id で取得
   const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
@@ -76,7 +83,6 @@ export default async function SuperAdminSettingsPage() {
     pricing: settings.filter((s) => s.category === 'pricing'),
   };
 
-  const maintenance = settings.find((s) => s.key === 'maintenance.enabled');
   const disabledFeatures = settings.filter(
     (s) => s.category === 'features' && s.value === false,
   );
@@ -96,7 +102,7 @@ export default async function SuperAdminSettingsPage() {
           <CardBody>
             <p className="text-xs font-medium text-slate-500">運用ステータス</p>
             <p className="mt-2 text-lg font-bold">
-              {maintenance?.value ? (
+              {maintenanceSetting.enabled ? (
                 <Badge tone="danger">メンテナンス中</Badge>
               ) : (
                 <Badge tone="success">通常運用</Badge>
@@ -123,6 +129,9 @@ export default async function SuperAdminSettingsPage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* メンテナンスモード (スーパー管理者以外の閲覧を一時停止する) */}
+      <MaintenanceClient initialSetting={maintenanceSetting} />
 
       {/* コンテンツ / グッズ の公開設定 (オープン日調整などで一時的に非公開にする) */}
       <SiteVisibilityClient initialVisibility={siteSectionVisibility} />

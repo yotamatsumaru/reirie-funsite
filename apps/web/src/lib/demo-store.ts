@@ -33,7 +33,8 @@ function load(): Store {
   // 初期データ
   const init: Store = {
     settings: [
-      { key: 'maintenance.enabled', value: false, label: 'メンテナンスモード', description: '有効にすると全ユーザーが /maintenance にリダイレクト', category: 'system' },
+      // メンテナンスモードは AppSetting (site.maintenance) + 専用 UI (MaintenanceClient) で
+      // 管理するため、汎用 SettingRow 用のここのエントリは削除した (二重トグル防止)。
       { key: 'features.gameEnabled', value: true, label: 'ゲーム機能', description: '恋愛 ADV ゲーム全体を ON/OFF', category: 'features' },
       { key: 'features.commentsEnabled', value: true, label: 'コメント機能', description: 'コンテンツのコメント投稿を ON/OFF', category: 'features' },
       { key: 'features.liveEnabled', value: true, label: 'ライブ配信機能', description: 'IVS ライブ機能の ON/OFF', category: 'features' },

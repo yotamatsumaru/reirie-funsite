@@ -10,7 +10,6 @@ import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getSetting, updateSetting } from '@/lib/demo-store';
-import { setMaintenanceMode } from '@/lib/maintenance-flag';
 
 export const runtime = 'nodejs';
 
@@ -45,10 +44,8 @@ export const PATCH = handle(async (req: Request) => {
     throw errors.notFound('設定の更新に失敗しました');
   }
 
-  // メンテナンスモードフラグは middleware からも参照されるので同期
-  if (key === 'maintenance.enabled' && typeof value === 'boolean') {
-    setMaintenanceMode(value);
-  }
+  // ※ メンテナンスモードは専用 API (/api/super-admin/maintenance) + AppSetting で
+  //   管理するようになったため、ここでの同期処理は不要 (旧 maintenance.enabled は廃止)。
 
   await logAudit({
     userId: session.user.id,
