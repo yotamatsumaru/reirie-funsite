@@ -5,6 +5,7 @@ export * from './membership';
 export * from './membership-rank';
 export * from './stripe-mode';
 export * from './site-section-visibility';
+export * from './maintenance';
 export * from './mini-game';
 export * from './promo';
 export * from './game-audio';

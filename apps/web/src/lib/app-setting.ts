@@ -31,6 +31,10 @@ import {
   DEFAULT_SITE_SECTION_VISIBILITY,
   SiteSectionVisibilitySchema,
   type SiteSectionVisibility,
+  MAINTENANCE_SETTING_KEY,
+  DEFAULT_MAINTENANCE_SETTING,
+  MaintenanceSettingSchema,
+  type MaintenanceSetting,
 } from '@idol/shared';
 
 /**
@@ -213,6 +217,62 @@ export async function getSiteSectionVisibility(): Promise<SiteSectionVisibility>
   } catch {
     return DEFAULT_SITE_SECTION_VISIBILITY;
   }
+}
+
+/**
+ * サイト全体のメンテナンスモード設定を取得する。
+ * 未設定 / 破損時は既定値 (通常運用 = メンテナンス OFF) を返す (安全側)。
+ *
+ * 【注意】この関数は Node ランタイム (Prisma) 依存のため、Edge middleware からは
+ * 直接呼べない。middleware は /api/maintenance-status 経由で状態を取得する
+ * (middleware.ts のコメント参照)。
+ */
+export async function getMaintenanceSetting(): Promise<MaintenanceSetting> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: MAINTENANCE_SETTING_KEY },
+    });
+    if (!row) return DEFAULT_MAINTENANCE_SETTING;
+    const parsed = MaintenanceSettingSchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : DEFAULT_MAINTENANCE_SETTING;
+  } catch {
+    return DEFAULT_MAINTENANCE_SETTING;
+  }
+}
+
+/**
+ * メンテナンスモード設定を「部分更新」する (SUPER_ADMIN 限定で呼び出すこと)。
+ * site-visibility と同じく advisory lock で read → merge → write を直列化し、
+ * 連続操作による更新取りこぼしを防ぐ。
+ */
+export async function setMaintenanceSetting(
+  patch: Partial<MaintenanceSetting>,
+): Promise<{ before: MaintenanceSetting; after: MaintenanceSetting }> {
+  return prisma.$transaction(async (tx) => {
+    await acquireAppSettingLock(tx, MAINTENANCE_SETTING_KEY);
+
+    const row = await tx.appSetting.findUnique({
+      where: { key: MAINTENANCE_SETTING_KEY },
+    });
+    let before: MaintenanceSetting = DEFAULT_MAINTENANCE_SETTING;
+    if (row) {
+      try {
+        const parsed = MaintenanceSettingSchema.safeParse(JSON.parse(row.value));
+        if (parsed.success) before = parsed.data;
+      } catch {
+        // 破損データはデフォルト値扱い (安全側)
+      }
+    }
+
+    const after = MaintenanceSettingSchema.parse({ ...before, ...patch });
+    const value = JSON.stringify(after);
+    await tx.appSetting.upsert({
+      where: { key: MAINTENANCE_SETTING_KEY },
+      create: { key: MAINTENANCE_SETTING_KEY, value },
+      update: { value },
+    });
+    return { before, after };
+  });
 }
 
 /**
