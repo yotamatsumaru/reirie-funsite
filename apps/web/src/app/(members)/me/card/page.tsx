@@ -22,22 +22,49 @@ import { PointActions } from './point-actions';
 export const metadata: Metadata = { title: '会員カード' };
 export const dynamic = 'force-dynamic';
 
-// プランごとのカードデザイン (グラデーション)
-const CARD_THEME: Record<PlanTypeLiteral, { gradient: string; rank: string; accent: string }> = {
+// プランごとのカードデザイン。
+// 背景はデザイン画像 (public/card/*.webp) を使用し、その上に会員情報を重ねる。
+// 各カードの背景色に合わせて文字色 (text / accent) を調整する。
+//  - FREE     : 水色背景 → 濃色文字
+//  - STANDARD : マゼンタ背景 → 白文字
+//  - PREMIUM  : ラベンダー背景 → 濃色 (深い紫) 文字
+type CardTheme = {
+  image: string;
+  rank: string;
+  text: string;
+  accent: string;
+  qrDark: string;
+  // 鍵モチーフの上に文字が重なっても読めるよう、テキスト帯に薄いスクリムを敷く。
+  scrim: string;
+};
+
+const CARD_THEME: Record<PlanTypeLiteral, CardTheme> = {
   FREE: {
-    gradient: 'from-slate-600 via-slate-700 to-slate-800',
+    image: '/card/free.webp',
     rank: 'REGULAR',
-    accent: 'text-slate-300',
+    text: 'text-slate-800',
+    accent: 'text-slate-600',
+    qrDark: '#1e293b',
+    // フラットな水色背景 (モチーフ無し) のためスクリム不要
+    scrim: '',
   },
   STANDARD: {
-    gradient: 'from-sky-500 via-blue-600 to-indigo-700',
+    image: '/card/standard.webp',
     rank: 'STANDARD',
-    accent: 'text-sky-100',
+    text: 'text-white',
+    accent: 'text-white/80',
+    qrDark: '#7a1d5a',
+    // マゼンタ + 白文字: 上下をわずかに暗くして白文字を安定させる
+    scrim: 'bg-gradient-to-b from-black/25 via-transparent to-black/30',
   },
   PREMIUM: {
-    gradient: 'from-amber-400 via-pink-500 to-fuchsia-600',
+    image: '/card/premium.webp',
     rank: 'PREMIUM',
-    accent: 'text-amber-50',
+    text: 'text-slate-900',
+    accent: 'text-slate-700/90',
+    qrDark: '#3a2b4d',
+    // ラベンダー + 濃色文字: 鍵モチーフ上でも読めるよう上下をわずかに明るくする
+    scrim: 'bg-gradient-to-b from-white/35 via-transparent to-white/40',
   },
 };
 
@@ -75,7 +102,7 @@ export default async function MemberCardPage() {
     }),
   ]);
 
-  const theme = CARD_THEME[plan];
+  const theme = CARD_THEME[plan] ?? CARD_THEME.FREE;
   const points = user?.pui ?? 0;
   const joinedAt = user?.createdAt ?? new Date();
 
@@ -89,7 +116,7 @@ export default async function MemberCardPage() {
   const qrDataUrl = await QRCode.toDataURL(qrPayload, {
     margin: 1,
     width: 240,
-    color: { dark: '#0f172a', light: '#ffffff' },
+    color: { dark: theme.qrDark, light: '#ffffff' },
   });
 
   const claimedSet = new Set(shareGrants.map((g) => g.platform));
@@ -113,50 +140,62 @@ export default async function MemberCardPage() {
         </Link>
       </header>
 
-      {/* デジタル会員カード */}
+      {/* デジタル会員カード (背景はデザイン画像) */}
       <div
-        className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${theme.gradient} p-6 text-white shadow-xl`}
+        className={`relative aspect-[1.586/1] w-full overflow-hidden rounded-2xl shadow-xl ${theme.text}`}
       >
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-        <div className="absolute -bottom-12 -left-6 h-32 w-32 rounded-full bg-white/10" />
+        {/* 背景画像 */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={theme.image}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
 
-        <div className="relative flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className={`text-xs font-semibold uppercase tracking-widest ${theme.accent}`}>
-              Reirie Fan Club
-            </p>
-            <p className="mt-1 text-lg font-bold">{theme.rank} MEMBER</p>
-            <div className="mt-2">
-              <RankBadge rank={memberRank} size="sm" />
+        {/* 文字可読性のためのスクリム (モチーフの上でも読めるように) */}
+        {theme.scrim && <div aria-hidden className={`absolute inset-0 ${theme.scrim}`} />}
+
+        {/* 情報レイヤー */}
+        <div className="relative flex h-full flex-col justify-between p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className={`text-[10px] font-semibold uppercase tracking-widest sm:text-xs ${theme.accent}`}>
+                Reirie Fan Club
+              </p>
+              <p className="mt-1 text-base font-bold sm:text-lg">{theme.rank} MEMBER</p>
+              <div className="mt-2">
+                <RankBadge rank={memberRank} size="sm" />
+              </div>
+            </div>
+            <div className="shrink-0 rounded-lg bg-white p-1.5 shadow-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrDataUrl} alt="会員QRコード" className="h-16 w-16 sm:h-20 sm:w-20" />
             </div>
           </div>
-          <div className="shrink-0 rounded-lg bg-white p-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl} alt="会員QRコード" className="h-20 w-20" />
-          </div>
-        </div>
 
-        <div className="relative mt-8">
-          <p className={`text-xs ${theme.accent}`}>会員番号</p>
-          <p className="font-mono text-2xl font-bold tracking-wider">{memberNumber}</p>
-        </div>
-
-        <div className="relative mt-4 flex items-end justify-between">
-          <div className="min-w-0">
-            <p className={`text-xs ${theme.accent}`}>お名前</p>
-            <p className="truncate text-base font-semibold">
-              {user?.displayName ?? 'ファン'} 様
-            </p>
-            <p className={`mt-2 text-xs ${theme.accent}`}>
-              加入日 {new Date(joinedAt).toLocaleDateString('ja-JP')}
-            </p>
+          <div className="mt-2">
+            <p className={`text-[10px] sm:text-xs ${theme.accent}`}>会員番号</p>
+            <p className="font-mono text-xl font-bold tracking-wider sm:text-2xl">{memberNumber}</p>
           </div>
-          <div className="text-right">
-            <p className={`text-xs ${theme.accent}`}>保有ポイント</p>
-            <p className="text-2xl font-bold">
-              {points.toLocaleString()}
-              <span className="ml-1 text-sm font-normal">pt</span>
-            </p>
+
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className={`text-[10px] sm:text-xs ${theme.accent}`}>お名前</p>
+              <p className="truncate text-sm font-semibold sm:text-base">
+                {user?.displayName ?? 'ファン'} 様
+              </p>
+              <p className={`mt-1.5 text-[10px] sm:text-xs ${theme.accent}`}>
+                加入日 {new Date(joinedAt).toLocaleDateString('ja-JP')}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className={`text-[10px] sm:text-xs ${theme.accent}`}>保有ポイント</p>
+              <p className="text-xl font-bold sm:text-2xl">
+                {points.toLocaleString()}
+                <span className="ml-1 text-xs font-normal sm:text-sm">pt</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
