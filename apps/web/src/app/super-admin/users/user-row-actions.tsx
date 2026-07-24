@@ -2,6 +2,7 @@
  * ユーザー行の操作ボタン群 (Client Component)
  *  - ロール変更
  *  - BAN / 復活
+ *  - 完全消去 (BAN 済みユーザーのみ。注文/決済履歴がある場合は個人情報の匿名化に切り替わる)
  */
 'use client';
 
@@ -78,6 +79,33 @@ export function UserRowActions({
     });
   }
 
+  async function handleErase() {
+    if (
+      !confirm(
+        'このユーザーを完全に消去します。この操作は取り消せません。\n' +
+          '（注文・決済履歴がある場合は個人情報のみ匿名化されます）\n\n' +
+          '本当に消去しますか？',
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/super-admin/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        setError(j.error?.message ?? `HTTP ${res.status}`);
+        return;
+      }
+      const j = (await res.json().catch(() => ({}))) as { mode?: string };
+      if (j.mode === 'anonymized') {
+        alert('注文・決済履歴があるため物理削除はできませんでした。個人情報を匿名化しました。');
+      }
+      router.push('/super-admin/users?tab=trash');
+      router.refresh();
+    });
+  }
+
   return (
     <div className="flex items-center justify-end gap-2">
       <Link
@@ -101,14 +129,24 @@ export function UserRowActions({
       )}
 
       {isBanned ? (
-        <button
-          type="button"
-          onClick={handleRestore}
-          disabled={pending}
-          className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-        >
-          復活
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={handleRestore}
+            disabled={pending}
+            className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+          >
+            復活
+          </button>
+          <button
+            type="button"
+            onClick={handleErase}
+            disabled={pending}
+            className="rounded-md border border-rose-400 bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 hover:bg-rose-200 disabled:opacity-50"
+          >
+            完全消去
+          </button>
+        </>
       ) : (
         <button
           type="button"
