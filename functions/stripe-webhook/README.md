@@ -90,3 +90,53 @@ stripe trigger invoice.payment_succeeded
 
 CDK (`infra/lib/webhook-stack.ts`) で `lambda.Function` + `FunctionUrl` を定義。
 ZIP パッケージは `pnpm run build:zip` で生成し、CDK の `Code.fromAsset()` で参照。
+
+### ⚠️ Prisma エンジンの同梱 (必須)
+
+この Lambda は `@idol/db` (Prisma) を使うため、**Linux 用クエリエンジン**
+`libquery_engine-rhel-openssl-3.0.x.so.node` を ZIP に含めないと、
+実行時に `PrismaClientInitializationError: could not locate the Query Engine`
+が発生し、全リクエストが 502 になる。
+
+対策は以下 2 点で、`pnpm run build:zip` に組み込み済み:
+
+1. `packages/db/prisma/schema.prisma` の `generator.binaryTargets` に
+   `"rhel-openssl-3.0.x"` を含める → `pnpm db:generate` で Linux エンジンが生成される。
+2. ビルド後に `scripts/copy-prisma-engine.cjs` がそのエンジンを `dist/` 直下へコピーし、
+   `scripts/make-zip.cjs` が `index.js` / `index.js.map` / `.so.node` を
+   **ZIP のルート**に格納する (esbuild bundle は同階層からエンジンを探すため)。
+
+> ❌ `Compress-Archive -Path index.js, index.js.map` のように JS だけを手動 ZIP すると
+> エンジンが漏れて 502 になる。必ず `pnpm run build:zip` (または `build:full` → `make-zip`) を使うこと。
+
+### 手動デプロイ手順 (Windows PowerShell)
+
+GitHub Actions は main で稼働していないため手動デプロイ。プロジェクトルートで:
+
+```powershell
+# 1. 最新を取得
+git pull
+
+# 2. 依存インストール & Prisma クライアント生成 (Linux エンジンを含む)
+pnpm install
+pnpm db:generate
+
+# 3. ビルド + エンジン同梱 + ZIP 作成 (この 1 コマンドで全部やる)
+pnpm --filter @idol/stripe-webhook build:zip
+
+# 4. ZIP の中身を確認 (index.js / index.js.map / *.so.node の 3 ファイルが必須)
+#    PowerShell:
+Expand-Archive -Path functions\stripe-webhook\dist\function.zip -DestinationPath functions\stripe-webhook\dist\_check -Force
+Get-ChildItem functions\stripe-webhook\dist\_check
+Remove-Item -Recurse functions\stripe-webhook\dist\_check
+
+# 5. Lambda を更新
+aws lambda update-function-code `
+  --function-name idol-fansite-dev-stripe-webhook `
+  --zip-file fileb://functions/stripe-webhook/dist/function.zip `
+  --region ap-northeast-1 `
+  --publish
+```
+
+デプロイ後、Stripe テストイベント再送 → CloudWatch Logs で
+`[stripe-webhook] processed mode=TEST ...` (Status 200) を確認する。

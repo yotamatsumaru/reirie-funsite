@@ -6,7 +6,9 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:@aws-sdk/* --external:aws-sdk --minify --sourcemap",
-    "build:zip": "pnpm run build && cd dist && zip -r function.zip index.js index.js.map ../prisma 2>/dev/null || zip -r function.zip index.js index.js.map",
+    "copy:engine": "node scripts/copy-prisma-engine.cjs",
+    "build:full": "pnpm run build && pnpm run copy:engine",
+    "build:zip": "pnpm run build:full && node scripts/make-zip.cjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo 'no lint'",
     "test": "jest",
