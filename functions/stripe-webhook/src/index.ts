@@ -73,6 +73,63 @@ export const handler = async (
   _ctx: Context,
 ): Promise<Result> => {
   const start = Date.now();
+
+  // --- 診断モード (VPC 内 DB を Lambda 経由で確認する) ---
+  // Function URL 経由ではなく、直接 Lambda invoke で
+  //   { "__diag": "subscriptions", "email": "user@example.com" }
+  // を渡すと、DB のサブスク状況を返す。stripe-signature が無いため
+  // 通常の Webhook フローとは干渉しない。運用: 一時的な調査用。
+  const diag = (event as unknown as { __diag?: string; email?: string }).__diag;
+  if (diag === 'subscriptions') {
+    const email = (event as unknown as { email?: string }).email;
+    try {
+      const subs = await prisma.subscription.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: { user: { select: { id: true, email: true, displayName: true } } },
+      });
+      const recent = subs.map((s) => ({
+        createdAt: s.createdAt.toISOString(),
+        plan: s.planType,
+        status: s.status,
+        interval: s.billingInterval,
+        priceId: s.stripePriceId,
+        userEmail: s.user?.email ?? null,
+        userId: s.userId,
+        stripeSubscriptionId: s.stripeSubscriptionId,
+        stripeCustomerId: s.stripeCustomerId,
+      }));
+      let userReport: unknown = null;
+      if (email) {
+        const u = await prisma.user.findUnique({
+          where: { email },
+          include: { subscriptions: { orderBy: { createdAt: 'desc' } } },
+        });
+        if (!u) {
+          userReport = { found: false, email };
+        } else {
+          const active = u.subscriptions.filter((s) =>
+            ['ACTIVE', 'TRIALING', 'PAST_DUE'].includes(s.status),
+          );
+          userReport = {
+            found: true,
+            email,
+            userId: u.id,
+            displayName: u.displayName,
+            stripeCustomerId: u.stripeCustomerId,
+            totalSubscriptions: u.subscriptions.length,
+            activeSubscriptions: active.length,
+            derivedPlan: active[0]?.planType ?? 'FREE',
+          };
+        }
+      }
+      return jsonResponse(200, { diag: 'subscriptions', recent, user: userReport });
+    } catch (err) {
+      return jsonResponse(500, { diag: 'subscriptions', error: (err as Error).message });
+    }
+  }
+  // --- 診断モードここまで ---
+
   const sigHeader =
     getHeader(event.headers, 'stripe-signature') ??
     getHeader(event.headers, 'Stripe-Signature');
