@@ -51,6 +51,16 @@ export async function GET(
   });
   if (!redeemed) return new Response('Forbidden', { status: 403 });
 
+  // ダウンロード数集計用のログを記録 (景品単位)。
+  // 配信をブロックしないよう best-effort (失敗しても無視) とする。
+  try {
+    await prisma.rewardDownloadLog.create({
+      data: { catalogItemId: asset.catalogItemId, userId: session.user.id },
+    });
+  } catch (e) {
+    console.error('[reward-downloads] failed to log download', e);
+  }
+
   const dispositionName = encodeURIComponent(asset.fileName || `download-${asset.id}`);
 
   // S3 / CDN 保存: URL へリダイレクト

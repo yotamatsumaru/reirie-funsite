@@ -395,6 +395,7 @@ model User {
   rewardPointPurchases     RewardPointPurchase[]
   rewardRedemptions        RewardRedemption[]
   monthlyRewardPointGrants MonthlyRewardPointGrant[]
+  rewardDownloadLogs       RewardDownloadLog[]
 
   // Direct Message (REIRIE への DM)
   directMessages DirectMessage[]
@@ -1388,10 +1389,28 @@ model RewardCatalogItem {
 
   redemptions RewardRedemption[]
   digitalAssets RewardDigitalAsset[]
+  downloadLogs  RewardDownloadLog[]
 
   @@index([status, sortOrder])
   @@index([kind])
   @@map("reward_catalog_items")
+}
+
+/// デジタル特典のダウンロード履歴 (景品単位)。
+/// /api/me/reward-downloads/[assetId] でファイル配信に成功した際に 1 件記録する。
+/// 集計は景品 (catalogItemId) 単位で「延べ回数」と「ユニーク人数 (distinct userId)」を出す。
+model RewardDownloadLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  catalogItemId String   @map("catalog_item_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  catalogItem RewardCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId, createdAt])
+  @@index([catalogItemId, userId])
+  @@map("reward_download_logs")
 }
 
 /// デジタル特典 (DIGITAL) の配布ファイル。

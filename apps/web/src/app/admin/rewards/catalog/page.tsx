@@ -7,6 +7,7 @@ import { prisma } from '@idol/db';
 import { REWARD_CATALOG_ITEM_KIND_LABELS, REWARD_CATALOG_ITEM_STATUS_LABELS } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { getDownloadStatsByCatalogItem } from '@/lib/reward-download-stats';
 import { requireCapabilityPage } from '@/auth';
 
 export const metadata: Metadata = { title: '景品カタログ管理' };
@@ -24,6 +25,10 @@ export default async function AdminRewardCatalogPage() {
     orderBy: [{ status: 'asc' }, { sortOrder: 'asc' }],
     include: { _count: { select: { redemptions: true } } },
   });
+
+  // デジタル特典のダウンロード数を景品単位でまとめて集計する。
+  const digitalItemIds = items.filter((it) => it.kind === 'DIGITAL').map((it) => it.id);
+  const downloadStats = await getDownloadStatsByCatalogItem(digitalItemIds);
 
   return (
     <div className="space-y-4">
@@ -76,6 +81,12 @@ export default async function AdminRewardCatalogPage() {
                   在庫: {it.stock === null ? '無制限' : it.stock}
                 </span>
                 <span className="text-xs text-slate-500">交換 {it._count.redemptions} 件</span>
+                {it.kind === 'DIGITAL' && (
+                  <span className="text-xs text-slate-500">
+                    DL 延べ{(downloadStats.get(it.id)?.total ?? 0).toLocaleString()}回 /{' '}
+                    {(downloadStats.get(it.id)?.unique ?? 0).toLocaleString()}人
+                  </span>
+                )}
               </div>
             </CardBody>
           </Card>
@@ -91,6 +102,7 @@ export default async function AdminRewardCatalogPage() {
               <th className="px-4 py-2 text-right">必要 Pui</th>
               <th className="px-4 py-2 text-right">在庫</th>
               <th className="px-4 py-2 text-right">交換数</th>
+              <th className="px-4 py-2 text-right">DL数</th>
               <th className="px-4 py-2">状態</th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -98,7 +110,7 @@ export default async function AdminRewardCatalogPage() {
           <tbody>
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                   景品がありません
                 </td>
               </tr>
@@ -114,6 +126,17 @@ export default async function AdminRewardCatalogPage() {
                   {it.stock === null ? '無制限' : it.stock}
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">{it._count.redemptions}</td>
+                <td className="px-4 py-2 text-right tabular-nums">
+                  {it.kind === 'DIGITAL' ? (
+                    <span className="whitespace-nowrap">
+                      延べ{(downloadStats.get(it.id)?.total ?? 0).toLocaleString()}回
+                      <span className="mx-0.5 text-slate-300">/</span>
+                      {(downloadStats.get(it.id)?.unique ?? 0).toLocaleString()}人
+                    </span>
+                  ) : (
+                    <span className="text-slate-300">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   <Badge tone={STATUS_TONE[it.status] ?? 'gray'}>
                     {REWARD_CATALOG_ITEM_STATUS_LABELS[it.status]}
