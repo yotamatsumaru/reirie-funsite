@@ -28,6 +28,11 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
     label: 'グッズ',
     description: 'ECショップ (商品一覧・詳細・カート) の /products セクションを一般公開するか',
   },
+  {
+    key: 'dmVisible',
+    label: 'REIRIE への DM',
+    description: '会員向け DM 送信機能 (/me/dm) を利用可能にするか',
+  },
 ];
 
 export function SiteVisibilityClient({ initialVisibility }: Props) {
@@ -68,7 +73,7 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">
-              コンテンツ / グッズ の公開設定
+              コンテンツ / グッズ / DM の公開設定
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               OFF にすると該当セクションのページ・APIが一般ユーザーから見えなくなります

@@ -14,6 +14,7 @@ import { SendDirectMessageSchema, resolvePreferredName } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 import {
   sendDirectMessage,
   listMyDirectMessages,
@@ -25,6 +26,9 @@ import {
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
+  const { dmVisible } = await getSiteSectionVisibility();
+  if (!dmVisible) throw errors.notFound('この機能は現在ご利用いただけません');
+
   const session = await requireApiSession(req);
   const [user, messages, ngWords] = await Promise.all([
     prisma.user.findUnique({
@@ -44,6 +48,9 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
+  const { dmVisible } = await getSiteSectionVisibility();
+  if (!dmVisible) throw errors.notFound('この機能は現在ご利用いただけません');
+
   const session = await requireApiSession(req);
 
   const json = (await req.json().catch(() => null)) as { body?: unknown } | null;

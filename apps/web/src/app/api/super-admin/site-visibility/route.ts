@@ -1,10 +1,10 @@
 /**
- * GET   /api/super-admin/site-visibility — コンテンツ/グッズ セクションの公開設定を取得
+ * GET   /api/super-admin/site-visibility — コンテンツ/グッズ/DM セクションの公開設定を取得
  * PATCH /api/super-admin/site-visibility — 公開設定を更新 (即時反映)
  *
  * SUPER_ADMIN 限定。値は AppSetting (site.sectionVisibility) に永続化される。
- * 非公開にすると /contents, /products (および各詳細ページ・公開API) が
- * 404 相当になる (/admin/* の管理画面は対象外)。
+ * 非公開にすると /contents, /products, /me/dm (および各詳細ページ・公開API) が
+ * 404 相当になる (/admin/*, /super-admin/* の管理画面は対象外)。
  */
 import { NextResponse } from 'next/server';
 import { SiteSectionVisibilitySchema } from '@idol/shared';

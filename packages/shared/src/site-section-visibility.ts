@@ -1,12 +1,12 @@
 /**
- * サイト全体のセクション公開設定 (コンテンツ / グッズ)。
+ * サイト全体のセクション公開設定 (コンテンツ / グッズ / DM)。
  *
  * - Content / Product は個別レコード単位の status / isActive を持つが、
  *   「セクションそのもの」を一時的に非公開にする (オープン前の準備中など) ための
  *   サイト全体トグル。SUPER_ADMIN が /super-admin/settings から ON/OFF できる。
  * - AppSetting (site.sectionVisibility) に JSON で永続化する。
  * - 非公開時は一覧/詳細ページとも 404 相当のメッセージを表示し、対応する公開 API
- *   (/api/contents*, /api/products*) も 404 を返す。管理画面 (/admin/*) は対象外。
+ *   (/api/contents*, /api/products*, /api/me/dm) も 404 を返す。管理画面 (/admin/*, /super-admin/*) は対象外。
  */
 import { z } from 'zod';
 
@@ -18,12 +18,15 @@ export const SiteSectionVisibilitySchema = z.object({
   contentsVisible: z.boolean().default(true),
   /** グッズ ( EC) セクションを公開するか */
   productsVisible: z.boolean().default(true),
+  /** REIRIE への DM セクションを公開するか */
+  dmVisible: z.boolean().default(true),
 });
 
 export type SiteSectionVisibility = z.infer<typeof SiteSectionVisibilitySchema>;
 
-/** 未設定時の既定値 (安全側 = 通常運用と同じ「両方公開」) */
+/** 未設定時の既定値 (安全側 = 通常運用と同じ「すべて公開」) */
 export const DEFAULT_SITE_SECTION_VISIBILITY: SiteSectionVisibility = {
   contentsVisible: true,
   productsVisible: true,
+  dmVisible: true,
 };
