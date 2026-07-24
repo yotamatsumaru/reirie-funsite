@@ -145,7 +145,7 @@ export function Sidebar({
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
-        <Link href="/" className="text-lg font-black uppercase tracking-wide text-black">
+        <Link href="/" className="text-lg font-black tracking-wide text-black">
           ReiRieRoom
         </Link>
         <Link
@@ -244,7 +244,7 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 py-6 text-black">
       {/* ロゴ */}
-      <Link href="/" className="mb-1 px-2 text-2xl font-black uppercase tracking-wide text-black">
+      <Link href="/" className="mb-1 px-2 text-2xl font-black tracking-wide text-black">
         ReiRieRoom
       </Link>
       <p className="mb-6 px-2 text-[10px] font-bold uppercase tracking-[0.3em] text-twilight-rose">

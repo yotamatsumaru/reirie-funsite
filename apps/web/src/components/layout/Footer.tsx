@@ -4,7 +4,7 @@ export function Footer() {
       <div className="mx-auto max-w-5xl px-4 py-8 text-sm sm:px-8 sm:py-10 safe-bottom">
         <div className="flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
           <div>
-            <p className="text-lg font-black uppercase tracking-wide text-white">ReiRieRoom</p>
+            <p className="text-lg font-black tracking-wide text-white">ReiRieRoom</p>
             <p className="mt-1 text-xs text-white/55">
               © {new Date().getFullYear()} ReiRieRoom — REIRIE Official Fan Club
             </p>
