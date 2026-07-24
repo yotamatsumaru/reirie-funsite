@@ -166,6 +166,81 @@ aws ssm get-parameters-by-path --path "/$APP/$ENV" --recursive \
 
 ---
 
+## Step 3.5. 稼働後に Stripe 設定を更新して反映する (重要)
+
+> **⚠️ よくあるハマり:** SSM の Stripe パラメータ (secret-key / price/* 等) を
+> **後から** 更新しても、EC2 の `.env.production` は初回起動時 (user-data.sh) の
+> 値のままで、**自動では反映されません**。その結果「SSM は直したのに
+> プラン加入で『サーバーエラー』が直らない」という状態になります。
+>
+> **`idol-fansite-dev-stripe-webhook` (Lambda) の環境変数を直しても、
+> プラン加入ボタン (EC2 の Web アプリ) には反映されません。** 加入ボタンが
+> 参照するのは SSM → EC2 の `.env.production` です。
+
+### 手順
+
+**① SSM のパラメータを更新** (例: Stripe 本番キー / 価格ID)
+
+このアプリが実際に使う価格は **STANDARD=月額 / PREMIUM=年額** の 2 つだけです
+(`packages/shared/src/constants.ts` の `PLAN_BILLING_INTERVAL`)。
+残り 2 つ (standard-yearly / premium-monthly) は未使用なので DUMMY でも動きます。
+
+```bash
+APP=idol-fansite; ENV=dev
+
+# 実際に使う 2 つ (必須)
+aws ssm put-parameter --name "/$APP/$ENV/stripe/price/standard-monthly" --type String --value "price_xxxxxxxx" --overwrite
+aws ssm put-parameter --name "/$APP/$ENV/stripe/price/premium-yearly"   --type String --value "price_yyyyyyyy" --overwrite
+
+# 本番シークレットキー (sk_live_ で始まる。★等のプレースホルダを残さないこと)
+aws ssm put-parameter --name "/$APP/$ENV/stripe/secret-key" --type SecureString --value "sk_live_xxxxx" --overwrite
+```
+
+登録した秘密鍵に `★` や `DUMMY` が混入していないか確認:
+
+```bash
+aws ssm get-parameter --name "/$APP/$ENV/stripe/secret-key" --with-decryption --query "Parameter.Value" --output text
+# => sk_live_51... のように表示され、★/DUMMY が含まれないこと
+```
+
+**② EC2 に反映** (`.env.production` 再生成 + 再ビルド + PM2 再起動)
+
+`deploy.sh` に `--refresh-env` を付けると、SSM から Stripe 設定を読み直して
+`.env.production` を更新してから再デプロイします。
+
+```bash
+# EC2 インスタンスID を取得
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=tag:Application,Values=idol-fansite" "Name=instance-state-name,Values=running" \
+  --query "Reservations[0].Instances[0].InstanceId" --output text)
+
+# SSM Run Command で --refresh-env 付きデプロイを実行
+aws ssm send-command \
+  --document-name "AWS-RunShellScript" \
+  --targets "Key=tag:Application,Values=idol-fansite" \
+  --parameters commands='["sudo -u ec2-user APP_BRANCH=main bash /home/ec2-user/app/deploy/deploy.sh --refresh-env"]'
+```
+
+または SSM Session Manager で EC2 に入って直接実行:
+
+```bash
+aws ssm start-session --target "$INSTANCE_ID"
+# EC2 上で:
+sudo -u ec2-user APP_BRANCH=main bash /home/ec2-user/app/deploy/deploy.sh --refresh-env
+```
+
+`regenerate-env.sh` の安全設計:
+- Stripe 関連の値のみ更新し、`DATABASE_URL` など他の値には触らない
+- SSM から取得できなかった (空の) 値では上書きしない (既存値を守る)
+- 冪等 (何度実行しても同じ結果)
+
+**③ 動作確認**
+
+`/plans` (会員プラン) ページでプラン加入ボタンを押し、Stripe Checkout 画面へ
+遷移すれば成功。エラーが出る場合は `pm2 logs --nostream` で詳細を確認。
+
+---
+
 ## Step 4. Stripe Webhook Lambda をビルド
 
 CDK の `webhook-stack` は `functions/stripe-webhook/dist/` を参照するので先にビルド:
@@ -854,6 +929,18 @@ psql "$DATABASE_URL"  # EC2 上で
 ```bash
 # storage-stack の Output の AssetDistributionDomain / VideoDistributionDomain を
 # SSM の /idol-fansite/dev/cloudfront/asset-domain などに登録 → EC2 再起動が必要
+```
+
+### プラン加入で「サーバーエラーが発生しました」が出る
+Stripe 設定 (secret-key / price ID) が EC2 の `.env.production` に反映されて
+いないのが典型。SSM を更新したうえで **`deploy.sh --refresh-env`** で反映する。
+詳細は「Step 3.5. 稼働後に Stripe 設定を更新して反映する」を参照。
+
+```bash
+# 現在 EC2 が読んでいる Stripe 値を確認 (EC2 上)
+grep -E '^STRIPE_(SECRET_KEY|PRICE_STANDARD_MONTHLY|PRICE_PREMIUM_YEARLY)=' \
+  /home/ec2-user/app/.env.production | sed 's/=.\{0,8\}.*/=<hidden>/'
+# ★ や DUMMY が残っていないか、sk_live_ で始まっているかを確認
 ```
 
 ---

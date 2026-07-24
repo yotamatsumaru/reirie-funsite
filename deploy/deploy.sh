@@ -5,6 +5,14 @@
 #
 #   環境変数:
 #     APP_BRANCH (default: main) - チェックアウトするブランチ
+#     REFRESH_ENV (0/1, default: 0) - 1 なら SSM から .env.production の
+#         Stripe 設定を再生成してからビルド/再起動する。
+#         (SSM を更新したあとの反映用。--refresh-env オプションでも指定可)
+#
+#   使い方:
+#     bash deploy.sh                 # 通常デプロイ (env は据え置き)
+#     bash deploy.sh --refresh-env   # SSM から Stripe 設定を再取得して反映
+#     REFRESH_ENV=1 bash deploy.sh   # 同上 (環境変数指定)
 #
 #   このスクリプトが面倒を見る "ハマりどころ":
 #     1. DATABASE_URL 等の env を .env.production から安全に読み込む
@@ -26,11 +34,21 @@ ECOSYSTEM="$APP_DIR/deploy/ecosystem.config.js"
 WEB_DIR="$APP_DIR/apps/web"
 STANDALONE_WEB_DIR="$WEB_DIR/.next/standalone/apps/web"
 
+# --refresh-env オプション / REFRESH_ENV 環境変数の解釈
+REFRESH_ENV="${REFRESH_ENV:-0}"
+for arg in "$@"; do
+  case "$arg" in
+    --refresh-env) REFRESH_ENV=1 ;;
+  esac
+done
+
 cd "$APP_DIR"
 
 export NVM_DIR="$HOME/.nvm"
 # shellcheck disable=SC1091
 . "$NVM_DIR/nvm.sh"
+
+
 
 # ---------------------------------------------------------------------
 # 0. .env.production を ecosystem.config.js 経由で読み込み export する
@@ -73,6 +91,39 @@ echo "[deploy] git pull..."
 git fetch --all --prune
 git checkout "$APP_BRANCH"
 git pull --ff-only
+
+# ---------------------------------------------------------------------
+# REFRESH_ENV=1: SSM から .env.production の Stripe 設定を再生成する。
+#   git pull の "後" に実行することで、最新の regenerate-env.sh を使う。
+#   build の "前" に実行することで、NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+#   などビルド時に埋め込まれる公開値も新しい値で焼き込まれる。
+#   再生成後は step 0 で export 済みの env を最新値へ読み直す。
+# ---------------------------------------------------------------------
+if [ "$REFRESH_ENV" = "1" ]; then
+  echo "[deploy] REFRESH_ENV=1: regenerating .env.production Stripe settings from SSM..."
+  if [ -f "$APP_DIR/deploy/regenerate-env.sh" ]; then
+    bash "$APP_DIR/deploy/regenerate-env.sh"
+    # 再生成後の値を現在のシェルにも反映 (build がこの env を参照するため)
+    echo "[deploy] reloading env after refresh..."
+    while IFS=$'\t' read -r k v; do
+      [ -z "$k" ] && continue
+      case "$k" in
+        NODE_ENV|PORT|HOSTNAME) continue ;;
+      esac
+      export "$k=$v"
+    done < <(node -e '
+      const c = require(process.argv[1]);
+      const e = (c.apps && c.apps[0] && c.apps[0].env) || {};
+      for (const k of Object.keys(e)) {
+        const v = String(e[k]);
+        if (v.includes("\n")) continue;
+        process.stdout.write(k + "\t" + v + "\n");
+      }
+    ' "$ECOSYSTEM" 2>/dev/null)
+  else
+    echo "[deploy][WARN] regenerate-env.sh not found; skipping env refresh" >&2
+  fi
+fi
 
 echo "[deploy] pnpm install..."
 pnpm install --frozen-lockfile
