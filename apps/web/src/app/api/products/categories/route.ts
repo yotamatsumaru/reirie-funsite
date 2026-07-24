@@ -4,11 +4,15 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { handle } from '@/lib/errors';
+import { errors, handle } from '@/lib/errors';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
+  const { productsVisible } = await getSiteSectionVisibility();
+  if (!productsVisible) throw errors.notFound('商品は現在非公開です');
+
   const cats = await prisma.productCategory.findMany({
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     select: {

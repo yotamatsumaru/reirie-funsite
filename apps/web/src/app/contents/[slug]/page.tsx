@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { canAccess } from '@idol/shared';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,9 @@ export default async function ContentDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const { contentsVisible } = await getSiteSectionVisibility();
+  if (!contentsVisible) notFound();
+
   const { slug } = await params;
   const session = await auth();
 

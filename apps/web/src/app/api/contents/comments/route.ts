@@ -17,10 +17,14 @@ import {
 import { requireApiAccessLevel, resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { sanitizeContentBody } from '@/lib/sanitize-html';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
+  const { contentsVisible } = await getSiteSectionVisibility();
+  if (!contentsVisible) throw errors.notFound('記事が見つかりません');
+
   const url = new URL(req.url);
   const query = ListContentCommentsQuerySchema.parse({
     contentId: url.searchParams.get('contentId'),
@@ -81,6 +85,9 @@ export const GET = handle(async (req: Request) => {
 });
 
 export const POST = handle(async (req: Request) => {
+  const { contentsVisible } = await getSiteSectionVisibility();
+  if (!contentsVisible) throw errors.notFound('記事が見つかりません');
+
   // STANDARD 以上のみ投稿可能
   const session = await requireApiAccessLevel(req, 'MEMBERS');
   if (!session?.user?.id) throw errors.unauthorized();

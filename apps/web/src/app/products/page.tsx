@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { canAccess } from '@idol/shared';
@@ -7,11 +8,15 @@ import type { Prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { effectiveUnitPrice, formatJpy } from '@/lib/pricing';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const metadata: Metadata = { title: 'グッズ' };
 export const dynamic = 'force-dynamic';
 
 export default async function ProductsPage() {
+  const { productsVisible } = await getSiteSectionVisibility();
+  if (!productsVisible) notFound();
+
   const session = await auth();
   const plan = session?.user?.plan ?? 'FREE';
 

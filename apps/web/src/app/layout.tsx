@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from '@/components/layout/Providers';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Footer } from '@/components/layout/Footer';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 // ===== City Editorial タイポグラフィ =====
 // 旧: Cormorant Garamond（英字セリフ）+ Zen Maru Gothic（丸ゴシック）+ Shrikhand（装飾）
@@ -32,12 +33,13 @@ export const viewport: Viewport = {
   themeColor: '#c263a2',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { contentsVisible, productsVisible } = await getSiteSectionVisibility();
   return (
     <html lang="ja" className={zenKaku.variable}>
       <body className="min-h-screen">
         <Providers>
-          <Sidebar />
+          <Sidebar contentsVisible={contentsVisible} productsVisible={productsVisible} />
           {/* PC ではサイドバー幅 (w-64 = 16rem) 分だけ右にオフセット */}
           <div className="flex min-h-screen flex-col md:pl-64">
             <main className="flex-1">{children}</main>
