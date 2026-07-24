@@ -87,6 +87,25 @@ export async function getStripeWebhookSecret(): Promise<string> {
   return config.webhookSecret;
 }
 
+/**
+ * DB に保存済みの stripeCustomerId が現在の Stripe モードに実在するかを検証し、
+ * 実在しない (テスト→本番の切り替え等で resource_missing になる) / 削除済みなら
+ * null を返す。呼び出し側はその場合に顧客を作り直す。
+ */
+export async function verifyStripeCustomer(
+  stripe: Stripe,
+  customerId: string | null | undefined,
+): Promise<string | null> {
+  if (!customerId) return null;
+  try {
+    const existing = await stripe.customers.retrieve(customerId);
+    if ((existing as { deleted?: boolean }).deleted) return null;
+    return customerId;
+  } catch {
+    return null;
+  }
+}
+
 export async function getPriceId(
   plan: 'STANDARD' | 'PREMIUM',
   interval: 'MONTH' | 'YEAR',
