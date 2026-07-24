@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { CatalogForm } from '../catalog-form';
+import { DigitalAssetsManager } from '../digital-assets-manager';
 import { requireCapabilityPage } from '@/auth';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,22 @@ export default async function EditCatalogItemPage({
   const { id } = await params;
   const item = await prisma.rewardCatalogItem.findUnique({ where: { id } });
   if (!item) notFound();
+
+  const digitalAssets =
+    item.kind === 'DIGITAL'
+      ? await prisma.rewardDigitalAsset.findMany({
+          where: { catalogItemId: id },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          select: {
+            id: true,
+            fileName: true,
+            contentType: true,
+            fileSize: true,
+            sortOrder: true,
+            createdAt: true,
+          },
+        })
+      : [];
   return (
     <div className="space-y-4">
       <div>
@@ -38,6 +55,16 @@ export default async function EditCatalogItemPage({
           sortOrder: item.sortOrder,
         }}
       />
+
+      {item.kind === 'DIGITAL' && (
+        <DigitalAssetsManager
+          catalogItemId={item.id}
+          initialAssets={digitalAssets.map((a) => ({
+            ...a,
+            createdAt: a.createdAt.toISOString(),
+          }))}
+        />
+      )}
     </div>
   );
 }
