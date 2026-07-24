@@ -98,16 +98,30 @@ ZIP パッケージは `pnpm run build:zip` で生成し、CDK の `Code.fromAss
 実行時に `PrismaClientInitializationError: could not locate the Query Engine`
 が発生し、全リクエストが 502 になる。
 
-対策は以下 2 点で、`pnpm run build:zip` に組み込み済み:
+対策は以下 3 点で、`pnpm run build:zip` と `src/db.ts` に組み込み済み:
 
 1. `packages/db/prisma/schema.prisma` の `generator.binaryTargets` に
    `"rhel-openssl-3.0.x"` を含める → `pnpm db:generate` で Linux エンジンが生成される。
-2. ビルド後に `scripts/copy-prisma-engine.cjs` がそのエンジンを `dist/` 直下へコピーし、
-   `scripts/make-zip.cjs` が `index.js` / `index.js.map` / `.so.node` を
-   **ZIP のルート**に格納する (esbuild bundle は同階層からエンジンを探すため)。
+2. ビルド後に `scripts/copy-prisma-engine.cjs` がそのエンジンを
+   `dist/.prisma/client/` (主) と `dist/` 直下 (副) の **両方**へコピーし、
+   `scripts/make-zip.cjs` が両方を ZIP に格納する (計 4 エントリ)。
+3. **`src/db.ts` が `@idol/db` (= PrismaClient の生成) を読み込む前に、
+   環境変数 `PRISMA_QUERY_ENGINE_LIBRARY` を同梱エンジンの絶対パスに設定する。**
+   これが最重要。`esbuild --bundle --minify` は Prisma のエンジン探索ロジックを
+   壊し、ビルドマシン (Windows) の絶対パスをバンドルに焼き込んでしまうため、
+   ZIP にエンジンを入れるだけでは `/var/task` を探索してくれない。
+   `db.ts` は `LAMBDA_TASK_ROOT` (通常 `/var/task`) 配下の
+   `.prisma/client/…so.node` → ルート `…so.node` の順で実在するパスを検出し、
+   `PRISMA_QUERY_ENGINE_LIBRARY` に設定してから PrismaClient を `require` する。
 
 > ❌ `Compress-Archive -Path index.js, index.js.map` のように JS だけを手動 ZIP すると
 > エンジンが漏れて 502 になる。必ず `pnpm run build:zip` (または `build:full` → `make-zip`) を使うこと。
+> ❌ ZIP にエンジンを入れても `db.ts` の `PRISMA_QUERY_ENGINE_LIBRARY` 設定が無いと、
+> minify 済みバンドルは Windows パスを探し続けて 502 になる (実際に発生した事象)。
+>
+> 💡 保険として Lambda の環境変数に直接
+> `PRISMA_QUERY_ENGINE_LIBRARY=/var/task/.prisma/client/libquery_engine-rhel-openssl-3.0.x.so.node`
+> を設定してもよい (コード側は環境変数が既にあればそれを尊重する)。
 
 ### 手動デプロイ手順 (Windows PowerShell)
 
@@ -124,10 +138,11 @@ pnpm db:generate
 # 3. ビルド + エンジン同梱 + ZIP 作成 (この 1 コマンドで全部やる)
 pnpm --filter @idol/stripe-webhook build:zip
 
-# 4. ZIP の中身を確認 (index.js / index.js.map / *.so.node の 3 ファイルが必須)
+# 4. ZIP の中身を確認 (4 エントリが必須:
+#    index.js / index.js.map / .prisma\client\*.so.node / ルート *.so.node)
 #    PowerShell:
 Expand-Archive -Path functions\stripe-webhook\dist\function.zip -DestinationPath functions\stripe-webhook\dist\_check -Force
-Get-ChildItem functions\stripe-webhook\dist\_check
+Get-ChildItem -Recurse functions\stripe-webhook\dist\_check | Select-Object FullName
 Remove-Item -Recurse functions\stripe-webhook\dist\_check
 
 # 5. Lambda を更新
@@ -138,5 +153,9 @@ aws lambda update-function-code `
   --publish
 ```
 
-デプロイ後、Stripe テストイベント再送 → CloudWatch Logs で
-`[stripe-webhook] processed mode=TEST ...` (Status 200) を確認する。
+デプロイ後、CloudWatch Logs で以下を確認する:
+
+- INIT 時に `[stripe-webhook] Prisma engine を検出: /var/task/.prisma/client/…so.node`
+  が出る (= エンジンパス解決に成功)。
+- Stripe テストイベント再送 → `[stripe-webhook] processed mode=TEST ...` (Status 200)。
+- `PrismaClientInitializationError` が消えていること。
