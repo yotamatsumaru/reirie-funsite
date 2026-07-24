@@ -9,11 +9,15 @@ import { canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { effectiveUnitPrice } from '@/lib/pricing';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(
   async (req: Request, ctx: { params: Promise<{ slug: string }> }) => {
+    const { productsVisible } = await getSiteSectionVisibility();
+    if (!productsVisible) throw errors.notFound('商品が見つかりません');
+
     const { slug } = await ctx.params;
     const session = await resolveApiSession(req);
     const plan = session?.user?.plan ?? 'FREE';

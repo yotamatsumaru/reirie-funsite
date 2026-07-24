@@ -5,6 +5,7 @@ import { formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
 import { listAnnouncements } from '@/lib/announcements';
 import { getSiteImageUrl } from '@/lib/site-image';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,8 @@ export default async function HomePage() {
 
   // ヒーロー画像 (super-admin で差し替え可能。未設定時はデフォルト画像)
   const heroImageUrl = (await getSiteImageUrl('home.hero')) ?? DEFAULT_HERO_IMAGE;
+
+  const { contentsVisible } = await getSiteSectionVisibility();
 
   return (
     <div className="bg-twilight-lavender">
@@ -55,12 +58,14 @@ export default async function HomePage() {
               >
                 入室する（無料会員登録）
               </Link>
-              <Link
-                href="/contents"
-                className="rounded-full border-2 border-black bg-transparent px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:-translate-y-0.5 hover:bg-black hover:text-white"
-              >
-                コンテンツを見る
-              </Link>
+              {contentsVisible && (
+                <Link
+                  href="/contents"
+                  className="rounded-full border-2 border-black bg-transparent px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:-translate-y-0.5 hover:bg-black hover:text-white"
+                >
+                  コンテンツを見る
+                </Link>
+              )}
             </div>
           </div>
 

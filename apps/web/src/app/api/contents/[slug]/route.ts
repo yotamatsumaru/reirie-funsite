@@ -3,10 +3,14 @@ import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request, ctx: { params: Promise<{ slug: string }> }) => {
+  const { contentsVisible } = await getSiteSectionVisibility();
+  if (!contentsVisible) throw errors.notFound('記事が見つかりません');
+
   const { slug } = await ctx.params;
   const session = await resolveApiSession(req);
 

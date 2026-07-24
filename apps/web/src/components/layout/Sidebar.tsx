@@ -77,13 +77,29 @@ const MEMBER_GROUP: NavGroup = {
   ],
 };
 
-export function Sidebar() {
+export function Sidebar({
+  contentsVisible = true,
+  productsVisible = true,
+}: {
+  /** /super-admin/settings のトグルで OFF の場合、対応するナビ項目を非表示にする */
+  contentsVisible?: boolean;
+  productsVisible?: boolean;
+} = {}) {
   const { data: session, status } = useSession();
   const cartCount = useCartItemCount();
   const isAdmin = roleIsAdmin(session?.user?.role);
   const isSuper = isSuperAdmin(session?.user?.role);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+
+  const navGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      if (item.href === '/contents') return contentsVisible;
+      if (item.href === '/products') return productsVisible;
+      return true;
+    }),
+  })).filter((group) => group.items.length > 0);
 
   // ログイン中はプラン/ランク/ポイントを取得し、ログアウトしたらクリア
   useEffect(() => {
@@ -139,6 +155,7 @@ export function Sidebar() {
       {/* ===== PC: 固定サイドバー ===== */}
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:w-64 md:flex-col md:border-r-2 md:border-black md:bg-white">
         <SidebarContent
+          navGroups={navGroups}
           cartCount={cartCount}
           status={status}
           session={session}
@@ -177,6 +194,7 @@ export function Sidebar() {
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
           <SidebarContent
+            navGroups={navGroups}
             cartCount={cartCount}
             status={status}
             session={session}
@@ -192,6 +210,7 @@ export function Sidebar() {
 
 /* ===== サイドバー中身（PC / モバイル共通） ===== */
 function SidebarContent({
+  navGroups,
   cartCount,
   status,
   session,
@@ -199,6 +218,7 @@ function SidebarContent({
   isSuper,
   pathname,
 }: {
+  navGroups: NavGroup[];
   cartCount: number;
   status: string;
   session: ReturnType<typeof useSession>['data'];
@@ -219,7 +239,7 @@ function SidebarContent({
 
       {/* ナビゲーション */}
       <nav className="flex-1 space-y-6">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.title}>
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
               {group.title}

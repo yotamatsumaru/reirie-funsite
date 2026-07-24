@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ListContentsQuerySchema, canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
-import { handle } from '@/lib/errors';
+import { errors, handle } from '@/lib/errors';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
+  const { contentsVisible } = await getSiteSectionVisibility();
+  if (!contentsVisible) throw errors.notFound('コンテンツは現在非公開です');
+
   const url = new URL(req.url);
   const query = ListContentsQuerySchema.parse({
     type: url.searchParams.get('type') ?? undefined,

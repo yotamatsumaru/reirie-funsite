@@ -7,13 +7,17 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ListProductsQuerySchema, canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
-import { handle } from '@/lib/errors';
+import { errors, handle } from '@/lib/errors';
 import { effectiveUnitPrice } from '@/lib/pricing';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 import type { Prisma } from '@idol/db';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
+  const { productsVisible } = await getSiteSectionVisibility();
+  if (!productsVisible) throw errors.notFound('商品は現在非公開です');
+
   const url = new URL(req.url);
   const query = ListProductsQuerySchema.parse({
     category: url.searchParams.get('category') ?? undefined,

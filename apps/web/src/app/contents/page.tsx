@@ -1,15 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { canAccess } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const metadata: Metadata = { title: 'コンテンツ' };
 export const dynamic = 'force-dynamic';
 
 export default async function ContentsPage() {
+  const { contentsVisible } = await getSiteSectionVisibility();
+  if (!contentsVisible) notFound();
+
   const session = await auth();
   const plan = session?.user?.plan;
 

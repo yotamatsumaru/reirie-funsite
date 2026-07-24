@@ -27,6 +27,10 @@ import {
   DEFAULT_STRIPE_TEST_CREDENTIALS,
   StripeTestCredentialsSchema,
   type StripeTestCredentials,
+  SITE_SECTION_VISIBILITY_KEY,
+  DEFAULT_SITE_SECTION_VISIBILITY,
+  SiteSectionVisibilitySchema,
+  type SiteSectionVisibility,
 } from '@idol/shared';
 
 /**
@@ -189,6 +193,37 @@ export async function setStripeTestCredentials(
   await prisma.appSetting.upsert({
     where: { key: STRIPE_TEST_CREDENTIALS_SETTING_KEY },
     create: { key: STRIPE_TEST_CREDENTIALS_SETTING_KEY, value },
+    update: { value },
+  });
+  return validated;
+}
+
+/**
+ * コンテンツ / グッズ セクションのサイト全体公開設定を取得する。
+ * 未設定 / 破損時は既定値 (両方公開) を返す (安全側)。
+ */
+export async function getSiteSectionVisibility(): Promise<SiteSectionVisibility> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: SITE_SECTION_VISIBILITY_KEY },
+    });
+    if (!row) return DEFAULT_SITE_SECTION_VISIBILITY;
+    const parsed = SiteSectionVisibilitySchema.safeParse(JSON.parse(row.value));
+    return parsed.success ? parsed.data : DEFAULT_SITE_SECTION_VISIBILITY;
+  } catch {
+    return DEFAULT_SITE_SECTION_VISIBILITY;
+  }
+}
+
+/** コンテンツ / グッズ セクションのサイト全体公開設定を保存する (SUPER_ADMIN 限定で呼び出すこと) */
+export async function setSiteSectionVisibility(
+  visibility: SiteSectionVisibility,
+): Promise<SiteSectionVisibility> {
+  const validated = SiteSectionVisibilitySchema.parse(visibility);
+  const value = JSON.stringify(validated);
+  await prisma.appSetting.upsert({
+    where: { key: SITE_SECTION_VISIBILITY_KEY },
+    create: { key: SITE_SECTION_VISIBILITY_KEY, value },
     update: { value },
   });
   return validated;

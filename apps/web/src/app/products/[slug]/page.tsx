@@ -6,6 +6,7 @@ import { canAccess } from '@idol/shared';
 import { effectiveUnitPrice, formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
 import { AddToCartForm } from '@/components/product/AddToCartForm';
+import { getSiteSectionVisibility } from '@/lib/app-setting';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,9 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const { productsVisible } = await getSiteSectionVisibility();
+  if (!productsVisible) notFound();
+
   const { slug } = await params;
   const session = await auth();
   const plan = session?.user?.plan ?? 'FREE';
