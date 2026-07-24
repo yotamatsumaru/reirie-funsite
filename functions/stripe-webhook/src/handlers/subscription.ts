@@ -9,6 +9,7 @@ import {
   intervalFromPriceId,
   mapSubscriptionStatus,
   planFromPriceId,
+  type PlanType,
   type PriceMap,
 } from '../plan-mapping';
 import { getStripe } from '../stripe-client';
@@ -86,6 +87,45 @@ export async function handleSubscriptionUpsert(
     toDate((item as unknown as { current_period_end?: number }).current_period_end) ??
     new Date();
 
+  // ------------------------------------------------------------------
+  // プラン変更予約 (Subscription Schedule) の同期
+  //   - Stripe 側でスケジュールが release / 解除された、または既存の予約プランへ
+  //     実際に切り替わった場合は、DB の予約カラムをクリアする。
+  //   - まだスケジュールが有効 (別プランへ切替待ち) の場合は予約情報を保持する。
+  // ------------------------------------------------------------------
+  const existing = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: sub.id },
+  });
+
+  const scheduleRef = (sub as unknown as { schedule?: string | { id: string } | null }).schedule;
+  const currentScheduleId =
+    typeof scheduleRef === 'string' ? scheduleRef : (scheduleRef?.id ?? null);
+
+  // 予約カラムの決定
+  //   1) 実際の planType が予約プランに一致 → 切替完了なのでクリア
+  //   2) Stripe 側に schedule が無い (release 済み) → クリア
+  //   3) それ以外 → 既存の予約を維持
+  // DB の scheduledPlanType は Prisma enum (FREE も含む) だが、予約対象は
+  // 有料プランのみのため PlanType (STANDARD|PREMIUM) として扱う。
+  let scheduledPlanType: PlanType | null =
+    existing?.scheduledPlanType === 'STANDARD' || existing?.scheduledPlanType === 'PREMIUM'
+      ? existing.scheduledPlanType
+      : null;
+  let stripeScheduleId: string | null = existing?.stripeScheduleId ?? null;
+
+  if (scheduledPlanType && scheduledPlanType === planType) {
+    // 予約先プランに到達 → 予約完了
+    scheduledPlanType = null;
+    stripeScheduleId = null;
+  } else if (!currentScheduleId) {
+    // Stripe 側にスケジュールが無い (未使用 or release 済み) → 予約解除
+    scheduledPlanType = null;
+    stripeScheduleId = null;
+  } else {
+    // スケジュール継続中: 最新の schedule id を反映しつつ予約を維持
+    stripeScheduleId = currentScheduleId;
+  }
+
   await prisma.subscription.upsert({
     where: { stripeSubscriptionId: sub.id },
     create: {
@@ -101,6 +141,8 @@ export async function handleSubscriptionUpsert(
       cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
       canceledAt: toDate(sub.canceled_at),
       trialEndsAt: toDate(sub.trial_end),
+      scheduledPlanType,
+      stripeScheduleId,
     },
     update: {
       planType,
@@ -112,6 +154,8 @@ export async function handleSubscriptionUpsert(
       cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
       canceledAt: toDate(sub.canceled_at),
       trialEndsAt: toDate(sub.trial_end),
+      scheduledPlanType,
+      stripeScheduleId,
     },
   });
 
@@ -135,6 +179,9 @@ export async function handleSubscriptionDeleted(
       status: 'CANCELED',
       canceledAt: toDate(sub.canceled_at) ?? new Date(),
       cancelAtPeriodEnd: false,
+      // 解約時は保留中のプラン変更予約も無効化する
+      scheduledPlanType: null,
+      stripeScheduleId: null,
     },
   });
   return { ok: true };

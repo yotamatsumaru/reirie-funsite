@@ -7,6 +7,7 @@
  * - 各プランの「申し込む」ボタンが Stripe Checkout を起動
  */
 import { auth } from '@/auth';
+import { prisma } from '@idol/db';
 import {
   PLAN_LABELS,
   PLAN_PRICES,
@@ -22,6 +23,33 @@ export default async function PlansPage() {
   const session = await auth();
   const currentPlan = session?.user?.plan ?? 'FREE';
   const groups = groupedPlanBenefits();
+
+  // アクティブな契約と、期間満了時のプラン変更予約を取得する。
+  // (契約期間中はプランを固定し、変更は「満了時切替の予約」として扱うため)
+  const activeSub = session?.user?.id
+    ? await prisma.subscription.findFirst({
+        where: { userId: session.user.id, status: { in: ['ACTIVE', 'TRIALING'] } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          planType: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          scheduledPlanType: true,
+        },
+      })
+    : null;
+
+  const subscription = activeSub
+    ? {
+        planType: activeSub.planType as 'STANDARD' | 'PREMIUM',
+        currentPeriodEnd: activeSub.currentPeriodEnd.toISOString(),
+        cancelAtPeriodEnd: activeSub.cancelAtPeriodEnd,
+        scheduledPlanType: (activeSub.scheduledPlanType ?? null) as
+          | 'STANDARD'
+          | 'PREMIUM'
+          | null,
+      }
+    : null;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:py-16">
@@ -39,6 +67,7 @@ export default async function PlansPage() {
       <PlanSubscribeSection
         currentPlan={currentPlan}
         isAuthenticated={!!session?.user?.id}
+        subscription={subscription}
       />
 
       {/* 詳細比較表 */}
@@ -146,7 +175,8 @@ export default async function PlansPage() {
           <li>• 表示価格はすべて税込みです。決済は Stripe を利用しています。</li>
           <li>• PREMIUM は会報誌を年2回お届けします (発送先はマイページの住所が使用されます)。</li>
           <li>• サイト内ポイント (ログインボーナス・SNS シェア・ミニゲーム報酬) の付与率はプランに応じて優遇されます (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)。</li>
-          <li>• プラン変更時は次回更新時から適用されます (即時変更は差額調整あり)。</li>
+          <li>• ご契約中のプラン変更 (スタンダード⇔プレミアム) は、現在の契約が満了する次回更新時に切り替わる「予約」として受け付けます。契約期間中に即時アップグレード／ダウングレードはされません。</li>
+          <li>• 予約はプラン画面からいつでも解除でき、解除すると現在のプランがそのまま継続します。</li>
           <li>• ゲーム内のアイテム・章購入は別途課金となります (景品表示法に基づき確定報酬制を採用)。</li>
         </ul>
       </section>

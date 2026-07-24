@@ -22,6 +22,19 @@ export const POST = handle(async (req: Request) => {
     );
   }
 
+  // 既にアクティブなサブスクリプションがある場合は新規加入 (Checkout) を拒否する。
+  //   契約期間中のプラン変更は「期間満了時に切り替える予約」(change-plan API) で行う仕様。
+  //   これにより二重契約・即時アップグレードを防ぐ (UI をバイパスした直接呼び出し対策)。
+  const activeSub = await prisma.subscription.findFirst({
+    where: { userId: session.user.id, status: { in: ['ACTIVE', 'TRIALING'] } },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (activeSub) {
+    throw errors.badRequest(
+      '現在ご契約中のプランがあります。プラン変更は「プラン変更を予約」からお手続きください（現在の契約満了時に切り替わります）。',
+    );
+  }
+
   const priceId = await getPriceId(input.plan, input.interval);
   if (!priceId) {
     throw errors.badRequest(

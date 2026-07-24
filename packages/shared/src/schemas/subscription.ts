@@ -9,9 +9,17 @@ export const CreateCheckoutSessionSchema = z.object({
 });
 export type CreateCheckoutSessionInput = z.infer<typeof CreateCheckoutSessionSchema>;
 
+/**
+ * プラン変更 (予約) リクエスト。
+ *
+ * 契約期間中のアップグレード / ダウングレードは即時切替せず、
+ * 「期間満了時に切り替える」予約として受け付ける (Stripe Subscription Schedule)。
+ * 各プランの課金サイクルは固定 (STANDARD=月額 / PREMIUM=年額) のため
+ * interval は任意 (省略時はプラン既定を採用)。
+ */
 export const ChangePlanSchema = z.object({
   plan: z.enum(['STANDARD', 'PREMIUM']),
-  interval: z.enum(BILLING_INTERVALS),
+  interval: z.enum(BILLING_INTERVALS).optional(),
 });
 export type ChangePlanInput = z.infer<typeof ChangePlanSchema>;
 
