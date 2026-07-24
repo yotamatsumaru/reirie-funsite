@@ -114,8 +114,14 @@ export function SiteImageClient({ initial }: { initial: SiteImageItem[] }) {
                 className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex min-w-0 items-start gap-3">
-                  {/* プレビュー */}
-                  <div className="h-20 w-16 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white">
+                  {/* プレビュー (横長スロットは横長枠、それ以外は縦長枠で表示) */}
+                  <div
+                    className={`shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white ${
+                      slot.includes('desktop') || slot.includes('thumbnail')
+                        ? 'h-16 w-28'
+                        : 'h-20 w-16'
+                    }`}
+                  >
                     {item ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img

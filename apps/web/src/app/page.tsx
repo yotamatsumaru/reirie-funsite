@@ -11,6 +11,12 @@ export const dynamic = 'force-dynamic';
 
 const DEFAULT_HERO_IMAGE = '/images/hero/hero-main.jpg';
 
+// 外部URL (S3/CloudFront 等) は remotePatterns 未登録の可能性があるため
+// next/image の最適化をスキップする。ローカル/相対パスはそのまま最適化する。
+function isExternal(url: string): boolean {
+  return /^https?:\/\//.test(url) && url !== DEFAULT_HERO_IMAGE;
+}
+
 function formatDate(d: Date | null): string {
   if (!d) return '';
   return new Intl.DateTimeFormat('ja-JP', {
@@ -26,67 +32,93 @@ export default async function HomePage() {
     .slice(0, 3);
 
   // ヒーロー画像 (super-admin で差し替え可能。未設定時はデフォルト画像)
-  const heroImageUrl = (await getSiteImageUrl('home.hero')) ?? DEFAULT_HERO_IMAGE;
+  //  - スマホ用: 縦長 (home.hero)
+  //  - PC用   : 横長 (home.hero.desktop)
+  // 片方が未設定の場合はもう片方にフォールバックする。
+  const [heroPortraitRaw, heroLandscapeRaw] = await Promise.all([
+    getSiteImageUrl('home.hero'),
+    getSiteImageUrl('home.hero.desktop'),
+  ]);
+  const heroPortrait = heroPortraitRaw ?? heroLandscapeRaw ?? DEFAULT_HERO_IMAGE;
+  const heroLandscape = heroLandscapeRaw ?? heroPortraitRaw ?? DEFAULT_HERO_IMAGE;
 
   const { contentsVisible } = await getSiteSectionVisibility();
 
   return (
     <div className="bg-twilight-lavender">
-      {/* ===== Hero (City Editorial) ===== */}
-      <section className="relative overflow-hidden px-4 py-16 sm:py-24 md:py-28">
-        <div className="relative mx-auto grid max-w-6xl gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center md:gap-14">
-          <div>
-            <p className="mb-5 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.35em] text-black sm:text-sm">
-              <Star className="h-3.5 w-3.5 text-twilight-rose" />
-              REIRIE Official Fan Club
-            </p>
-            <h1 className="text-5xl font-black uppercase leading-[0.92] tracking-tight text-black sm:text-7xl md:text-8xl">
-              Rei<span className="text-twilight-rose">Rie</span>
-              <br />
-              Room
-            </h1>
-            <p className="mt-6 max-w-xl text-sm leading-relaxed text-black/80 sm:text-base md:text-lg">
-              ファンだけが入れる、紫水晶の部屋。
-              <br className="hidden sm:inline" />
-              限定コンテンツ・ライブ配信・特典会・先行チケット。
-              REIRIE との特別な時間をお届けします。
-            </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+      {/* ===== Hero (Full-bleed Editorial Banner) ===== */}
+      <section className="relative isolate w-full overflow-hidden">
+        {/* --- 背景画像 (PC=横長 / スマホ=縦長 で出し分け) --- */}
+        <div className="absolute inset-0 -z-10">
+          {/* スマホ: 縦長 */}
+          <Image
+            src={heroPortrait}
+            alt=""
+            aria-hidden
+            fill
+            priority
+            unoptimized={isExternal(heroPortrait)}
+            sizes="100vw"
+            className="object-cover md:hidden"
+          />
+          {/* PC: 横長 */}
+          <Image
+            src={heroLandscape}
+            alt=""
+            aria-hidden
+            fill
+            priority
+            unoptimized={isExternal(heroLandscape)}
+            sizes="100vw"
+            className="hidden object-cover md:block"
+          />
+          {/* 可読性のためのオーバーレイ: 左を暗く落とし、全体に紫トーンを重ねる */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/25" />
+          <div className="pointer-events-none absolute inset-0 bg-twilight-rose/15 mix-blend-multiply" />
+        </div>
+
+        {/* --- テキストオーバーレイ --- */}
+        <div className="relative mx-auto flex min-h-[78vh] max-w-6xl flex-col justify-end px-5 pb-14 pt-28 sm:min-h-[80vh] sm:px-6 sm:pb-20 sm:pt-32 md:min-h-[88vh] md:pb-24">
+          {/* 上部ラベル */}
+          <p className="mb-4 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.35em] text-white/90 sm:text-sm">
+            <Star className="h-3.5 w-3.5 text-twilight-rose" />
+            REIRIE Official Fan Club
+          </p>
+
+          <h1 className="text-6xl font-black uppercase leading-[0.9] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:text-8xl md:text-[8.5rem]">
+            Rei<span className="text-twilight-rose">Rie</span>
+            <br />
+            Room
+          </h1>
+
+          <p className="mt-6 max-w-xl text-sm leading-relaxed text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.5)] sm:text-base md:text-lg">
+            ファンだけが入れる、紫水晶の部屋。
+            <br className="hidden sm:inline" />
+            限定コンテンツ・ライブ配信・特典会・先行チケット。
+            REIRIE との特別な時間をお届けします。
+          </p>
+
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link
+              href="/signup"
+              className="rounded-full border-2 border-white bg-white px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:-translate-y-0.5 hover:border-twilight-rose hover:bg-twilight-rose hover:text-white"
+            >
+              入室する（無料会員登録）
+            </Link>
+            {contentsVisible && (
               <Link
-                href="/signup"
-                className="rounded-full border-2 border-black bg-black px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white transition hover:-translate-y-0.5 hover:bg-twilight-rose hover:border-twilight-rose"
+                href="/contents"
+                className="rounded-full border-2 border-white/80 bg-transparent px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white hover:text-black"
               >
-                入室する（無料会員登録）
+                コンテンツを見る
               </Link>
-              {contentsVisible && (
-                <Link
-                  href="/contents"
-                  className="rounded-full border-2 border-black bg-transparent px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:-translate-y-0.5 hover:bg-black hover:text-white"
-                >
-                  コンテンツを見る
-                </Link>
-              )}
-            </div>
+            )}
           </div>
 
-          <div className="relative">
-            <div className="relative aspect-[4/5] w-full overflow-hidden rounded-sm">
-              <Image
-                src={heroImageUrl}
-                alt="REIRIE"
-                fill
-                priority
-                // S3/CloudFront 等の外部URL (remotePatterns 未登録の可能性がある) は
-                // 最適化をスキップして安全側に倒す。ローカル/同一オリジンの相対パスはそのまま最適化。
-                unoptimized={/^https?:\/\//.test(heroImageUrl) && heroImageUrl !== DEFAULT_HERO_IMAGE}
-                sizes="(min-width: 768px) 40vw, 90vw"
-                className="object-cover"
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-twilight-rose/25 via-transparent to-transparent mix-blend-multiply" />
-            </div>
-            <div className="absolute -bottom-4 -left-4 rounded-sm bg-twilight-rose px-5 py-3.5 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)] sm:text-sm">
-              since 2026
-            </div>
+          {/* since バッジ (右下・オフセット影のエディトリアルアクセント) */}
+          <div className="absolute bottom-8 right-5 rounded-sm bg-twilight-rose px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)] sm:bottom-12 sm:right-6 sm:text-sm">
+            since 2026
           </div>
         </div>
       </section>
