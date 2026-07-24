@@ -154,3 +154,27 @@ export const AcceptAdminInvitationSchema = z.object({
   password: z.string().min(8).max(100).optional(),
 });
 export type AcceptAdminInvitationInput = z.infer<typeof AcceptAdminInvitationSchema>;
+
+// =====================================================================
+// ファンユーザーの直接登録 (Super Admin による手動登録)
+// =====================================================================
+
+/**
+ * 管理画面から直接ファンユーザーを新規登録する。
+ *  - 会員番号 (RR-000000 形式) を明示指定できる (通常は自動採番だが、
+ *    先着特典・記念番号など運営が意図的に割り当てたい場合に使う)。
+ *  - メール認証・利用規約入力を省略するため、emailVerified を即時セットする。
+ *  - パスワードは省略可。省略時はサーバー側でランダム生成し、レスポンスで
+ *    一度だけ返す (運営が本人へ別途安全な手段で伝える想定)。
+ */
+export const AdminCreateFanUserSchema = z.object({
+  email: z.email(),
+  displayName: z.string().min(1).max(50).optional(),
+  // 会員番号 (RR-000000 形式)。未指定なら MemberCounter から自動採番する。
+  memberNumber: z
+    .string()
+    .regex(/^RR-\d{6,}$/, '会員番号は "RR-" + 6桁以上の数字で入力してください (例: RR-000000)')
+    .optional(),
+  password: z.string().min(8).max(100).optional(),
+});
+export type AdminCreateFanUserInput = z.infer<typeof AdminCreateFanUserSchema>;
