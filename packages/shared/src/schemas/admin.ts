@@ -178,3 +178,19 @@ export const AdminCreateFanUserSchema = z.object({
   password: z.string().min(8).max(100).optional(),
 });
 export type AdminCreateFanUserInput = z.infer<typeof AdminCreateFanUserSchema>;
+
+/**
+ * 既存ユーザー (ファン・管理者いずれでも可) の会員番号を、メールアドレス指定で
+ * 直接変更する (SUPER_ADMIN 限定)。
+ *  - 記念会員番号 (RR-000000 等) を、すでにアカウントを持つ運営スタッフ本人
+ *    (SUPER_ADMIN 等) に割り当てたい場合に使う。
+ *  - memberNumber を null にすると会員番号を未設定に戻せる。
+ */
+export const AdminSetMemberNumberSchema = z.object({
+  email: z.email(),
+  memberNumber: z
+    .string()
+    .regex(/^RR-\d{6,}$/, '会員番号は "RR-" + 6桁以上の数字で入力してください (例: RR-000000)')
+    .nullable(),
+});
+export type AdminSetMemberNumberInput = z.infer<typeof AdminSetMemberNumberSchema>;

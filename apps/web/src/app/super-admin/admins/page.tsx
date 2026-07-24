@@ -17,6 +17,7 @@ import { AdminCapabilityEditor } from './admin-capability-editor';
 import { GrantAdminForm } from './grant-admin-form';
 import { InviteAdminForm } from './invite-admin-form';
 import { InvitationList, type InvitationItem } from './invitation-list';
+import { SetMemberNumberForm } from './set-member-number-form';
 
 export const metadata: Metadata = { title: '管理者管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -163,6 +164,20 @@ export default async function SuperAdminAdminsPage() {
         </CardHeader>
         <CardBody className="p-0">
           <InvitationList invitations={invitations} />
+        </CardBody>
+      </Card>
+
+      {/* 既存ユーザーの会員番号を直接変更 (記念番号の割り当てなど) */}
+      <Card className="mt-6">
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">会員番号を変更</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            すでにアカウントを持つユーザー (管理者・スーパー管理者を含む) の会員番号を、
+            メールアドレスを指定して直接書き換えます。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <SetMemberNumberForm />
         </CardBody>
       </Card>
     </main>
