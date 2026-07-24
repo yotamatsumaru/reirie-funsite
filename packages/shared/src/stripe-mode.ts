@@ -7,9 +7,13 @@
  *   (テストキーは Stripe Dashboard の Test mode 専用で実害が小さいため)。
  * - 「有効モード」自体は AppSetting (stripe.mode) に 'LIVE' | 'TEST' の文字列で永続化。
  *
- * 注意: これは Web アプリ (apps/web) の Checkout / Portal / Webhook のみが対象。
- * 独立稼働の Stripe Webhook Lambda (functions/stripe-webhook) は対象外
- * (EC2 障害時のフェイルセーフ用に本番キー固定で稼働させる設計のため)。
+ * 対象:
+ *  - Web アプリ (apps/web) の Checkout / Portal / Webhook
+ *  - 独立稼働の Stripe Webhook Lambda (functions/stripe-webhook)
+ *    ※ 以前は本番キー固定 (対象外) だったが、テストモードでもプラン/ランクを
+ *      検証できるよう、Lambda も stripe.mode / stripe.testCredentials を読んで
+ *      本番/テストを切り替えるようにした (A-1 方式)。テスト資格情報が未設定なら
+ *      安全側で本番 (LIVE) にフォールバックし、フェイルセーフ性を維持する。
  */
 import { z } from 'zod';
 

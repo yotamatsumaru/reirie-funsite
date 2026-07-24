@@ -5,9 +5,11 @@
  * - AppSetting (stripe.mode = 'TEST') が有効な場合は、管理画面で入力した
  *   テストモード用キー (AppSetting: stripe.testCredentials) を使う。
  * - 切り替えは即時反映 (サーバ再起動不要)。DB を読むため async 関数になる。
- * - 対象は Web アプリの Checkout / Portal / Webhook のみ。
- *   独立稼働の Stripe Webhook Lambda (functions/stripe-webhook) は対象外
- *   (EC2 障害時のフェイルセーフ用に本番キー固定で稼働させる設計のため)。
+ * - 対象は Web アプリの Checkout / Portal / Webhook。
+ *   独立稼働の Stripe Webhook Lambda (functions/stripe-webhook) も、
+ *   同じ AppSetting (stripe.mode / stripe.testCredentials) を読んで
+ *   本番/テストを切り替えるようになった (プラン/ランクの反映を担当)。
+ *   テスト資格情報が未設定なら Lambda 側も安全側で本番にフォールバックする。
  */
 import Stripe from 'stripe';
 import { env } from './env';

@@ -27,6 +27,34 @@ Stripe → Lambda Function URL → handler → RDS PostgreSQL
 | `payment_intent.succeeded` | EC 決済成功時のフォールバック (idempotent) |
 | `payment_intent.payment_failed` | EC 決済失敗時の状態更新 |
 
+## 本番 / テストモードの切り替え (A-1 方式)
+
+この Lambda はプラン・ランク (Subscription) の反映を担当するため、
+**管理画面 (SUPER_ADMIN) の Stripe テスト/本番トグルに追従する**ようにした。
+
+- 有効モードは `AppSetting` テーブルの `stripe.mode` (`LIVE` / `TEST`) を読む
+  (Web アプリと同じ設定を共有)。
+- `TEST` かつ `stripe.testCredentials` に `secretKey` / `webhookSecret` が
+  揃っている場合のみテストキーを使う。それ以外は SSM の**本番キーにフォールバック**
+  (フェイルセーフ性を維持)。
+- モード解決はイベントごとに DB を読む (warm start でもトグルが即反映される)。
+- Price ID も `TEST` 時は `stripe.testCredentials` の値を優先する
+  (未設定分は `STRIPE_PRICE_*` 環境変数へフォールバック)。
+- CloudWatch Logs の `[stripe-webhook] processed mode=TEST/LIVE ...` で
+  どちらで処理したか確認できる。
+
+> **⚠️ 重要 (Stripe Dashboard 側の設定が別途必要):**
+> テストモードでプラン加入を検証するには、**Stripe Dashboard の「テストモード」側**で
+> この Lambda の Function URL 宛に Webhook エンドポイントを追加し
+> (`customer.subscription.*` / `invoice.*` / `checkout.session.completed` を購読)、
+> そこで発行される**テスト用 Webhook Secret (`whsec_...`)** を管理画面の
+> テスト資格情報 `webhookSecret` に入力すること。
+> これがないと Lambda はテストイベントを受信できない (署名検証以前に届かない)。
+>
+> 検証が終わったら管理画面のトグルを **本番 (LIVE)** に戻すこと。テスト中は
+> 本番のサブスク Webhook がテストキーで検証されて失敗するため、本物の課金イベントを
+> 取りこぼすリスクがある (Stripe は最大3日リトライするが、長時間の放置は避ける)。
+
 ## 冪等性 (Idempotency)
 
 - 受信した event の `event.id` を `stripe_webhook_events` テーブルに upsert で記録

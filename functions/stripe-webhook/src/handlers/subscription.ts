@@ -9,6 +9,7 @@ import {
   intervalFromPriceId,
   mapSubscriptionStatus,
   planFromPriceId,
+  type PriceMap,
 } from '../plan-mapping';
 import { getStripe } from '../stripe-client';
 
@@ -53,13 +54,14 @@ async function resolveUserId(
 
 export async function handleSubscriptionUpsert(
   sub: Stripe.Subscription,
+  prices?: PriceMap,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const item = sub.items.data[0];
   if (!item) return { ok: false, reason: 'no_items' };
   const priceId = item.price.id;
 
-  const planType = planFromPriceId(priceId) ?? 'STANDARD';
-  const billingInterval = intervalFromPriceId(priceId) ?? 'MONTH';
+  const planType = planFromPriceId(priceId, prices) ?? 'STANDARD';
+  const billingInterval = intervalFromPriceId(priceId, prices) ?? 'MONTH';
   const status = mapSubscriptionStatus(sub.status);
 
   const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
@@ -118,13 +120,14 @@ export async function handleSubscriptionUpsert(
 
 export async function handleSubscriptionDeleted(
   sub: Stripe.Subscription,
+  prices?: PriceMap,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const existing = await prisma.subscription.findUnique({
     where: { stripeSubscriptionId: sub.id },
   });
   if (!existing) {
     // 未登録なら upsert と同じ流れで CANCELED 化
-    return handleSubscriptionUpsert(sub);
+    return handleSubscriptionUpsert(sub, prices);
   }
   await prisma.subscription.update({
     where: { stripeSubscriptionId: sub.id },

@@ -19,8 +19,8 @@ import type {
 } from 'aws-lambda';
 import type Stripe from 'stripe';
 import { prisma } from './db';
-import { getStripe } from './stripe-client';
-import { getSecrets } from './secrets';
+import { getStripeForKey } from './stripe-client';
+import { resolveStripeRuntime } from './secrets';
 import {
   handleSubscriptionDeleted,
   handleSubscriptionUpsert,
@@ -86,16 +86,24 @@ export const handler = async (
     return jsonResponse(400, { error: 'empty_body' });
   }
 
-  // SSM から secret を取得 (コンテナ再利用時はキャッシュ)
+  // 現在の有効モード (LIVE / TEST) を解決してキー・Webhook Secret・Price ID を取得する。
+  //   - LIVE: SSM の本番キー
+  //   - TEST: 管理画面 (AppSetting) のテストキー
+  // これにより Stripe テストモードで送られたイベントも、テストの Webhook Secret で
+  // 署名検証できるようになり、プラン/ランクが正しく反映される。
   let webhookSecret: string;
   let stripe: Stripe;
+  let runtimeMode: 'LIVE' | 'TEST';
+  let runtimePrices: Parameters<typeof handleSubscriptionUpsert>[1];
   try {
-    const secrets = await getSecrets();
-    webhookSecret = secrets.stripeWebhookSecret;
-    stripe = await getStripe();
+    const runtime = await resolveStripeRuntime();
+    webhookSecret = runtime.webhookSecret;
+    stripe = getStripeForKey(runtime.secretKey);
+    runtimeMode = runtime.mode;
+    runtimePrices = runtime.prices;
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[stripe-webhook] failed to resolve secrets from SSM', err);
+    console.error('[stripe-webhook] failed to resolve Stripe runtime (SSM/DB)', err);
     return jsonResponse(500, { error: 'secrets_unavailable' });
   }
 
@@ -140,12 +148,14 @@ export const handler = async (
       case 'customer.subscription.updated':
         result = await handleSubscriptionUpsert(
           stripeEvent.data.object as Stripe.Subscription,
+          runtimePrices,
         );
         break;
 
       case 'customer.subscription.deleted':
         result = await handleSubscriptionDeleted(
           stripeEvent.data.object as Stripe.Subscription,
+          runtimePrices,
         );
         break;
 
@@ -203,6 +213,7 @@ export const handler = async (
   // eslint-disable-next-line no-console
   console.log(
     '[stripe-webhook] processed',
+    `mode=${runtimeMode}`,
     stripeEvent.type,
     stripeEvent.id,
     `${elapsed}ms`,
