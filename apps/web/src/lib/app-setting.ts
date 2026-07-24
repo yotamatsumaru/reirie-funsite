@@ -212,7 +212,13 @@ export async function getSiteSectionVisibility(): Promise<SiteSectionVisibility>
       where: { key: SITE_SECTION_VISIBILITY_KEY },
     });
     if (!row) return DEFAULT_SITE_SECTION_VISIBILITY;
-    const parsed = SiteSectionVisibilitySchema.safeParse(JSON.parse(row.value));
+    // 旧バージョンで一部フィールドが欠けた行が保存されている可能性に備え、
+    // まず既定値とマージしてからパースする (欠損フィールドのみ既定値で補完)。
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    const parsed = SiteSectionVisibilitySchema.safeParse({
+      ...DEFAULT_SITE_SECTION_VISIBILITY,
+      ...raw,
+    });
     return parsed.success ? parsed.data : DEFAULT_SITE_SECTION_VISIBILITY;
   } catch {
     return DEFAULT_SITE_SECTION_VISIBILITY;
@@ -233,7 +239,12 @@ export async function getMaintenanceSetting(): Promise<MaintenanceSetting> {
       where: { key: MAINTENANCE_SETTING_KEY },
     });
     if (!row) return DEFAULT_MAINTENANCE_SETTING;
-    const parsed = MaintenanceSettingSchema.safeParse(JSON.parse(row.value));
+    // 欠損フィールドは既定値で補完してからパースする (部分保存対策)。
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    const parsed = MaintenanceSettingSchema.safeParse({
+      ...DEFAULT_MAINTENANCE_SETTING,
+      ...raw,
+    });
     return parsed.success ? parsed.data : DEFAULT_MAINTENANCE_SETTING;
   } catch {
     return DEFAULT_MAINTENANCE_SETTING;
@@ -257,13 +268,19 @@ export async function setMaintenanceSetting(
     let before: MaintenanceSetting = DEFAULT_MAINTENANCE_SETTING;
     if (row) {
       try {
-        const parsed = MaintenanceSettingSchema.safeParse(JSON.parse(row.value));
+        // 欠損フィールドは既定値で補完してから読み込む (部分保存対策)。
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = MaintenanceSettingSchema.safeParse({
+          ...DEFAULT_MAINTENANCE_SETTING,
+          ...raw,
+        });
         if (parsed.success) before = parsed.data;
       } catch {
         // 破損データはデフォルト値扱い (安全側)
       }
     }
 
+    // patch には「変更されたフィールドのみ」が含まれる。before に重ねて他は維持する。
     const after = MaintenanceSettingSchema.parse({ ...before, ...patch });
     const value = JSON.stringify(after);
     await tx.appSetting.upsert({
@@ -352,13 +369,20 @@ export async function setSiteSectionVisibility(
     let before: SiteSectionVisibility = DEFAULT_SITE_SECTION_VISIBILITY;
     if (row) {
       try {
-        const parsed = SiteSectionVisibilitySchema.safeParse(JSON.parse(row.value));
+        // 欠損フィールドは既定値で補完してから読み込む (前バージョンの部分保存対策)。
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = SiteSectionVisibilitySchema.safeParse({
+          ...DEFAULT_SITE_SECTION_VISIBILITY,
+          ...raw,
+        });
         if (parsed.success) before = parsed.data;
       } catch {
         // 破損データはデフォルト値扱い (安全側)
       }
     }
 
+    // patch には「変更されたフィールドのみ」が含まれる (undefined は除去済み)。
+    // before に patch を重ねることで、他のフィールドは保存済みの値を維持する。
     const after = SiteSectionVisibilitySchema.parse({ ...before, ...patch });
     const value = JSON.stringify(after);
     await tx.appSetting.upsert({

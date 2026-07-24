@@ -16,11 +16,19 @@ import { z } from 'zod';
 /** AppSetting に保存する設定キー */
 export const MAINTENANCE_SETTING_KEY = 'site.maintenance';
 
+/**
+ * 【重要 / 部分更新バグ対策】各フィールドに .default() を付けてはならない。
+ * PATCH API では `.partial()` したスキーマで「変更されたフィールドだけ」を受け取り
+ * サーバー側で保存済みの値にマージするが、Zod の `.partial()` は default を残すため、
+ * default があると送られなかったフィールドまで既定値で上書きされてしまう
+ * (例: enabled だけ変更したつもりが message も '' に戻る)。
+ * 既定値は DEFAULT_MAINTENANCE_SETTING で一元管理する。
+ */
 export const MaintenanceSettingSchema = z.object({
   /** メンテナンスモードを有効にするか (true = SUPER_ADMIN 以外は閲覧不可) */
-  enabled: z.boolean().default(false),
+  enabled: z.boolean(),
   /** メンテナンス案内ページに表示する任意のメッセージ (空欄なら既定文言) */
-  message: z.string().max(500).default(''),
+  message: z.string().max(500),
 });
 
 export type MaintenanceSetting = z.infer<typeof MaintenanceSettingSchema>;
