@@ -169,6 +169,15 @@ export function CatalogForm({ mode, id, initial }: Props) {
             onChange={(e) => onChange('description', e.target.value)}
           />
 
+          {form.kind === 'DIGITAL' && (
+            <p className="rounded-md border border-brand-100 bg-brand-50 px-3 py-2 text-xs text-brand-800">
+              デジタル特典の配布ファイル（壁紙など）は、
+              {mode === 'create'
+                ? 'この景品を保存すると下に追加できるようになります。'
+                : '下の「デジタル特典ファイル」から追加できます。'}
+            </p>
+          )}
+
           {error && (
             <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
               {error}

@@ -31,6 +31,31 @@ export function requiresShipping(kind: RewardCatalogItemKindLiteral): boolean {
   return kind === 'GOODS';
 }
 
+// ---------------------------------------------------------------------
+// デジタル特典 (DIGITAL) 配布ファイル (RewardDigitalAsset)
+// ---------------------------------------------------------------------
+
+/**
+ * デジタル特典としてアップロード可能な画像 MIME タイプ → 拡張子。
+ * 壁紙 (スマホ / PC) 配布を主用途とするため画像のみ許可する。
+ */
+export const REWARD_DIGITAL_ASSET_TYPES: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
+/** 1 ファイルあたりの上限 (壁紙の高解像度に配慮し 20MB) */
+export const MAX_REWARD_DIGITAL_ASSET_BYTES = 20 * 1024 * 1024;
+
+/** 1 つの景品に紐づけられる最大ファイル数 */
+export const MAX_REWARD_DIGITAL_ASSETS_PER_ITEM = 20;
+
+/** デジタル特典 (ダウンロード配布) を持つ種別か */
+export function isDigitalDelivery(kind: RewardCatalogItemKindLiteral): boolean {
+  return kind === 'DIGITAL';
+}
+
 export const REWARD_CATALOG_ITEM_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
 export type RewardCatalogItemStatusLiteral = (typeof REWARD_CATALOG_ITEM_STATUSES)[number];
 

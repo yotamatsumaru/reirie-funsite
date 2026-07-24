@@ -395,6 +395,7 @@ model User {
   rewardPointPurchases     RewardPointPurchase[]
   rewardRedemptions        RewardRedemption[]
   monthlyRewardPointGrants MonthlyRewardPointGrant[]
+  rewardDownloadLogs       RewardDownloadLog[]
 
   // Direct Message (REIRIE への DM)
   directMessages DirectMessage[]
@@ -1387,10 +1388,53 @@ model RewardCatalogItem {
   updatedAt   DateTime                @updatedAt @map("updated_at")
 
   redemptions RewardRedemption[]
+  digitalAssets RewardDigitalAsset[]
+  downloadLogs  RewardDownloadLog[]
 
   @@index([status, sortOrder])
   @@index([kind])
   @@map("reward_catalog_items")
+}
+
+/// デジタル特典のダウンロード履歴 (景品単位)。
+/// /api/me/reward-downloads/[assetId] でファイル配信に成功した際に 1 件記録する。
+/// 集計は景品 (catalogItemId) 単位で「延べ回数」と「ユニーク人数 (distinct userId)」を出す。
+model RewardDownloadLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  catalogItemId String   @map("catalog_item_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  catalogItem RewardCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId, createdAt])
+  @@index([catalogItemId, userId])
+  @@map("reward_download_logs")
+}
+
+/// デジタル特典 (DIGITAL) の配布ファイル。
+/// 1 つの景品 (RewardCatalogItem) に複数の壁紙などを紐づけられる。
+/// 交換済み (DIGITAL の RewardRedemption を持つ) 会員のみが
+/// /api/me/reward-downloads/[assetId] 経由でダウンロードできる。
+/// 保存方式は ProductImage と同じ二段構え:
+///  - S3 アセットバケット設定時: url が S3/CloudFront を指し、data は null。
+///  - S3 未設定時: data (Bytes) に本体を保持し /api/me/reward-downloads 経由で配信。
+model RewardDigitalAsset {
+  id            String  @id @default(uuid()) @db.Uuid
+  catalogItemId String  @map("catalog_item_id") @db.Uuid
+  fileName      String  @map("file_name") // 表示 / ダウンロード時のファイル名
+  contentType   String  @map("content_type")
+  fileSize      Int     @map("file_size") // バイト数
+  url           String? // S3/CloudFront の URL (S3 設定時)
+  data          Bytes? // DB 保存フォールバック (S3 未設定時)
+  sortOrder     Int     @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  catalogItem RewardCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId, sortOrder])
+  @@map("reward_digital_assets")
 }
 
 /// 景品交換履歴 (発送管理を含む)。

@@ -10,7 +10,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { Card, CardBody } from '@/components/ui/Card';
-import { RewardsClient } from './rewards-client';
+import { RewardsSection } from './rewards-section';
 
 export const metadata: Metadata = { title: '景品交換' };
 export const dynamic = 'force-dynamic';
@@ -94,7 +94,7 @@ export default async function MeRewardsPage() {
         </CardBody>
       </Card>
 
-      <RewardsClient
+      <RewardsSection
         items={items}
         balance={balance}
         defaultShipping={{

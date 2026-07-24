@@ -41,10 +41,12 @@ export function RewardsClient({
   items,
   balance,
   defaultShipping,
+  onRedeemed,
 }: {
   items: CatalogItem[];
   balance: number;
   defaultShipping: ShippingInfo;
+  onRedeemed?: (kind: string) => void;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<CatalogItem | null>(null);
@@ -86,7 +88,12 @@ export function RewardsClient({
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error?.message ?? '交換に失敗しました');
       }
-      setSuccessMessage(`${selected.name} との交換を受け付けました！`);
+      setSuccessMessage(
+        selected.kind === 'DIGITAL'
+          ? `${selected.name} と交換しました！下の「交換済みデジタル特典」からダウンロードできます。`
+          : `${selected.name} との交換を受け付けました！`,
+      );
+      onRedeemed?.(selected.kind);
       setSelected(null);
       router.refresh();
     } catch (e) {
