@@ -2,13 +2,66 @@
  * invoice.payment_succeeded / invoice.payment_failed ハンドラ
  *  - サブスク継続課金時の決済記録を Payment テーブルに残す
  *  - 失敗時は Subscription 側の status は subscription.updated で来るのでここでは触らない
+ *
+ * ## Subscription テーブルの自動バックフィル (重要)
+ *   Stripe の Webhook 設定で `customer.subscription.*` が購読されていない、
+ *   または一時的に取りこぼした場合、Payment (売上) は記録されるのに
+ *   Subscription (サブスク分析) には行が作られず、両者が乖離する。
+ *   これを防ぐため、invoice.paid 時に対応する Subscription 行が見つからなければ
+ *   Stripe から subscription を取得して upsert する。
  */
 import type Stripe from 'stripe';
 import { prisma } from '../db';
+import { getStripe } from '../stripe-client';
+import { handleSubscriptionUpsert } from './subscription';
+import { resolveStripeRuntime } from '../secrets';
 
 function toDate(unix: number | null | undefined): Date | null {
   if (!unix) return null;
   return new Date(unix * 1000);
+}
+
+/**
+ * stripeSubscriptionId に対応する Subscription 行が無ければ、
+ * Stripe から subscription を取得して handleSubscriptionUpsert でバックフィルする。
+ * 成功すれば作成済みの Subscription.id を返す。
+ */
+async function ensureSubscriptionRecord(
+  subscriptionId: string,
+): Promise<string | null> {
+  const existing = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+  });
+  if (existing) return existing.id;
+
+  try {
+    const stripe = await getStripe();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    // TEST/LIVE いずれのモードかで Price ID マップが変わるため runtime を解決して渡す
+    const runtime = await resolveStripeRuntime();
+    const result = await handleSubscriptionUpsert(sub, runtime.prices);
+    if (!result.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[stripe-webhook] invoice backfill subscription failed',
+        subscriptionId,
+        result.reason,
+      );
+      return null;
+    }
+    const created = await prisma.subscription.findUnique({
+      where: { stripeSubscriptionId: subscriptionId },
+    });
+    return created?.id ?? null;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[stripe-webhook] invoice backfill subscription error',
+      subscriptionId,
+      (err as Error).message,
+    );
+    return null;
+  }
 }
 
 export async function handleInvoicePaid(
@@ -30,6 +83,18 @@ export async function handleInvoicePaid(
     if (sub) {
       subscriptionRecordId = sub.id;
       userId = sub.userId;
+    } else {
+      // Subscription 行が無い (customer.subscription.* 取りこぼし等) → Stripe から復元
+      const backfilledId = await ensureSubscriptionRecord(subscriptionId);
+      if (backfilledId) {
+        const created = await prisma.subscription.findUnique({
+          where: { id: backfilledId },
+        });
+        if (created) {
+          subscriptionRecordId = created.id;
+          userId = created.userId;
+        }
+      }
     }
   }
 
