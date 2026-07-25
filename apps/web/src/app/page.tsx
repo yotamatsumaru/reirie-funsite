@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { auth } from '@/auth';
 import { PLAN_LABELS, PLAN_PRICES, PLAN_BILLING_INTERVAL } from '@idol/shared';
 import { formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
@@ -46,6 +47,11 @@ export default async function HomePage() {
 
   const { contentsVisible } = await getSiteSectionVisibility();
 
+  // ログイン済みなら CTA を「入室する（無料会員登録）」ではなく
+  // 「マイページへ」に切り替える。
+  const session = await auth();
+  const isAuthenticated = Boolean(session?.user?.id);
+
   return (
     <div className="bg-twilight-lavender">
       {/* ===== Hero =====
@@ -75,7 +81,7 @@ export default async function HomePage() {
           </div>
 
           <div className="relative z-10 mx-auto flex min-h-[600px] max-w-6xl flex-col items-center px-5 pb-28 pt-20 text-center">
-            <HeroCopy contentsVisible={contentsVisible} />
+            <HeroCopy contentsVisible={contentsVisible} isAuthenticated={isAuthenticated} />
           </div>
 
           <div className="absolute right-6 top-6 z-10 rounded-sm bg-twilight-rose px-4 py-2 text-xs font-black uppercase tracking-wide text-white shadow-[4px_4px_0_rgba(0,0,0,0.5)]">
@@ -102,7 +108,7 @@ export default async function HomePage() {
           </div>
 
           <div className="relative z-10 flex min-h-[88vh] flex-col justify-end px-5 pb-12 pt-14 text-center">
-            <HeroCopy contentsVisible={contentsVisible} />
+            <HeroCopy contentsVisible={contentsVisible} isAuthenticated={isAuthenticated} />
           </div>
 
           <div className="absolute right-4 top-4 z-10 rounded-sm bg-twilight-rose px-3.5 py-2 text-[10px] font-black uppercase tracking-wide text-white shadow-[4px_4px_0_rgba(0,0,0,0.5)]">
@@ -217,7 +223,13 @@ export default async function HomePage() {
 
 /* ===== ヒーローのコピー(PC/スマホ共通) =====
    親側で濃色スクリム/濃色帯を敷いているので、白文字＋強い影で可読性を確保。 */
-function HeroCopy({ contentsVisible }: { contentsVisible: boolean }) {
+function HeroCopy({
+  contentsVisible,
+  isAuthenticated,
+}: {
+  contentsVisible: boolean;
+  isAuthenticated: boolean;
+}) {
   return (
     <>
       <p className="mb-3 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.3em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] sm:text-xs sm:tracking-[0.35em]">
@@ -230,17 +242,17 @@ function HeroCopy({ contentsVisible }: { contentsVisible: boolean }) {
       </h1>
 
       <p className="mt-5 max-w-md text-sm leading-relaxed text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] sm:mt-6 sm:max-w-xl sm:text-base">
-        ファンだけが入れる、紫水晶の部屋。
+        ファンだけが入れる部屋
         <br className="hidden sm:inline" />
-        限定コンテンツ・ライブ配信・特典会・先行チケット。 REIRIE との特別な時間をお届けします。
+        限定コンテンツ・限定グッズ・イベント開催・先行チケット。 REIRIE との特別な時間をお届けします
       </p>
 
       <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center">
         <Link
-          href="/signup"
+          href={isAuthenticated ? '/me' : '/signup'}
           className="rounded-full border-2 border-white bg-white px-7 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black shadow-[0_4px_16px_rgba(0,0,0,0.3)] transition hover:-translate-y-0.5 hover:border-twilight-rose hover:bg-twilight-rose hover:text-white"
         >
-          入室する（無料会員登録）
+          {isAuthenticated ? 'マイページへ' : '入室する（無料会員登録）'}
         </Link>
         {contentsVisible && (
           <Link
