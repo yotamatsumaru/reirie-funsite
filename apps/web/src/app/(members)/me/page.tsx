@@ -6,12 +6,9 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
 import {
   PLAN_LABELS,
-  SAVE_SLOT_LIMIT,
-  MONTHLY_BONUS_GIFT_COUNT,
   MAX_VIDEO_QUALITY,
   FREE_SHIPPING_THRESHOLD_BY_PLAN,
   PLAN_PUI_MULTIPLIER,
-  currentYearMonth,
   canUseShop,
   type PlanTypeLiteral,
 } from '@idol/shared';
@@ -30,9 +27,7 @@ export default async function MePage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me');
 
-  const yearMonth = currentYearMonth();
-
-  const [user, recentHistory, saveSlotCount, bonusGrant] = await Promise.all([
+  const [user, recentHistory] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
@@ -46,11 +41,6 @@ export default async function MePage() {
     // EC 注文 (グッズ) とサブスク課金を統合した「最近の注文」表示用の履歴。
     // 全件取得後にマージ済みなので、ここでは先頭 5 件だけ使う。
     getUnifiedOrderHistory(session.user.id, 5),
-    prisma.playerSaveSlot.count({ where: { userId: session.user.id } }),
-    prisma.bonusGiftGrant.findUnique({
-      where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
-      include: { item: { select: { name: true, iconUrl: true } } },
-    }),
   ]);
   const orders = recentHistory.slice(0, 5);
 
@@ -60,8 +50,6 @@ export default async function MePage() {
   // DB を正とすることで、加入直後でも正しいプランを即時表示する。
   const plan = (sub?.planType as PlanTypeLiteral) ?? 'FREE';
   const memberPoints = user?.pui ?? 0;
-  const slotLimit = SAVE_SLOT_LIMIT[plan];
-  const bonusEligible = MONTHLY_BONUS_GIFT_COUNT[plan];
   const maxQuality = MAX_VIDEO_QUALITY[plan];
   const freeShippingThreshold = FREE_SHIPPING_THRESHOLD_BY_PLAN[plan];
   // 無料会員は物販 (EC) を利用できないため、送料特典ではなく「利用不可」を表示する。
@@ -190,38 +178,6 @@ export default async function MePage() {
               <p className="mt-1 text-xs text-slate-500">スタンダード以上でお買い物可能</p>
             </div>
           )}
-          {/* セーブスロット */}
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-xs text-slate-500">ゲームセーブスロット</p>
-            <p className="mt-1 text-xl font-bold text-slate-900">
-              {saveSlotCount} / {slotLimit} スロット
-            </p>
-            {plan !== 'PREMIUM' && (
-              <p className="mt-1 text-xs text-slate-500">
-                プレミアムで {SAVE_SLOT_LIMIT.PREMIUM} スロットに
-              </p>
-            )}
-          </div>
-          {/* 月次ボーナス */}
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-xs text-slate-500">月次ボーナスギフト ({yearMonth})</p>
-            {bonusEligible === 0 ? (
-              <p className="mt-1 text-xl font-bold text-slate-400">対象外</p>
-            ) : bonusGrant ? (
-              <p className="mt-1 text-xl font-bold text-emerald-600">
-                受取済み (×{bonusGrant.count})
-              </p>
-            ) : (
-              <p className="mt-1 text-xl font-bold text-slate-900">
-                対象 (×{bonusEligible}) / 未受取
-              </p>
-            )}
-            {plan !== 'PREMIUM' && (
-              <p className="mt-1 text-xs text-slate-500">
-                プレミアムで月 {MONTHLY_BONUS_GIFT_COUNT.PREMIUM} 個に
-              </p>
-            )}
-          </div>
           {/* Pui 付与率 (全プラン共通で持つ特典) */}
           <div className="rounded-lg border border-slate-200 p-4">
             <p className="text-xs text-slate-500">Pui 付与率</p>
