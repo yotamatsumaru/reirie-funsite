@@ -6,6 +6,7 @@ import { prisma } from '@idol/db';
 import {
   PLAN_LABELS,
   SOCIAL_PLATFORMS,
+  CARD_BG_SLOT_BY_PLAN,
   jstDateKey,
   previousJstDateKey,
   type PlanTypeLiteral,
@@ -15,6 +16,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { ensureMemberNumber } from '@/lib/points';
 import { getLivePlan } from '@/lib/plan';
+import { getSiteImageUrl } from '@/lib/site-image';
 import { getPuiRates } from '@/lib/app-setting';
 import { getMemberRank } from '@/lib/membership-rank';
 import { env } from '@/lib/env';
@@ -84,6 +86,9 @@ export default async function MemberCardPage() {
   const today = jstDateKey();
   // 会員ランク (ブロンズ〜ダイヤ)。昇格条件は非公開のため、現在ランクのみ取得する。
   const { rank: memberRank } = await getMemberRank(userId);
+  // 会員カード背景: スーパー管理者がアップロードした画像 (プランごと・16:10) を優先し、
+  // 未設定ならコード同梱の初期デザイン (public/card/*.webp) にフォールバックする。
+  const uploadedCardBg = await getSiteImageUrl(CARD_BG_SLOT_BY_PLAN[plan]);
   const [user, rates, loginGrant, todayGrant, shareGrants] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -106,6 +111,8 @@ export default async function MemberCardPage() {
   ]);
 
   const theme = CARD_THEME[plan] ?? CARD_THEME.FREE;
+  // アップロード画像があればそれを、無ければ初期デザインを背景に使う。
+  const cardBgImage = uploadedCardBg ?? theme.image;
   const points = user?.pui ?? 0;
   const joinedAt = user?.createdAt ?? new Date();
 
@@ -145,12 +152,12 @@ export default async function MemberCardPage() {
 
       {/* デジタル会員カード (背景はデザイン画像) */}
       <div
-        className={`relative aspect-[1.586/1] w-full overflow-hidden rounded-2xl shadow-xl ${theme.text}`}
+        className={`relative aspect-[16/10] w-full overflow-hidden rounded-2xl shadow-xl ${theme.text}`}
       >
-        {/* 背景画像 */}
+        {/* 背景画像 (管理画面アップロード優先 → 初期デザイン) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={theme.image}
+          src={cardBgImage}
           alt=""
           aria-hidden
           className="absolute inset-0 h-full w-full object-cover"
