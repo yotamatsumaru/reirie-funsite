@@ -9,22 +9,26 @@ import { prisma } from '@idol/db';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { getMemberRank } from '@/lib/membership-rank';
+import { getLivePlan } from '@/lib/plan';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
   const session = await requireApiSession(req);
 
-  const [user, { rank }] = await Promise.all([
+  // プランは JWT (session.user.plan) が最大5分キャッシュされ古い値になり得るため、
+  // DB の有効なサブスクリプションから直接取得してサイドバー表示へ即時反映させる。
+  const [user, { rank }, plan] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { pui: true },
     }),
     getMemberRank(session.user.id),
+    getLivePlan(session.user.id),
   ]);
 
   return NextResponse.json({
-    plan: session.user.plan,
+    plan,
     rank,
     points: user?.pui ?? 0,
   });

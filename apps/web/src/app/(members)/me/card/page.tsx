@@ -14,6 +14,7 @@ import { auth } from '@/auth';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { ensureMemberNumber } from '@/lib/points';
+import { getLivePlan } from '@/lib/plan';
 import { getPuiRates } from '@/lib/app-setting';
 import { getMemberRank } from '@/lib/membership-rank';
 import { env } from '@/lib/env';
@@ -73,7 +74,9 @@ export default async function MemberCardPage() {
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me/card');
 
   const userId = session.user.id;
-  const plan = session.user.plan as PlanTypeLiteral;
+  // プランは JWT (session.user.plan) が最大5分キャッシュされ古い値になり得るため、
+  // DB の有効なサブスクリプションから直接取得して会員カードへ即時反映させる。
+  const plan = await getLivePlan(userId);
 
   // 会員番号を採番 (未付与なら)
   const memberNumber = await ensureMemberNumber(userId);
@@ -164,6 +167,10 @@ export default async function MemberCardPage() {
                 Reirie Fan Club
               </p>
               <p className="mt-1 text-base font-bold sm:text-lg">{theme.rank} MEMBER</p>
+              {/* 会員プラン (日本語) を明示。英語表記だけだとプランか会員ランクか分かりにくいため。 */}
+              <p className={`mt-0.5 text-[11px] font-medium sm:text-sm ${theme.accent}`}>
+                {PLAN_LABELS[plan]}プラン
+              </p>
               <div className="mt-2">
                 <RankBadge rank={memberRank} size="sm" />
               </div>
