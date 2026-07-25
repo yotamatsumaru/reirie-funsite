@@ -8,9 +8,45 @@
  *   1 箇所に集約し、呼び出し側は「明細データ (InvoiceDocument)」を組み立てるだけでよい。
  */
 import PDFDocument from 'pdfkit';
+import fs from 'node:fs';
 import path from 'node:path';
 
-const FONT_DIR = path.join(process.cwd(), 'src', 'lib', 'fonts');
+/**
+ * Noto Sans JP フォント (TTF) の在り処を解決する。
+ *
+ * このファイルはビルド後、以下のいずれかの場所から実行される:
+ *   - 開発時 (next dev):        process.cwd() = apps/web
+ *   - 本番 standalone (PM2):    __dirname は .next/server 配下に置かれるが、
+ *                               PM2 の cwd は apps/web なので process.cwd() が有効
+ *   - 単体テスト等:             cwd が apps/web 以外になり得る
+ *
+ * output:'standalone' では、実行時の文字列パスで参照するフォント (.ttf) や
+ * pdfkit の標準フォントメトリクス (.afm) が .next/standalone にトレース・コピー
+ * されないため、cwd に決め打ちすると本番で ENOENT → PDF 生成が
+ * INTERNAL_ERROR になる。複数の候補パスを順に探索して確実に解決する。
+ */
+function resolveFontDir(): string {
+  const candidates = [
+    // 1) PM2 の cwd (= apps/web) を基準にしたソース配置
+    path.join(process.cwd(), 'src', 'lib', 'fonts'),
+    // 2) 万一 cwd がリポジトリルートの場合
+    path.join(process.cwd(), 'apps', 'web', 'src', 'lib', 'fonts'),
+    // 3) このモジュール自身からの相対 (バンドルされずソースが残る構成向け)
+    path.join(__dirname, 'fonts'),
+    path.join(__dirname, '..', 'lib', 'fonts'),
+  ];
+  for (const dir of candidates) {
+    try {
+      if (fs.existsSync(path.join(dir, 'NotoSansJP-Regular.ttf'))) return dir;
+    } catch {
+      // 探索は続行する
+    }
+  }
+  // どれも見つからなければ従来の既定パスを返す (エラーメッセージで気付けるように)
+  return candidates[0];
+}
+
+const FONT_DIR = resolveFontDir();
 const FONT_REGULAR = path.join(FONT_DIR, 'NotoSansJP-Regular.ttf');
 const FONT_BOLD = path.join(FONT_DIR, 'NotoSansJP-Bold.ttf');
 
@@ -102,14 +138,24 @@ export interface InvoiceDocument {
 export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const pdf = new PDFDocument({ size: 'A4', margin: 50 });
+      // font: null で pdfkit の既定フォント (Helvetica) の読み込みを抑止する。
+      //   pdfkit は標準フォントのメトリクス Helvetica.afm を
+      //   `fs.readFileSync(__dirname + '/data/Helvetica.afm')` で読むが、
+      //   output:'standalone' ではこの .afm がトレースされず ENOENT になる。
+      //   本明細書は日本語 (Noto Sans JP) しか使わないため、標準フォントは不要。
+      const pdf = new PDFDocument({ size: 'A4', margin: 50, font: null as never });
       const chunks: Buffer[] = [];
       pdf.on('data', (chunk: Buffer) => chunks.push(chunk));
       pdf.on('end', () => resolve(Buffer.concat(chunks)));
       pdf.on('error', reject);
 
-      pdf.registerFont('NotoSansJP', FONT_REGULAR);
-      pdf.registerFont('NotoSansJP-Bold', FONT_BOLD);
+      // TTF はこちらで Buffer に読み込んでから登録する。
+      //   pdfkit にパス文字列を渡すと pdfkit 内部の fs 解決に依存してしまうため、
+      //   自前で読み込んでフォント欠落を確実に検知できるようにする。
+      const regularBuf = fs.readFileSync(FONT_REGULAR);
+      const boldBuf = fs.readFileSync(FONT_BOLD);
+      pdf.registerFont('NotoSansJP', regularBuf);
+      pdf.registerFont('NotoSansJP-Bold', boldBuf);
       pdf.font('NotoSansJP');
 
       // --- タイトル ---
