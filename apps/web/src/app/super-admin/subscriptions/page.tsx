@@ -14,6 +14,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { PLAN_LABELS, PLAN_PRICES, type PlanTypeLiteral } from '@idol/shared';
 import { SubRowActions } from './sub-row-actions';
+import { ReconcileButton } from './reconcile-button';
 
 export const metadata: Metadata = { title: 'サブスク分析 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -160,11 +161,17 @@ export default async function SuperAdminSubscriptionsPage({
 
   return (
     <main>
-      <header className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">サブスク分析</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          現在の加入状況・離脱・推移を把握するためのダッシュボードです（全 {subs.length} 件）。
-        </p>
+      <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">サブスク分析</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            現在の加入状況・離脱・推移を把握するためのダッシュボードです（全 {subs.length} 件）。
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            売上には出ているのに件数が合わない場合は「Stripe と再照合」で最新化できます。
+          </p>
+        </div>
+        <ReconcileButton />
       </header>
 
       {/* ① KPI カード */}
