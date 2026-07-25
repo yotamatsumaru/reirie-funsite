@@ -31,6 +31,8 @@ type SubRow = {
   canceledAt: Date | null;
   createdAt: Date;
   user?: { id: string; email: string; displayName: string | null } | null;
+  /** この契約に紐づく課金の状態（返金済み判定に使用） */
+  payments?: { status: string }[];
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -75,9 +77,30 @@ export default async function SuperAdminSubscriptionsPage({
   const planFilter = sp.plan ?? '';
 
   const subs = (await prisma.subscription.findMany({
-    include: { user: { select: { id: true, email: true, displayName: true } } },
+    include: {
+      user: { select: { id: true, email: true, displayName: true } },
+      // 返金済み判定のため、各契約に紐づく課金の状態を取得する。
+      payments: { select: { status: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })) as unknown as SubRow[];
+
+  // ---------------------------------------------------------------------------
+  // 返金済み契約の判定
+  //   返金 (super-admin の返金機能) を実行すると Payment.status が REFUNDED に
+  //   なる。契約に紐づく課金のうち「成功 (SUCCEEDED) が 1 件も無く、返金
+  //   (REFUNDED) が 1 件以上ある」場合、その契約は実質的に返金済みとみなす。
+  //   返金済みの契約は二重契約 (重複) の警告対象から外し、
+  //   一覧では「返金済み」バッジを表示する。
+  // ---------------------------------------------------------------------------
+  const isRefundedSub = (s: SubRow): boolean => {
+    const ps = s.payments ?? [];
+    if (ps.length === 0) return false;
+    const hasSucceeded = ps.some((p) => p.status === 'SUCCEEDED');
+    const hasRefunded = ps.some((p) => p.status === 'REFUNDED');
+    return hasRefunded && !hasSucceeded;
+  };
+  const refundedSubIds = new Set(subs.filter(isRefundedSub).map((s) => s.id));
 
   // ---------------------------------------------------------------------------
   // ① KPI 算出
@@ -94,8 +117,10 @@ export default async function SuperAdminSubscriptionsPage({
   //   プラン反映バグ等で二重に購入してしまった可能性が高い。
   //   ここで userId ごとに件数を数え、2 件以上のユーザーを洗い出す。
   // ---------------------------------------------------------------------------
+  //   返金済みの契約は「解決済み」とみなし、重複カウントから除外する。
   const liveCountByUser = new Map<string, number>();
   for (const s of liveSubs) {
+    if (refundedSubIds.has(s.id)) continue;
     liveCountByUser.set(s.userId, (liveCountByUser.get(s.userId) ?? 0) + 1);
   }
   const duplicateUserIds = new Set(
@@ -447,11 +472,13 @@ export default async function SuperAdminSubscriptionsPage({
                   <tr
                     key={s.id}
                     className={
-                      duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status)
-                        ? 'bg-rose-50 hover:bg-rose-100'
-                        : INCOMPLETE_STATUSES.has(s.status)
-                          ? 'bg-slate-50 text-slate-400 hover:bg-slate-100'
-                          : 'hover:bg-slate-50'
+                      refundedSubIds.has(s.id)
+                        ? 'bg-emerald-50/60 hover:bg-emerald-50'
+                        : duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status)
+                          ? 'bg-rose-50 hover:bg-rose-100'
+                          : INCOMPLETE_STATUSES.has(s.status)
+                            ? 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                            : 'hover:bg-slate-50'
                     }
                   >
                     <td className="px-4 py-3">
@@ -465,13 +492,23 @@ export default async function SuperAdminSubscriptionsPage({
                         >
                           {s.user?.displayName ?? '（不明）'}
                         </p>
-                        {duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status) && (
+                        {refundedSubIds.has(s.id) ? (
                           <span
-                            className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
-                            title="このユーザーは有効な契約を複数持っています（二重契約の可能性）"
+                            className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700"
+                            title="この契約の課金は返金済みです"
                           >
-                            重複
+                            返金済み
                           </span>
+                        ) : (
+                          duplicateUserIds.has(s.userId) &&
+                          LIVE_STATUSES.has(s.status) && (
+                            <span
+                              className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                              title="このユーザーは有効な契約を複数持っています（二重契約の可能性）"
+                            >
+                              重複
+                            </span>
+                          )
                         )}
                       </div>
                       <p className="text-xs text-slate-400">{s.user?.email ?? '—'}</p>
