@@ -212,7 +212,7 @@ export default async function SuperAdminSubscriptionsPage({
             同一ユーザーに有効なサブスクリプションが 2 件以上あります。プラン反映の遅延などで
             重複購入された可能性があります。下記の契約一覧で
             <span className="mx-1 rounded bg-rose-200 px-1 font-semibold">重複</span>
-            マークの付いた契約を確認し、不要な方を「強制解約」してください（返金が必要な場合は Stripe 管理画面から対応）。
+            マークの付いた契約を確認し、不要な方を「即時解約」してください（返金が必要な場合は各契約の「返金」から対応できます）。
           </p>
           <ul className="mt-2 space-y-1">
             {duplicateUsers.map((d) => (
