@@ -6,8 +6,10 @@
 import type Stripe from 'stripe';
 import { prisma } from '../db';
 import {
+  intervalFromMetadata,
   intervalFromPriceId,
   mapSubscriptionStatus,
+  planFromMetadata,
   planFromPriceId,
   type PlanType,
   type PriceMap,
@@ -61,15 +63,23 @@ export async function handleSubscriptionUpsert(
   if (!item) return { ok: false, reason: 'no_items' };
   const priceId = item.price.id;
 
-  const planType = planFromPriceId(priceId, prices) ?? 'STANDARD';
-  const billingInterval = intervalFromPriceId(priceId, prices) ?? 'MONTH';
+  // プラン判定の優先順位:
+  //   1) Checkout で付与された metadata.plan / metadata.interval
+  //      (checkout ルートが subscription_data.metadata に必ず設定する)
+  //   2) Price ID マッピング (本番 Price ID 環境変数 / TEST の PriceMap)
+  //   3) fallback (STANDARD / MONTH)
+  // 以前は (2) → fallback のみで、本番 Price ID 環境変数が未設定/不一致だと
+  // PREMIUM 申込でも STANDARD に降格される不具合があった。metadata を最優先に
+  // することで Price ID 設定ミスがあっても正しいプランを維持する。
+  const metadata = (sub.metadata as Record<string, string> | null) ?? null;
+  const planType =
+    planFromMetadata(metadata) ?? planFromPriceId(priceId, prices) ?? 'STANDARD';
+  const billingInterval =
+    intervalFromMetadata(metadata) ?? intervalFromPriceId(priceId, prices) ?? 'MONTH';
   const status = mapSubscriptionStatus(sub.status);
 
   const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
-  const userId = await resolveUserId(
-    customerId,
-    (sub.metadata as Record<string, string> | null)?.userId,
-  );
+  const userId = await resolveUserId(customerId, metadata?.userId);
   if (!userId) {
     // eslint-disable-next-line no-console
     console.warn('[stripe-webhook] user not found for subscription', sub.id, customerId);
