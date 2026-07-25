@@ -37,8 +37,9 @@ type CardTheme = {
   text: string;
   accent: string;
   qrDark: string;
-  // 鍵モチーフの上に文字が重なっても読めるよう、テキスト帯に薄いスクリムを敷く。
-  scrim: string;
+  // スクリムを敷かない代わりに、文字自体へ控えめな影を付けて可読性を確保する。
+  // 濃色文字 (FREE/PREMIUM) は白系の影、白文字 (STANDARD) は黒系の影。
+  textShadow: string;
 };
 
 const CARD_THEME: Record<PlanTypeLiteral, CardTheme> = {
@@ -48,8 +49,7 @@ const CARD_THEME: Record<PlanTypeLiteral, CardTheme> = {
     text: 'text-slate-800',
     accent: 'text-slate-600',
     qrDark: '#1e293b',
-    // フラットな水色背景 (モチーフ無し) のためスクリム不要
-    scrim: '',
+    textShadow: '[text-shadow:0_1px_2px_rgba(255,255,255,0.55)]',
   },
   STANDARD: {
     image: '/card/standard.webp',
@@ -57,8 +57,7 @@ const CARD_THEME: Record<PlanTypeLiteral, CardTheme> = {
     text: 'text-white',
     accent: 'text-white/80',
     qrDark: '#7a1d5a',
-    // マゼンタ + 白文字: 上下をわずかに暗くして白文字を安定させる
-    scrim: 'bg-gradient-to-b from-black/25 via-transparent to-black/30',
+    textShadow: '[text-shadow:0_1px_3px_rgba(0,0,0,0.45)]',
   },
   PREMIUM: {
     image: '/card/premium.webp',
@@ -66,8 +65,7 @@ const CARD_THEME: Record<PlanTypeLiteral, CardTheme> = {
     text: 'text-slate-900',
     accent: 'text-slate-700/90',
     qrDark: '#3a2b4d',
-    // ラベンダー + 濃色文字: 鍵モチーフ上でも読めるよう上下をわずかに明るくする
-    scrim: 'bg-gradient-to-b from-white/35 via-transparent to-white/40',
+    textShadow: '[text-shadow:0_1px_2px_rgba(255,255,255,0.55)]',
   },
 };
 
@@ -154,7 +152,8 @@ export default async function MemberCardPage() {
       <div
         className={`relative aspect-[16/10] w-full overflow-hidden rounded-2xl shadow-xl ${theme.text}`}
       >
-        {/* 背景画像 (管理画面アップロード優先 → 初期デザイン) */}
+        {/* 背景画像 (管理画面アップロード優先 → 初期デザイン)。
+            画像の色をそのまま見せるため、上に敷くスクリム (暗さ/明るさ加工) は無し。 */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={cardBgImage}
@@ -163,11 +162,8 @@ export default async function MemberCardPage() {
           className="absolute inset-0 h-full w-full object-cover"
         />
 
-        {/* 文字可読性のためのスクリム (モチーフの上でも読めるように) */}
-        {theme.scrim && <div aria-hidden className={`absolute inset-0 ${theme.scrim}`} />}
-
-        {/* 情報レイヤー */}
-        <div className="relative flex h-full flex-col justify-between p-5 sm:p-6">
+        {/* 情報レイヤー。スクリムを外した分、文字自体に控えめな影を付けて可読性を確保する。 */}
+        <div className={`relative flex h-full flex-col justify-between p-5 sm:p-6 ${theme.textShadow}`}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className={`text-[10px] font-semibold uppercase tracking-widest sm:text-xs ${theme.accent}`}>
