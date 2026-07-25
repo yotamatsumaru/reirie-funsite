@@ -138,6 +138,44 @@ export async function ensureMemberNumber(userId: string): Promise<string> {
 }
 
 /**
+ * 会員番号が未採番のユーザー全員に、登録が古い順で会員番号を一括採番する。
+ *
+ * 会員番号は本来「会員カードを開いた時」または「登録時」に採番されるが、
+ * その導線を通っていない既存ユーザーには番号が付いていない。
+ * このバックフィルで、番号なしユーザーへ確実に番号を付与する。
+ *
+ * - 既に番号を持つユーザーは対象外 (番号は変更しない)。
+ * - ensureMemberNumber と同じ MemberCounter を使うため連番は継続し重複しない。
+ * - 1 件ずつ独立トランザクションで採番するため、途中失敗しても採番済み分は保持される。
+ * - 何度実行しても安全 (冪等)。
+ *
+ * @returns { assigned: 採番した件数, alreadyHad: 既に番号を持っていた件数 }
+ */
+export async function backfillMemberNumbers(): Promise<{
+  assigned: number;
+  alreadyHad: number;
+}> {
+  const [alreadyHad, targets] = await Promise.all([
+    prisma.user.count({ where: { memberNumber: { not: null } } }),
+    prisma.user.findMany({
+      where: { memberNumber: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    }),
+  ]);
+
+  let assigned = 0;
+  for (const t of targets) {
+    // ensureMemberNumber は「未採番なら採番、採番済みならその番号を返す」ため、
+    // ここで呼べば重複採番の心配なく安全にバックフィルできる。
+    await ensureMemberNumber(t.id);
+    assigned += 1;
+  }
+
+  return { assigned, alreadyHad };
+}
+
+/**
  * Pui を増減し、履歴を残す (内部用)。残高を返す。
  * tx を渡せば既存トランザクションに参加する。
  *

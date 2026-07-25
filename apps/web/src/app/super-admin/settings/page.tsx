@@ -24,6 +24,7 @@ import { StripeModeClient } from './stripe-mode-client';
 import { TotpSetupClient } from './totp-setup-client';
 import { SiteVisibilityClient } from './site-visibility-client';
 import { MaintenanceClient } from './maintenance-client';
+import { MemberNumberClient } from './member-number-client';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -59,6 +60,17 @@ export default async function SuperAdminSettingsPage() {
   const stripeTestCredentialsUsable = isStripeTestCredentialsUsable(stripeTestCredentials);
   const siteSectionVisibility = await getSiteSectionVisibility();
   const maintenanceSetting = await getMaintenanceSetting();
+
+  // 会員番号の採番状況 (一括採番パネル用)
+  const [memberTotal, memberWithNumber] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { memberNumber: { not: null } } }),
+  ]);
+  const memberNumberStats = {
+    total: memberTotal,
+    withNumber: memberWithNumber,
+    missing: memberTotal - memberWithNumber,
+  };
 
   // TOTP (2段階認証) 現在の状態 — SUPER_ADMIN 自身の設定なので session.user.id で取得
   const currentUser = await prisma.user.findUnique({ where: { id: session.user.id } });
@@ -138,6 +150,9 @@ export default async function SuperAdminSettingsPage() {
 
       {/* サイト画像 (トップページのヒーロー画像等) */}
       <SiteImageClient initial={siteImageItems} />
+
+      {/* 会員番号の一括採番 (番号なし会員へまとめて付与) */}
+      <MemberNumberClient initial={memberNumberStats} />
 
       {/* Stripe 本番/テストモード切り替え */}
       <StripeModeClient
