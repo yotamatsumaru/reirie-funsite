@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
@@ -18,6 +19,7 @@ import { formatJpy } from '@/lib/pricing';
 import { getUnifiedOrderHistory } from '@/lib/order-history';
 import { ManageSubscriptionButtons } from '@/components/auth/ManageSubscriptionButtons';
 import { WithdrawSection } from './withdraw-section';
+import { SubscribedRefresh } from './subscribed-refresh';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -26,7 +28,6 @@ export default async function MePage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me');
 
-  const plan = session.user.plan as PlanTypeLiteral;
   const yearMonth = currentYearMonth();
 
   const [user, recentHistory, saveSlotCount, bonusGrant] = await Promise.all([
@@ -52,6 +53,10 @@ export default async function MePage() {
   const orders = recentHistory.slice(0, 5);
 
   const sub = user?.subscriptions[0];
+  // プランは JWT (session.user.plan) ではなく、DB のアクティブなサブスクから直接導出する。
+  // JWT は最大5分キャッシュされるため、加入直後は反映ラグで「無料」と表示されてしまう。
+  // DB を正とすることで、加入直後でも正しいプランを即時表示する。
+  const plan = (sub?.planType as PlanTypeLiteral) ?? 'FREE';
   const memberPoints = user?.pui ?? 0;
   const slotLimit = SAVE_SLOT_LIMIT[plan];
   const bonusEligible = MONTHLY_BONUS_GIFT_COUNT[plan];
@@ -60,6 +65,10 @@ export default async function MePage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 py-10">
+      {/* 加入直後 (?subscribed=1) に JWT のプランを強制リフレッシュ */}
+      <Suspense fallback={null}>
+        <SubscribedRefresh />
+      </Suspense>
       <header>
         <h1 className="text-2xl font-bold text-slate-800">マイページ</h1>
         <p className="mt-1 text-sm text-slate-500">{user?.email}</p>
@@ -223,7 +232,9 @@ export default async function MePage() {
                 const label =
                   entry.type === 'ORDER'
                     ? entry.documentNumber
-                    : `${entry.planLabel} プラン (${entry.intervalLabel})`;
+                    : entry.planLabel
+                      ? `${entry.planLabel} プラン${entry.intervalLabel ? ` (${entry.intervalLabel})` : ''}`
+                      : 'サブスクリプション';
                 const isSuccess =
                   entry.type === 'ORDER' ? entry.status === 'PAID' : entry.status === 'SUCCEEDED';
                 return (

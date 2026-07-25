@@ -110,7 +110,9 @@ export default async function MeOrdersPage() {
                         <div className="flex items-center gap-2">
                           <Badge tone="info">サブスク</Badge>
                           <p className="text-sm text-slate-700">
-                            {entry.planLabel} プラン ({entry.intervalLabel})
+                            {entry.planLabel
+                              ? `${entry.planLabel} プラン${entry.intervalLabel ? ` (${entry.intervalLabel})` : ''}`
+                              : 'サブスクリプション'}
                           </p>
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500">
