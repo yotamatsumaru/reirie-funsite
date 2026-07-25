@@ -14,10 +14,13 @@
  * ## 挙動
  * - `?subscribed=1` のときだけ 1 回だけ update() を実行する。
  * - Webhook がわずかに遅延して DB 反映前だった場合に備え、短い間隔で数回リトライする。
+ * - サイドバーのプラン表示 (member-summary-store, /api/me/summary 由来) も併せて
+ *   再取得し、会員カード・マイページ・サイドバーのプラン表示を揃える。
  */
 import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import { useMemberSummaryStore } from '@/stores/member-summary-store';
 
 export function SubscribedRefresh() {
   const params = useSearchParams();
@@ -35,7 +38,11 @@ export function SubscribedRefresh() {
     const delays = [0, 2000, 5000];
     const timers = delays.map((d) =>
       setTimeout(() => {
-        if (!cancelled) void update();
+        if (cancelled) return;
+        // JWT (アクセス制御・session.user.plan 参照箇所) を最新化
+        void update();
+        // サイドバーのプラン表示 (DB 直読みの /api/me/summary) も再取得
+        void useMemberSummaryStore.getState().fetchSummary();
       }, d),
     );
     return () => {
