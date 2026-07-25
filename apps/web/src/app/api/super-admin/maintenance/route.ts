@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { MaintenanceSettingSchema } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getMaintenanceSetting, setMaintenanceSetting } from '@/lib/app-setting';
@@ -17,7 +17,7 @@ import { primeMaintenanceCache } from '@/lib/maintenance-flag';
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const setting = await getMaintenanceSetting();
   return NextResponse.json({ setting });
 });

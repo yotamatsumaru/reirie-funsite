@@ -8,7 +8,7 @@
  */
 import { NextResponse } from 'next/server';
 import { SiteSectionVisibilitySchema } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getSiteSectionVisibility, setSiteSectionVisibility } from '@/lib/app-setting';
@@ -16,7 +16,7 @@ import { getSiteSectionVisibility, setSiteSectionVisibility } from '@/lib/app-se
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const visibility = await getSiteSectionVisibility();
   return NextResponse.json({ visibility });
 });

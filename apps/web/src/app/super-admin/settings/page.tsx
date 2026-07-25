@@ -9,7 +9,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { listSettings } from '@/lib/demo-store';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { listSiteImages } from '@/lib/site-image';
 import {
   getStripeMode,
@@ -50,7 +50,7 @@ const CATEGORY_META: Record<
 };
 
 export default async function SuperAdminSettingsPage() {
-  const session = await requireSuperAdmin();
+  const session = await requireSuperAdminView();
 
   const settings = listSettings();
   const siteImages = await listSiteImages();

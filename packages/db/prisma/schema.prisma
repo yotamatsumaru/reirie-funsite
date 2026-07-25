@@ -119,6 +119,9 @@ enum TicketLinkStatus {
 enum UserRole {
   USER
   ADMIN
+  // STAFF: スタッフ管理者。SUPER_ADMIN と同じ画面を「閲覧」できるが、
+  // 返金 / BAN / ロール変更などの書き込み操作はできない (read-only 運営)。
+  STAFF
   SUPER_ADMIN
 }
 

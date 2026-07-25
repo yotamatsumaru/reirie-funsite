@@ -6,13 +6,13 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 
 export const metadata: Metadata = { title: 'Pui パック管理' };
 export const dynamic = 'force-dynamic';
 
 export default async function RewardPointPacksPage() {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const packs = await prisma.rewardPointPack.findMany({
     orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }],
     include: { _count: { select: { purchases: true } } },

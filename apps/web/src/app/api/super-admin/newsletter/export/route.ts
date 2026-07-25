@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { handle } from '@/lib/errors';
 import { toCsv } from '@/lib/csv';
 import { logAudit } from '@/lib/audit';
@@ -47,7 +47,7 @@ function isShippable(u: NewsletterUser): boolean {
 }
 
 export const GET = handle(async (req: Request) => {
-  const session = await requireSuperAdmin();
+  const session = await requireSuperAdminView();
 
   const subs = (await prisma.subscription.findMany({
     where: {

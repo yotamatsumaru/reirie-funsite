@@ -9,7 +9,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Package, Truck, Wallet } from 'lucide-react';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 
@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: '景品交換・ポイントパック
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminRewardsPage() {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
 
   const [catalogCount, packCount, redemptionCount] = await Promise.all([
     prisma.rewardCatalogItem.count(),

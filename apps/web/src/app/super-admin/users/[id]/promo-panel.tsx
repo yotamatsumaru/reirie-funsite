@@ -43,9 +43,12 @@ function daysFromNowIso(days: number): string {
 export function PromoPanel({
   userId,
   initialPromoUntil,
+  readOnly = false,
 }: {
   userId: string;
   initialPromoUntil: string | null;
+  /** スタッフ管理者など閲覧のみの場合 true。付与/解除ボタンを非表示にし、状態のみ表示する。 */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [promoUntil, setPromoUntil] = useState<string | null>(initialPromoUntil);
@@ -125,29 +128,33 @@ export function PromoPanel({
         期限が切れると自動的に通常アカウントに戻ります。
       </p>
 
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => grantDays(1)} loading={pending} variant="outline" size="sm">
-          1日付与
-        </Button>
-        <Button onClick={() => grantDays(7)} loading={pending} variant="outline" size="sm">
-          7日付与
-        </Button>
-        <Button onClick={() => grantDays(30)} loading={pending} variant="outline" size="sm">
-          30日付与
-        </Button>
-        <Button onClick={grantForever} loading={pending} variant="secondary" size="sm">
-          無期限付与
-        </Button>
-        <Button
-          onClick={revoke}
-          loading={pending}
-          variant="danger"
-          size="sm"
-          disabled={promoUntil === null}
-        >
-          解除
-        </Button>
-      </div>
+      {readOnly ? (
+        <p className="text-xs text-slate-400">閲覧のみ（付与・解除はスーパー管理者のみ可能）</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => grantDays(1)} loading={pending} variant="outline" size="sm">
+            1日付与
+          </Button>
+          <Button onClick={() => grantDays(7)} loading={pending} variant="outline" size="sm">
+            7日付与
+          </Button>
+          <Button onClick={() => grantDays(30)} loading={pending} variant="outline" size="sm">
+            30日付与
+          </Button>
+          <Button onClick={grantForever} loading={pending} variant="secondary" size="sm">
+            無期限付与
+          </Button>
+          <Button
+            onClick={revoke}
+            loading={pending}
+            variant="danger"
+            size="sm"
+            disabled={promoUntil === null}
+          >
+            解除
+          </Button>
+        </div>
+      )}
 
       {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
     </div>

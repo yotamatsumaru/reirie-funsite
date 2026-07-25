@@ -9,7 +9,7 @@ import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { listAnnouncements } from '@/lib/announcements';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementRowActions } from './announcement-row-actions';
 
@@ -64,7 +64,7 @@ function formatDateTime(d: Date | null): string {
 }
 
 export default async function SuperAdminAnnouncementsPage() {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
 
   const all = await listAnnouncements();
   const published = all.filter((a) => a.status === 'PUBLISHED');

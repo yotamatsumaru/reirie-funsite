@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getNgWords, setNgWords } from '@/lib/dm';
@@ -18,7 +18,7 @@ const UpdateNgWordsSchema = z.object({
 });
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const ngWords = await getNgWords();
   return NextResponse.json({ ngWords });
 });

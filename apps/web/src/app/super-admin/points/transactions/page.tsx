@@ -7,7 +7,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -36,7 +36,7 @@ export default async function PointsTransactionsPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const sp = await searchParams;
   const reason = REASONS.includes(sp.reason ?? '') ? sp.reason : undefined;
   const q = (sp.q ?? '').trim();

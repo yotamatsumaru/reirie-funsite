@@ -18,7 +18,7 @@ import {
   MAX_SITE_IMAGE_BYTES,
   isSiteImageSlot,
 } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import {
@@ -30,7 +30,7 @@ import {
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const items = await listSiteImages();
   return NextResponse.json({ items });
 });

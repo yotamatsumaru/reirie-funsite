@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { handle } from '@/lib/errors';
 import { toCsv } from '@/lib/csv';
 import { logAudit } from '@/lib/audit';
@@ -32,7 +32,7 @@ interface PaymentRow {
 }
 
 export const GET = handle(async (req: Request) => {
-  const session = await requireSuperAdmin();
+  const session = await requireSuperAdminView();
   const url = new URL(req.url);
   const kind = url.searchParams.get('kind') ?? '';
   const status = url.searchParams.get('status') ?? '';

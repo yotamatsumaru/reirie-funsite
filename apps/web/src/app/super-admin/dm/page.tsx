@@ -5,7 +5,7 @@
  */
 import type { Metadata } from 'next';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { getNgWords } from '@/lib/dm';
 import { DmAdminClient } from './dm-admin-client';
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'DM 管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminDmPage() {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
 
   const [messages, ngWords, unreadCount] = await Promise.all([
     prisma.directMessage.findMany({

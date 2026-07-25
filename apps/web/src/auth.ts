@@ -305,6 +305,21 @@ export async function requireSuperAdmin() {
   return session;
 }
 
+/**
+ * スーパー管理画面の「閲覧」を許可するガード (SUPER_ADMIN または STAFF)。
+ *  - 読み取り専用のページ / GET API に利用する。
+ *  - 返金 / BAN / ロール変更などの書き込み操作は必ず requireSuperAdmin() を使い、
+ *    STAFF を拒否すること。
+ */
+export async function requireSuperAdminView() {
+  const session = await requireSession();
+  if (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'STAFF') {
+    const { errors } = await import('./lib/errors');
+    throw errors.forbidden('スーパー管理者権限が必要です');
+  }
+  return session;
+}
+
 export async function requireAccessLevel(level: AccessLevelLiteral) {
   const session = await auth();
   if (level !== 'PUBLIC' && !session?.user?.id) {
