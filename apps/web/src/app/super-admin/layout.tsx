@@ -27,6 +27,7 @@ import {
   MessageCircle,
   Gift,
   BarChart3,
+  Newspaper,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -45,6 +46,7 @@ const NAV: NavItem[] = [
   { href: '/super-admin', label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/super-admin/users', label: 'ユーザー', icon: Users },
   { href: '/super-admin/subscriptions', label: 'サブスク', icon: CreditCard },
+  { href: '/super-admin/newsletter', label: '会報誌 発送リスト', icon: Newspaper },
   { href: '/super-admin/orders', label: '注文・売上', icon: Receipt },
   { href: '/super-admin/sales', label: '売上管理', icon: BarChart3 },
   { href: '/super-admin/game', label: 'ゲーム経済', icon: Gamepad2 },
