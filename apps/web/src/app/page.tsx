@@ -241,11 +241,18 @@ function HeroCopy({
         Rei<span className="text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.6)]">Rie</span>Room
       </h1>
 
-      <p className="mt-5 max-w-md text-sm leading-relaxed text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] sm:mt-6 sm:max-w-xl sm:text-base">
-        ファンだけが入れる部屋
-        <br className="hidden sm:inline" />
-        限定コンテンツ・限定グッズ・イベント開催・先行チケット。 REIRIE との特別な時間をお届けします
-      </p>
+      <div className="mt-5 max-w-md text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] sm:mt-6 sm:max-w-xl">
+        {/* 1行目: リード。スマホでも1行で収まるよう少し大きめ・太字で見せる */}
+        <p className="text-balance text-base font-bold leading-snug sm:text-lg">
+          ファンだけが入れる部屋
+        </p>
+        {/* 2行目: 説明。長文なのでスマホは折り返しをバランス良く(text-balance)、
+            やや小さめ＆行間広めで読みやすく */}
+        <p className="mt-2 text-balance text-[13px] leading-relaxed text-white/95 sm:mt-2.5 sm:text-base">
+          限定コンテンツ・限定グッズ・イベント開催・先行チケット。 REIRIE
+          との特別な時間をお届けします
+        </p>
+      </div>
 
       <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center">
         <Link
