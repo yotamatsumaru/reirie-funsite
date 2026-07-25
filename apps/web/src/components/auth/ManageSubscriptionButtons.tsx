@@ -59,6 +59,7 @@ export function ManageSubscriptionButtons({ hasActiveSub }: { hasActiveSub: bool
     );
   }
 
+  // 会員プランは「スタンダード＝月額」「プレミアム＝年額」の 2 種類のみを提供する。
   return (
     <div className="flex flex-wrap gap-2">
       <Button onClick={() => subscribe('STANDARD', 'MONTH')} loading={loading === 'STANDARD-MONTH'}>
@@ -66,13 +67,6 @@ export function ManageSubscriptionButtons({ hasActiveSub }: { hasActiveSub: bool
       </Button>
       <Button
         variant="secondary"
-        onClick={() => subscribe('PREMIUM', 'MONTH')}
-        loading={loading === 'PREMIUM-MONTH'}
-      >
-        PREMIUM 月額
-      </Button>
-      <Button
-        variant="outline"
         onClick={() => subscribe('PREMIUM', 'YEAR')}
         loading={loading === 'PREMIUM-YEAR'}
       >
