@@ -268,19 +268,11 @@ export const PLAN_BENEFITS_TABLE: PlanBenefitRow[] = [
   { category: '物販', label: 'プレミアム独占商品', free: DASH, standard: DASH, premium: TICK },
   { category: '物販', label: '会員価格', free: DASH, standard: TICK, premium: TICK },
   { category: '物販', label: 'プレミアム価格', free: DASH, standard: DASH, premium: TICK },
-  { category: '物販', label: '送料無料', free: '¥8,000 以上', standard: '¥8,000 以上', premium: '常時無料', highlight: true },
+  { category: '物販', label: '送料無料', free: DASH, standard: '¥8,000 以上', premium: '常時無料', highlight: true },
   // ===== チケット =====
   { category: 'チケット', label: '一般販売', free: TICK, standard: TICK, premium: TICK },
   { category: 'チケット', label: 'スタンダード先行予約', free: DASH, standard: TICK, premium: TICK },
   { category: 'チケット', label: 'プレミアム最速先行', free: DASH, standard: DASH, premium: TICK },
-  // ===== ゲーム =====
-  { category: '🎮 恋愛 ADV ゲーム', label: 'プロローグ', free: TICK, standard: TICK, premium: TICK },
-  { category: '🎮 恋愛 ADV ゲーム', label: '通常章 (¥300〜)', free: '都度購入', standard: '都度購入', premium: '読み放題', highlight: true },
-  { category: '🎮 恋愛 ADV ゲーム', label: 'プレミアム限定キャラ', free: DASH, standard: DASH, premium: TICK },
-  { category: '🎮 恋愛 ADV ゲーム', label: 'プレミアム限定章', free: DASH, standard: DASH, premium: TICK },
-  { category: '🎮 恋愛 ADV ゲーム', label: 'プレミアム限定ギフト', free: DASH, standard: DASH, premium: TICK },
-  { category: '🎮 恋愛 ADV ゲーム', label: '月次ボーナスギフト', free: DASH, standard: '1 個/月', premium: '5 個/月', highlight: true },
-  { category: '🎮 恋愛 ADV ゲーム', label: 'セーブスロット', free: '1', standard: '3', premium: '10' },
   // ===== その他 =====
   { category: 'その他', label: '広告非表示', free: DASH, standard: TICK, premium: TICK },
   { category: 'その他', label: 'プレミアムバッジ', free: DASH, standard: DASH, premium: TICK },
