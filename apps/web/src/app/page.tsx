@@ -119,7 +119,7 @@ export default async function HomePage() {
 
       {/* ===== 最新お知らせ ===== */}
       {latestNotices.length > 0 && (
-        <section className="relative mx-auto max-w-6xl px-4 pb-4 sm:pb-8">
+        <section className="relative mx-auto max-w-6xl px-4 pb-4 pt-12 sm:pb-8 sm:pt-16">
           <div className="rounded-sm border-2 border-black bg-white p-6 sm:p-8">
             <div className="mb-5 flex items-baseline justify-between gap-2">
               <SectionHeading en="News" ja="最新のお知らせ" align="left" compact />
@@ -163,18 +163,18 @@ export default async function HomePage() {
         <div className="mt-10 grid border-t-2 border-black sm:grid-cols-3">
           <FeatureCard
             no="01"
-            title="限定コンテンツ"
-            description="メンバー限定の動画・写真・ブログ・ボイスをいち早くチェック。"
+            title="会員限定コンテンツ"
+            description="デジタル会員証を手に、会員だけの動画・写真・ボイスなど限定コンテンツを閲覧・利用できます。"
           />
           <FeatureCard
             no="02"
-            title="ライブ配信"
-            description="月1回以上のオンラインライブ。上位ランクは見逃し配信も視聴可能。"
+            title="限定グッズ・優先申込"
+            description="会員限定グッズの販売に加え、チケットの優先申込やイベント申込にも参加できます。"
           />
           <FeatureCard
             no="03"
-            title="特典会・先行チケット"
-            description="“部屋に入る”特典会や、会員限定の先行チケット受付に申し込み。"
+            title="ポイント＆特別なおもてなし"
+            description="ポイント付与率アップ、誕生日メッセージ、メールマガジン、会報誌（年2回）など特典が充実。"
             last
           />
         </div>
