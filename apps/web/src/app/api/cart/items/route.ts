@@ -4,7 +4,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { AddToCartSchema, canAccess } from '@idol/shared';
+import { AddToCartSchema, canAccess, canUseShop } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
@@ -22,6 +22,12 @@ async function getOrCreateCart(userId: string) {
 export const POST = handle(async (req: Request) => {
   const session = await requireApiSession(req);
   const plan = session.user.plan;
+
+  // 無料会員 (FREE) / 未認証プランは物販 (EC) を利用できない
+  if (!canUseShop(plan)) {
+    throw errors.forbidden('物販（ショップ）のご利用にはスタンダード以上のプランが必要です');
+  }
+
   const body = AddToCartSchema.parse(await req.json());
 
   const variant = await prisma.productVariant.findUnique({

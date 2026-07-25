@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess } from '@idol/shared';
+import { canAccess, canUseShop } from '@idol/shared';
+import Link from 'next/link';
 import { effectiveUnitPrice, formatJpy } from '@/lib/pricing';
 import { Badge } from '@/components/ui/Badge';
 import { AddToCartForm } from '@/components/product/AddToCartForm';
@@ -45,6 +46,9 @@ export default async function ProductDetailPage({
     },
   });
   if (!product || !product.isActive) notFound();
+
+  // 無料会員 (FREE) / 未認証は物販 (EC) を一切利用できない
+  const shopBlocked = !canUseShop(plan);
 
   const blocked =
     (product.isPremiumExclusive && !canAccess(plan, 'PREMIUM')) ||
@@ -112,7 +116,21 @@ export default async function ProductDetailPage({
           )}
 
           <div className="mt-6 border-t border-slate-200 pt-4">
-            {blocked ? (
+            {shopBlocked ? (
+              <div className="rounded-md bg-brand-50 p-4 text-sm text-brand-700">
+                <p className="font-semibold">物販（ショップ）はスタンダード以上のプラン限定です</p>
+                <p className="mt-1 text-brand-600">
+                  無料会員の方は商品をご購入いただけません。プランをアップグレードすると
+                  ショップをご利用いただけます。
+                </p>
+                <Link
+                  href="/plans"
+                  className="mt-3 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                >
+                  プランを見る
+                </Link>
+              </div>
+            ) : blocked ? (
               <div className="rounded-md bg-brand-50 p-4 text-sm text-brand-700">
                 この商品は
                 {product.isPremiumExclusive ? 'プレミアム' : 'スタンダード'}

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess } from '@idol/shared';
+import { canAccess, canUseShop } from '@idol/shared';
 import type { Prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -19,6 +19,7 @@ export default async function ProductsPage() {
 
   const session = await auth();
   const plan = session?.user?.plan ?? 'FREE';
+  const shopBlocked = !canUseShop(plan);
 
   const accessOr: Prisma.ProductWhereInput[] = [
     { isMembersOnly: false, isPremiumExclusive: false },
@@ -39,6 +40,19 @@ export default async function ProductsPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <h1 className="mb-6 text-2xl font-bold text-slate-800">グッズ</h1>
+      {shopBlocked && (
+        <div className="mb-6 flex flex-col gap-2 rounded-md bg-brand-50 p-4 text-sm text-brand-700 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            物販（ショップ）はスタンダード以上のプラン限定です。無料会員の方はご購入いただけません。
+          </p>
+          <Link
+            href="/plans"
+            className="inline-block shrink-0 rounded-md bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            プランを見る
+          </Link>
+        </div>
+      )}
       {products.length === 0 ? (
         <p className="text-sm text-slate-500">公開されている商品はありません</p>
       ) : (

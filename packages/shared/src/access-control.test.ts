@@ -1,4 +1,4 @@
-import { canAccess, planRank, requiredPlanLabel } from './access-control';
+import { canAccess, canUseShop, planRank, requiredPlanLabel } from './access-control';
 
 describe('canAccess', () => {
   it('PUBLIC は誰でもアクセス可', () => {
@@ -21,6 +21,19 @@ describe('canAccess', () => {
     expect(canAccess('FREE', 'PREMIUM')).toBe(false);
     expect(canAccess('STANDARD', 'PREMIUM')).toBe(false);
     expect(canAccess('PREMIUM', 'PREMIUM')).toBe(true);
+  });
+});
+
+describe('canUseShop', () => {
+  it('無料会員 (FREE) と未認証は物販を利用できない', () => {
+    expect(canUseShop(undefined)).toBe(false);
+    expect(canUseShop(null)).toBe(false);
+    expect(canUseShop('FREE')).toBe(false);
+  });
+
+  it('スタンダード以上は物販を利用できる', () => {
+    expect(canUseShop('STANDARD')).toBe(true);
+    expect(canUseShop('PREMIUM')).toBe(true);
   });
 });
 

@@ -28,6 +28,16 @@ export function planRank(plan: PlanTypeLiteral): number {
   return PLAN_RANK[plan];
 }
 
+/**
+ * EC (物販) を利用できるプランか判定する。
+ * 無料会員 (FREE) は買い物ができない。スタンダード以上のみ購入可能。
+ * 未認証 (null/undefined) も購入不可。
+ */
+export function canUseShop(plan: PlanTypeLiteral | undefined | null): boolean {
+  if (!plan) return false;
+  return PLAN_RANK[plan] >= PLAN_RANK.STANDARD;
+}
+
 export function requiredPlanLabel(level: AccessLevelLiteral): string {
   return level === 'PREMIUM' ? 'プレミアム' : 'スタンダード';
 }
