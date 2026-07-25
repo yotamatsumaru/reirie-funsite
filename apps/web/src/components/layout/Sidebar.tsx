@@ -244,12 +244,9 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col overflow-y-auto px-4 py-6 text-black">
       {/* ロゴ */}
-      <Link href="/" className="mb-1 px-2 text-2xl font-black tracking-wide text-black">
+      <Link href="/" className="mb-6 px-2 text-2xl font-black tracking-wide text-black">
         ReiRieRoom
       </Link>
-      <p className="mb-6 px-2 text-[10px] font-bold uppercase tracking-[0.3em] text-twilight-rose">
-        Amethyst Room
-      </p>
 
       {/* ナビゲーション */}
       <nav className="flex-1 space-y-6">
