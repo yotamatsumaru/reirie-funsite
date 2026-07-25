@@ -8,10 +8,36 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/stores/ui-store';
 
+/**
+ * ログイン後の遷移先を安全なローカルパスに正規化する。
+ * - callbackUrl が未指定 / 空 / トップ("/") の場合はマイページ("/me")へ。
+ * - "//" や "http(s)://" で始まるオープンリダイレクトは弾いて "/me" にフォールバック。
+ * - 絶対URL(res.url など)が渡された場合は pathname + search のみを取り出す。
+ */
+function resolveCallbackPath(raw: string | null | undefined): string {
+  const fallback = '/me';
+  if (!raw) return fallback;
+  let value = raw;
+  // 絶対URLならパス部分だけを取り出す
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const u = new URL(value);
+      value = `${u.pathname}${u.search}`;
+    } catch {
+      return fallback;
+    }
+  }
+  // オープンリダイレクト対策: 単一スラッシュ始まりのローカルパスのみ許可
+  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
+  // トップページ指定はマイページへ寄せる
+  if (value === '/') return fallback;
+  return value;
+}
+
 export function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const callbackUrl = params.get('callbackUrl') || '/me';
+  const callbackUrl = resolveCallbackPath(params.get('callbackUrl'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -58,7 +84,10 @@ export function SignInForm() {
       return;
     }
     toast.success('ログインしました');
-    router.push(res.url ?? callbackUrl);
+    // next-auth の res.url は絶対URLで返ることがあるためローカルパスへ正規化する。
+    // 解決できない場合は callbackUrl (既定は /me = マイページ) へ遷移する。
+    const destination = resolveCallbackPath(res.url) || callbackUrl;
+    router.push(destination);
     router.refresh();
   };
 
