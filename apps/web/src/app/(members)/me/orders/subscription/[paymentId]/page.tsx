@@ -68,9 +68,13 @@ export default async function MeSubscriptionPaymentDetailPage({
     notFound();
   }
 
-  const planType = (payment.subscription?.planType ?? 'STANDARD') as PlanTypeLiteral;
-  const planLabel = PLAN_LABELS[planType] ?? planType;
-  const intervalLabel = payment.subscription?.billingInterval === 'YEAR' ? '年額' : '月額';
+  // サブスク行に紐づかない場合は誤ったプラン名を出さないよう中立表示にする。
+  const planType = (payment.subscription?.planType ?? null) as PlanTypeLiteral | null;
+  const planLabel = planType ? (PLAN_LABELS[planType] ?? planType) : 'サブスクリプション';
+  const billingInterval = payment.subscription?.billingInterval ?? null;
+  const intervalLabel =
+    billingInterval === 'YEAR' ? '年額' : billingInterval === 'MONTH' ? '月額' : null;
+  const titleSuffix = intervalLabel ? ` (${intervalLabel})` : '';
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
@@ -79,7 +83,9 @@ export default async function MeSubscriptionPaymentDetailPage({
           <Link href="/me/orders" className="text-sm text-brand-600 hover:underline">
             ← 購入履歴へ戻る
           </Link>
-          <h1 className="mt-2 text-xl font-bold text-slate-800">{planLabel} プラン ({intervalLabel})</h1>
+          <h1 className="mt-2 text-xl font-bold text-slate-800">
+            {planType ? `${planLabel} プラン${titleSuffix}` : planLabel}
+          </h1>
           <p className="mt-1 text-sm text-slate-500">{formatDateTime(payment.createdAt)}</p>
         </div>
         <a
@@ -131,8 +137,10 @@ export default async function MeSubscriptionPaymentDetailPage({
         <CardBody className="p-0">
           <div className="flex items-center justify-between px-4 py-3 sm:px-6">
             <div>
-              <p className="text-sm font-medium text-slate-800">{planLabel} プラン</p>
-              <p className="text-xs text-slate-500">{intervalLabel}課金</p>
+              <p className="text-sm font-medium text-slate-800">
+                {planType ? `${planLabel} プラン` : planLabel}
+              </p>
+              {intervalLabel && <p className="text-xs text-slate-500">{intervalLabel}課金</p>}
             </div>
             <p className="text-sm font-semibold text-slate-800">{formatJpy(payment.amount)}</p>
           </div>

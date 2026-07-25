@@ -14,6 +14,7 @@ import {
   PLAN_HIGHLIGHTS,
   RECOMMENDED_PLAN,
   groupedPlanBenefits,
+  type PlanTypeLiteral,
 } from '@idol/shared';
 import { PlanSubscribeSection } from './plan-subscribe-section';
 
@@ -21,7 +22,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function PlansPage() {
   const session = await auth();
-  const currentPlan = session?.user?.plan ?? 'FREE';
   const groups = groupedPlanBenefits();
 
   // アクティブな契約と、期間満了時のプラン変更予約を取得する。
@@ -50,6 +50,11 @@ export default async function PlansPage() {
           | null,
       }
     : null;
+
+  // 現在プランは JWT (session.user.plan) ではなく DB のアクティブなサブスクから導出する。
+  // JWT は最大5分キャッシュされるため、加入直後は反映ラグが出る。DB を正とすることで
+  // 「加入したのに FREE カードが加入ボタンのまま」という不整合を防ぐ。
+  const currentPlan = (activeSub?.planType as PlanTypeLiteral) ?? 'FREE';
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:py-16">

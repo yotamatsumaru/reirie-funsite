@@ -31,15 +31,17 @@ export type UnifiedHistoryEntry =
       amount: number;
       /** 一覧表示用のステータス文字列 (Payment.status) */
       status: string;
-      /** プラン名 (例: 'スタンダード') */
-      planLabel: string;
-      /** 課金サイクル (例: '月額' / '年額') */
-      intervalLabel: string;
+      /** プラン名 (例: 'スタンダード')。サブスク行に紐づかない場合は null。 */
+      planLabel: string | null;
+      /** 課金サイクル (例: '月額' / '年額')。不明な場合は null。 */
+      intervalLabel: string | null;
     };
 
-function billingIntervalLabel(interval: 'MONTH' | 'YEAR' | null | undefined): string {
+function billingIntervalLabel(interval: 'MONTH' | 'YEAR' | null | undefined): string | null {
   if (interval === 'YEAR') return '年額';
-  return '月額';
+  if (interval === 'MONTH') return '月額';
+  // 不明なときに '月額' を既定にすると、年額プランが「月額」と誤表示されるため null を返す。
+  return null;
 }
 
 /**
@@ -98,14 +100,16 @@ export async function getUnifiedOrderHistory(
   });
 
   const paymentEntries: UnifiedHistoryEntry[] = payments.map((p) => {
-    const planType = (p.subscription?.planType ?? 'STANDARD') as PlanTypeLiteral;
+    // サブスク行に紐づかない (Webhook 取りこぼし等) 場合は、誤ったプラン名を出さないよう
+    // null にしておき、表示側で「サブスクリプション」等の中立ラベルにフォールバックさせる。
+    const planType = (p.subscription?.planType ?? null) as PlanTypeLiteral | null;
     return {
       type: 'SUBSCRIPTION_PAYMENT',
       id: p.id,
       createdAt: p.createdAt,
       amount: p.amount,
       status: p.status,
-      planLabel: PLAN_LABELS[planType] ?? planType,
+      planLabel: planType ? (PLAN_LABELS[planType] ?? planType) : null,
       intervalLabel: billingIntervalLabel(p.subscription?.billingInterval),
     };
   });

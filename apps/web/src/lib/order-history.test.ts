@@ -7,8 +7,9 @@
  *  2. Payment(SUBSCRIPTION) 以外の kind (ONE_TIME_ORDER 等) は対象外であること
  *     (findMany の where 条件で絞り込まれることを呼び出し引数で検証)。
  *  3. limit がマージ後の結果にも適用されること。
- *  4. サブスクが紐付いていない Payment でも既定値 (STANDARD / 月額) で
- *     フォールバックすること。
+ *  4. サブスクが紐付いていない Payment は、誤ったプラン名を出さないよう
+ *     planLabel / intervalLabel が null になること
+ *     (以前は STANDARD / 月額 に既定化して年額プランを誤表示していた)。
  */
 
 const findManyCalls: { model: string; args: unknown }[] = [];
@@ -104,7 +105,7 @@ describe('getUnifiedOrderHistory', () => {
     expect(times).toEqual([...times].sort((a, b) => b - a));
   });
 
-  it('サブスク未紐付けの Payment はデフォルト (STANDARD / 月額) にフォールバックする', async () => {
+  it('サブスク未紐付けの Payment は planLabel / intervalLabel が null になる (誤ったプラン名を出さない)', async () => {
     paymentRows = [
       {
         id: 'pay-orphan',
@@ -118,8 +119,8 @@ describe('getUnifiedOrderHistory', () => {
     const result = await getUnifiedOrderHistory('user-1');
     expect(result[0]).toMatchObject({
       type: 'SUBSCRIPTION_PAYMENT',
-      planLabel: 'スタンダード',
-      intervalLabel: '月額',
+      planLabel: null,
+      intervalLabel: null,
     });
   });
 
