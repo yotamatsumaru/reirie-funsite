@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
+import { auth } from '@/auth';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import {
@@ -11,6 +12,7 @@ import {
   type UserRoleLiteral,
   normalizeAdminCapabilities,
   type AdminCapabilityLiteral,
+  ADMIN_CAPABILITY_LABELS,
 } from '@idol/shared';
 import { AdminRowActions } from './admin-row-actions';
 import { AdminCapabilityEditor } from './admin-capability-editor';
@@ -34,11 +36,16 @@ type UserRow = {
 };
 
 export default async function SuperAdminAdminsPage() {
+  // スタッフ管理者は閲覧のみ (権限付与/招待/剥奪/会員番号変更などは不可)
+  const viewerSession = await auth();
+  const readOnly = viewerSession?.user?.role === 'STAFF';
+
   const allUsers = (await prisma.user.findMany({})) as unknown as UserRow[];
   const admins = allUsers.filter(
-    (u) => u.role === 'ADMIN' || u.role === 'SUPER_ADMIN',
+    (u) => u.role === 'ADMIN' || u.role === 'STAFF' || u.role === 'SUPER_ADMIN',
   );
   const supers = admins.filter((u) => u.role === 'SUPER_ADMIN');
+  const staffs = admins.filter((u) => u.role === 'STAFF');
   const regularAdmins = admins.filter((u) => u.role === 'ADMIN');
 
   // 期限切れの PENDING を EXPIRED に揃えてから取得
@@ -108,7 +115,25 @@ export default async function SuperAdminAdminsPage() {
           </div>
         </CardHeader>
         <CardBody className="p-0">
-          <AdminTable users={supers} />
+          <AdminTable users={supers} readOnly={readOnly} />
+        </CardBody>
+      </Card>
+
+      {/* STAFF セクション */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-800">
+              スタッフ管理者 ({staffs.length} 名)
+            </h2>
+            <Badge tone="info">STAFF（閲覧のみ）</Badge>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            スーパー管理者と同じ画面を閲覧できますが、返金・BAN・ロール変更などの書き込み操作はできません。
+          </p>
+        </CardHeader>
+        <CardBody className="p-0">
+          <AdminTable users={staffs} readOnly={readOnly} />
         </CardBody>
       </Card>
 
@@ -123,37 +148,41 @@ export default async function SuperAdminAdminsPage() {
           </div>
         </CardHeader>
         <CardBody className="p-0">
-          <AdminTable users={regularAdmins} />
+          <AdminTable users={regularAdmins} readOnly={readOnly} />
         </CardBody>
       </Card>
 
-      {/* 付与フォーム（既存ユーザーの即時昇格） */}
-      <Card className="mb-6">
-        <CardHeader>
-          <h2 className="text-sm font-semibold text-slate-800">既存ユーザーを管理者に昇格（即時）</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            すでにアカウントを持つユーザーのメールアドレスを指定して、その場で権限を付与します。
-            メール承認のステップはありません。
-          </p>
-        </CardHeader>
-        <CardBody>
-          <GrantAdminForm />
-        </CardBody>
-      </Card>
+      {!readOnly && (
+        <>
+          {/* 付与フォーム（既存ユーザーの即時昇格） */}
+          <Card className="mb-6">
+            <CardHeader>
+              <h2 className="text-sm font-semibold text-slate-800">既存ユーザーを管理者に昇格（即時）</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                すでにアカウントを持つユーザーのメールアドレスを指定して、その場で権限を付与します。
+                メール承認のステップはありません。
+              </p>
+            </CardHeader>
+            <CardBody>
+              <GrantAdminForm />
+            </CardBody>
+          </Card>
 
-      {/* メール招待フォーム（新規・既存両対応） */}
-      <Card className="mb-6">
-        <CardHeader>
-          <h2 className="text-sm font-semibold text-slate-800">メールで管理者を招待</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            アカウント未作成の人・既存ユーザーのどちらにも送信できます。
-            招待された本人がメール内のリンクから承認すると、管理者権限が付与されます。
-          </p>
-        </CardHeader>
-        <CardBody>
-          <InviteAdminForm />
-        </CardBody>
-      </Card>
+          {/* メール招待フォーム（新規・既存両対応） */}
+          <Card className="mb-6">
+            <CardHeader>
+              <h2 className="text-sm font-semibold text-slate-800">メールで管理者を招待</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                アカウント未作成の人・既存ユーザーのどちらにも送信できます。
+                招待された本人がメール内のリンクから承認すると、管理者権限が付与されます。
+              </p>
+            </CardHeader>
+            <CardBody>
+              <InviteAdminForm />
+            </CardBody>
+          </Card>
+        </>
+      )}
 
       {/* 招待一覧 */}
       <Card>
@@ -163,28 +192,30 @@ export default async function SuperAdminAdminsPage() {
           </h2>
         </CardHeader>
         <CardBody className="p-0">
-          <InvitationList invitations={invitations} />
+          <InvitationList invitations={invitations} readOnly={readOnly} />
         </CardBody>
       </Card>
 
       {/* 既存ユーザーの会員番号を直接変更 (記念番号の割り当てなど) */}
-      <Card className="mt-6">
-        <CardHeader>
-          <h2 className="text-sm font-semibold text-slate-800">会員番号を変更</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            すでにアカウントを持つユーザー (管理者・スーパー管理者を含む) の会員番号を、
-            メールアドレスを指定して直接書き換えます。
-          </p>
-        </CardHeader>
-        <CardBody>
-          <SetMemberNumberForm />
-        </CardBody>
-      </Card>
+      {!readOnly && (
+        <Card className="mt-6">
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-slate-800">会員番号を変更</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              すでにアカウントを持つユーザー (管理者・スーパー管理者を含む) の会員番号を、
+              メールアドレスを指定して直接書き換えます。
+            </p>
+          </CardHeader>
+          <CardBody>
+            <SetMemberNumberForm />
+          </CardBody>
+        </Card>
+      )}
     </main>
   );
 }
 
-function AdminTable({ users }: { users: UserRow[] }) {
+function AdminTable({ users, readOnly = false }: { users: UserRow[]; readOnly?: boolean }) {
   if (users.length === 0) {
     return (
       <p className="px-5 py-6 text-center text-sm text-slate-500">該当する管理者はいません。</p>
@@ -198,7 +229,7 @@ function AdminTable({ users }: { users: UserRow[] }) {
             <th className="px-4 py-3">ユーザー</th>
             <th className="px-4 py-3">管理権限</th>
             <th className="px-4 py-3">登録日</th>
-            <th className="px-4 py-3 text-right">操作</th>
+            {!readOnly && <th className="px-4 py-3 text-right">操作</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -219,6 +250,25 @@ function AdminTable({ users }: { users: UserRow[] }) {
                     <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
                       全権限（スーパー管理者）
                     </span>
+                  ) : u.role === 'STAFF' ? (
+                    <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                      閲覧のみ（スタッフ管理者）
+                    </span>
+                  ) : readOnly ? (
+                    <div className="flex flex-wrap gap-1">
+                      {caps.length === 0 ? (
+                        <span className="text-xs text-slate-400">権限なし</span>
+                      ) : (
+                        caps.map((c) => (
+                          <span
+                            key={c}
+                            className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700"
+                          >
+                            {ADMIN_CAPABILITY_LABELS[c]}
+                          </span>
+                        ))
+                      )}
+                    </div>
                   ) : (
                     <AdminCapabilityEditor userId={u.id} initialCapabilities={caps} />
                   )}
@@ -226,9 +276,11 @@ function AdminTable({ users }: { users: UserRow[] }) {
                 <td className="px-4 py-3 align-top text-xs text-slate-600">
                   {new Date(u.createdAt).toLocaleDateString('ja-JP')}
                 </td>
-                <td className="px-4 py-3 text-right align-top">
-                  <AdminRowActions userId={u.id} currentRole={u.role} />
-                </td>
+                {!readOnly && (
+                  <td className="px-4 py-3 text-right align-top">
+                    <AdminRowActions userId={u.id} currentRole={u.role} />
+                  </td>
+                )}
               </tr>
             );
           })}

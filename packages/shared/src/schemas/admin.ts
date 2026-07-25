@@ -98,8 +98,12 @@ export type AdminListContentsQuery = z.infer<typeof AdminListContentsQuerySchema
 // Admin Invitation (管理者メール招待)
 // =====================================================================
 
-/** 管理者として付与するロール (USER は付与対象外) */
-export const InvitableRoleSchema = z.enum(['ADMIN', 'SUPER_ADMIN']);
+/**
+ * 管理者として付与するロール (USER は付与対象外)
+ *  - STAFF: スタッフ管理者。SUPER_ADMIN と同じ画面を閲覧できるが書き込み不可 (read-only)。
+ *           SUPER_ADMIN と同様に capabilities は持たない (ロール自体が閲覧権限)。
+ */
+export const InvitableRoleSchema = z.enum(['ADMIN', 'STAFF', 'SUPER_ADMIN']);
 export type InvitableRole = z.infer<typeof InvitableRoleSchema>;
 
 export const AdminInvitationStatusSchema = z.enum([

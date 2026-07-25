@@ -47,7 +47,9 @@ export function InviteAdminForm() {
     const msg =
       role === 'SUPER_ADMIN'
         ? `${email} に SUPER_ADMIN 招待を送信しますか？\nすべての操作権限を持つ強力なロールです。`
-        : `${email} に ADMIN 招待を送信しますか？`;
+        : role === 'STAFF'
+          ? `${email} に STAFF（スタッフ管理者）招待を送信しますか？\n管理画面を閲覧できますが、返金・BAN などの書き込み操作はできません。`
+          : `${email} に ADMIN 招待を送信しますか？`;
     if (!confirm(msg)) return;
 
     startTransition(async () => {
@@ -104,6 +106,7 @@ export function InviteAdminForm() {
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
           >
             <option value="ADMIN">ADMIN</option>
+            <option value="STAFF">STAFF（スタッフ管理者・閲覧のみ）</option>
             <option value="SUPER_ADMIN">SUPER_ADMIN</option>
           </select>
         </div>
@@ -146,6 +149,10 @@ export function InviteAdminForm() {
             })}
           </div>
         </div>
+      ) : role === 'STAFF' ? (
+        <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          STAFF（スタッフ管理者）はスーパー管理者と同じ画面を閲覧できますが、返金・BAN・ロール変更などの書き込み操作はできません。
+        </p>
       ) : (
         <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
           SUPER_ADMIN はすべての管理権限を自動的に保有します。

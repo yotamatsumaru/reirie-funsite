@@ -32,7 +32,14 @@ const STATUS_TONE: Record<AdminInvitationStatusLiteral, string> = {
   EXPIRED: 'bg-slate-200 text-slate-500',
 };
 
-export function InvitationList({ invitations }: { invitations: InvitationItem[] }) {
+export function InvitationList({
+  invitations,
+  readOnly = false,
+}: {
+  invitations: InvitationItem[];
+  /** スタッフ管理者など閲覧のみの場合 true。再送/取消の操作列を非表示にする。 */
+  readOnly?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -87,7 +94,7 @@ export function InvitationList({ invitations }: { invitations: InvitationItem[] 
               <th className="px-4 py-3">ロール</th>
               <th className="px-4 py-3">状態</th>
               <th className="px-4 py-3">有効期限</th>
-              <th className="px-4 py-3 text-right">操作</th>
+              {!readOnly && <th className="px-4 py-3 text-right">操作</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -125,6 +132,7 @@ export function InvitationList({ invitations }: { invitations: InvitationItem[] 
                       minute: '2-digit',
                     })}
                   </td>
+                  {!readOnly && (
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {canResend && (
@@ -152,6 +160,7 @@ export function InvitationList({ invitations }: { invitations: InvitationItem[] 
                       )}
                     </div>
                   </td>
+                  )}
                 </tr>
               );
             })}
