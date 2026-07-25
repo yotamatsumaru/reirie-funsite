@@ -209,9 +209,6 @@ export default async function HomePage() {
             <PlanCard plan="STANDARD" highlight />
             <PlanCard plan="PREMIUM" />
           </div>
-          <p className="mt-6 text-center text-xs text-black/60">
-            ※価格は税込。年額プランは2ヶ月分お得です。
-          </p>
         </div>
       </section>
     </div>
