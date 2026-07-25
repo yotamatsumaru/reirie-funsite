@@ -10,7 +10,9 @@ import {
   MONTHLY_BONUS_GIFT_COUNT,
   MAX_VIDEO_QUALITY,
   FREE_SHIPPING_THRESHOLD_BY_PLAN,
+  PLAN_PUI_MULTIPLIER,
   currentYearMonth,
+  canUseShop,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -62,6 +64,9 @@ export default async function MePage() {
   const bonusEligible = MONTHLY_BONUS_GIFT_COUNT[plan];
   const maxQuality = MAX_VIDEO_QUALITY[plan];
   const freeShippingThreshold = FREE_SHIPPING_THRESHOLD_BY_PLAN[plan];
+  // 無料会員は物販 (EC) を利用できないため、送料特典ではなく「利用不可」を表示する。
+  const canShop = canUseShop(plan);
+  const puiMultiplier = PLAN_PUI_MULTIPLIER[plan];
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 py-10">
@@ -163,18 +168,28 @@ export default async function MePage() {
               <p className="mt-1 text-xs text-slate-500">プレミアムで 1080p に</p>
             )}
           </div>
-          {/* 送料 */}
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-xs text-slate-500">送料</p>
-            <p className="mt-1 text-xl font-bold text-slate-900">
-              {freeShippingThreshold === 0
-                ? '常時無料'
-                : `¥${freeShippingThreshold.toLocaleString()} 以上で無料`}
-            </p>
-            {plan !== 'PREMIUM' && (
-              <p className="mt-1 text-xs text-slate-500">プレミアムで常時無料</p>
-            )}
-          </div>
+          {/* 物販 (ショップ) / 送料 */}
+          {canShop ? (
+            // スタンダード以上: 送料特典を表示
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-xs text-slate-500">送料</p>
+              <p className="mt-1 text-xl font-bold text-slate-900">
+                {freeShippingThreshold === 0
+                  ? '常時無料'
+                  : `¥${freeShippingThreshold.toLocaleString()} 以上で無料`}
+              </p>
+              {plan !== 'PREMIUM' && (
+                <p className="mt-1 text-xs text-slate-500">プレミアムで常時無料</p>
+              )}
+            </div>
+          ) : (
+            // 無料会員: 物販は利用できないため、その旨を表示 (送料は表示しない)
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-xs text-slate-500">物販（ショップ）</p>
+              <p className="mt-1 text-xl font-bold text-slate-400">ご利用不可</p>
+              <p className="mt-1 text-xs text-slate-500">スタンダード以上でお買い物可能</p>
+            </div>
+          )}
           {/* セーブスロット */}
           <div className="rounded-lg border border-slate-200 p-4">
             <p className="text-xs text-slate-500">ゲームセーブスロット</p>
@@ -204,6 +219,18 @@ export default async function MePage() {
             {plan !== 'PREMIUM' && (
               <p className="mt-1 text-xs text-slate-500">
                 プレミアムで月 {MONTHLY_BONUS_GIFT_COUNT.PREMIUM} 個に
+              </p>
+            )}
+          </div>
+          {/* Pui 付与率 (全プラン共通で持つ特典) */}
+          <div className="rounded-lg border border-slate-200 p-4">
+            <p className="text-xs text-slate-500">Pui 付与率</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">
+              ×{puiMultiplier.toFixed(1)}
+            </p>
+            {plan !== 'PREMIUM' && (
+              <p className="mt-1 text-xs text-slate-500">
+                プレミアムで ×{PLAN_PUI_MULTIPLIER.PREMIUM.toFixed(1)} に
               </p>
             )}
           </div>
