@@ -228,8 +228,8 @@ function HeroCopy({ contentsVisible }: { contentsVisible: boolean }) {
         REIRIE Official Fan Club
       </p>
 
-      <h1 className="text-[3.25rem] font-black uppercase leading-[0.9] tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.85)] sm:text-7xl md:text-8xl lg:text-[7rem]">
-        Rei<span className="text-twilight-rose drop-shadow-[0_3px_18px_rgba(0,0,0,0.6)]">Rie</span> Room
+      <h1 className="text-[3.25rem] font-black leading-[0.9] tracking-tight text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.85)] sm:text-7xl md:text-8xl lg:text-[7rem]">
+        Rie<span className="text-twilight-rose drop-shadow-[0_3px_18px_rgba(0,0,0,0.6)]">Rie</span> Room
       </h1>
 
       <p className="mt-5 max-w-md text-sm leading-relaxed text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] sm:mt-6 sm:max-w-xl sm:text-base">
