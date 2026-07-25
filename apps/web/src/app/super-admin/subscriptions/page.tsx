@@ -46,6 +46,9 @@ const STATUS_LABELS: Record<string, string> = {
 /** 有効（=売上に寄与している）とみなすステータス */
 const LIVE_STATUSES = new Set(['ACTIVE', 'TRIALING']);
 
+/** 支払い未完了（=権限が付与されない）ステータス */
+const INCOMPLETE_STATUSES = new Set(['INCOMPLETE', 'INCOMPLETE_EXPIRED']);
+
 /** プラン別・課金サイクル別の「月次換算」単価（円） */
 function monthlyValue(planType: PlanTypeLiteral, interval: 'MONTH' | 'YEAR'): number {
   const price = PLAN_PRICES[planType];
@@ -446,12 +449,20 @@ export default async function SuperAdminSubscriptionsPage({
                     className={
                       duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status)
                         ? 'bg-rose-50 hover:bg-rose-100'
-                        : 'hover:bg-slate-50'
+                        : INCOMPLETE_STATUSES.has(s.status)
+                          ? 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                          : 'hover:bg-slate-50'
                     }
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-900">
+                        <p
+                          className={
+                            INCOMPLETE_STATUSES.has(s.status)
+                              ? 'font-medium text-slate-400'
+                              : 'font-medium text-slate-900'
+                          }
+                        >
                           {s.user?.displayName ?? '（不明）'}
                         </p>
                         {duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status) && (
@@ -463,18 +474,33 @@ export default async function SuperAdminSubscriptionsPage({
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500">{s.user?.email ?? '—'}</p>
+                      <p className="text-xs text-slate-400">{s.user?.email ?? '—'}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge tone={s.planType === 'PREMIUM' ? 'danger' : 'warning'}>
-                        {PLAN_LABELS[s.planType]}
-                      </Badge>
+                      {INCOMPLETE_STATUSES.has(s.status) ? (
+                        <Badge tone="gray">{PLAN_LABELS[s.planType]}</Badge>
+                      ) : (
+                        <Badge tone={s.planType === 'PREMIUM' ? 'danger' : 'warning'}>
+                          {PLAN_LABELS[s.planType]}
+                        </Badge>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
+                    <td
+                      className={
+                        INCOMPLETE_STATUSES.has(s.status)
+                          ? 'px-4 py-3 text-xs text-slate-400'
+                          : 'px-4 py-3 text-xs text-slate-600'
+                      }
+                    >
                       {s.billingInterval === 'MONTH' ? '月額' : '年額'}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={s.status} />
+                      {INCOMPLETE_STATUSES.has(s.status) && (
+                        <p className="mt-1 text-[11px] font-medium text-slate-400">
+                          支払い未完了・権限なし
+                        </p>
+                      )}
                       {s.cancelAtPeriodEnd && (
                         <span className="ml-1 text-xs text-amber-600">
                           (期末解約予約)
@@ -539,6 +565,8 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'TRIALING') return <Badge tone="info">{STATUS_LABELS[status]}</Badge>;
   if (status === 'PAST_DUE') return <Badge tone="warning">{STATUS_LABELS[status]}</Badge>;
   if (status === 'CANCELED') return <Badge tone="gray">{STATUS_LABELS[status]}</Badge>;
+  if (status === 'INCOMPLETE') return <Badge tone="gray">支払い未完了</Badge>;
+  if (status === 'INCOMPLETE_EXPIRED') return <Badge tone="gray">支払い未完了（期限切れ）</Badge>;
   return <Badge tone="gray">{STATUS_LABELS[status] ?? status}</Badge>;
 }
 
