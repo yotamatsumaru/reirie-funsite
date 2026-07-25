@@ -46,79 +46,89 @@ export default async function HomePage() {
 
   return (
     <div className="bg-twilight-lavender">
-      {/* ===== Hero (Full-bleed Editorial Banner) ===== */}
-      <section className="relative isolate w-full overflow-hidden">
-        {/* --- 背景画像 (PC=横長 / スマホ=縦長 で出し分け) --- */}
-        <div className="absolute inset-0 -z-10">
-          {/* スマホ: 縦長 */}
-          <Image
-            src={heroPortrait}
-            alt=""
-            aria-hidden
-            fill
-            priority
-            unoptimized={isExternal(heroPortrait)}
-            sizes="100vw"
-            className="object-cover md:hidden"
-          />
-          {/* PC: 横長 */}
-          <Image
-            src={heroLandscape}
-            alt=""
-            aria-hidden
-            fill
-            priority
-            unoptimized={isExternal(heroLandscape)}
-            sizes="100vw"
-            className="hidden object-cover md:block"
-          />
-          {/* 可読性のためのオーバーレイ: 左を暗く落とし、全体に紫トーンを重ねる */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-black/10" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/25" />
-          <div className="pointer-events-none absolute inset-0 bg-twilight-rose/15 mix-blend-multiply" />
-        </div>
+      {/* ===== Hero =====
+          レイアウト方針:
+           - PC (md+)  : 左=濃色テキストパネル / 右=写真 の 2 カラム分割。
+                        テキストが被写体(顔)に重ならず、どんな写真でも破綻しない。
+           - スマホ    : 縦長写真を背景に敷き、下部に強いスクリムを掛けて
+                        テキストを下寄せ。CTA は全幅で押しやすくする。 */}
+      <section className="relative isolate w-full overflow-hidden bg-black">
+        <div className="mx-auto grid min-h-[86vh] max-w-6xl grid-cols-1 md:min-h-[560px] md:grid-cols-2">
+          {/* --- テキストパネル --- */}
+          <div className="relative z-10 order-2 flex flex-col justify-end px-5 pb-10 pt-16 md:order-1 md:justify-center md:px-10 md:py-16 lg:px-12">
+            <p className="mb-3 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.3em] text-white/90 sm:text-xs sm:tracking-[0.35em]">
+              <Star className="h-3.5 w-3.5 text-twilight-rose" />
+              REIRIE Official Fan Club
+            </p>
 
-        {/* --- テキストオーバーレイ --- */}
-        <div className="relative mx-auto flex min-h-[78vh] max-w-6xl flex-col justify-end px-5 pb-14 pt-28 sm:min-h-[80vh] sm:px-6 sm:pb-20 sm:pt-32 md:min-h-[88vh] md:pb-24">
-          {/* 上部ラベル */}
-          <p className="mb-4 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.35em] text-white/90 sm:text-sm">
-            <Star className="h-3.5 w-3.5 text-twilight-rose" />
-            REIRIE Official Fan Club
-          </p>
+            <h1 className="text-[3.25rem] font-black uppercase leading-[0.9] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)] sm:text-7xl md:text-8xl lg:text-[7rem]">
+              Rei<span className="text-twilight-rose">Rie</span>
+              <br />
+              Room
+            </h1>
 
-          <h1 className="text-6xl font-black uppercase leading-[0.9] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:text-8xl md:text-[8.5rem]">
-            Rei<span className="text-twilight-rose">Rie</span>
-            <br />
-            Room
-          </h1>
+            <p className="mt-5 max-w-md text-sm leading-relaxed text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.5)] sm:mt-6 sm:text-base">
+              ファンだけが入れる、紫水晶の部屋。
+              <br className="hidden sm:inline" />
+              限定コンテンツ・ライブ配信・特典会・先行チケット。 REIRIE との特別な時間をお届けします。
+            </p>
 
-          <p className="mt-6 max-w-xl text-sm leading-relaxed text-white/85 drop-shadow-[0_1px_6px_rgba(0,0,0,0.5)] sm:text-base md:text-lg">
-            ファンだけが入れる、紫水晶の部屋。
-            <br className="hidden sm:inline" />
-            限定コンテンツ・ライブ配信・特典会・先行チケット。
-            REIRIE との特別な時間をお届けします。
-          </p>
-
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Link
-              href="/signup"
-              className="rounded-full border-2 border-white bg-white px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:-translate-y-0.5 hover:border-twilight-rose hover:bg-twilight-rose hover:text-white"
-            >
-              入室する（無料会員登録）
-            </Link>
-            {contentsVisible && (
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
-                href="/contents"
-                className="rounded-full border-2 border-white/80 bg-transparent px-8 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white hover:text-black"
+                href="/signup"
+                className="rounded-full border-2 border-white bg-white px-7 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:-translate-y-0.5 hover:border-twilight-rose hover:bg-twilight-rose hover:text-white"
               >
-                コンテンツを見る
+                入室する（無料会員登録）
               </Link>
-            )}
+              {contentsVisible && (
+                <Link
+                  href="/contents"
+                  className="rounded-full border-2 border-white/80 bg-transparent px-7 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white hover:text-black"
+                >
+                  コンテンツを見る
+                </Link>
+              )}
+            </div>
+
+            {/* since バッジ (PC: テキストパネル下部にインライン配置し写真と衝突させない) */}
+            <div className="mt-8 hidden md:inline-flex md:w-fit md:rounded-sm md:bg-twilight-rose md:px-4 md:py-2 md:text-xs md:font-black md:uppercase md:tracking-wide md:text-white md:shadow-[5px_5px_0_rgba(255,255,255,0.15)]">
+              since 2026
+            </div>
           </div>
 
-          {/* since バッジ (右下・オフセット影のエディトリアルアクセント) */}
-          <div className="absolute bottom-8 right-5 rounded-sm bg-twilight-rose px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)] sm:bottom-12 sm:right-6 sm:text-sm">
-            since 2026
+          {/* --- 写真 --- */}
+          <div className="relative order-1 min-h-[42vh] md:order-2 md:min-h-0">
+            {/* スマホ: 縦長 */}
+            <Image
+              src={heroPortrait}
+              alt="REIRIE"
+              fill
+              priority
+              unoptimized={isExternal(heroPortrait)}
+              sizes="100vw"
+              className="object-cover object-top md:hidden"
+            />
+            {/* PC: 横長 */}
+            <Image
+              src={heroLandscape}
+              alt="REIRIE"
+              fill
+              priority
+              unoptimized={isExternal(heroLandscape)}
+              sizes="(min-width: 768px) 50vw, 100vw"
+              className="hidden object-cover md:block"
+            />
+
+            {/* スクリム
+                - スマホ: 下から上へ暗く落とし、テキストパネル(下)へ滑らかに繋ぐ
+                - PC    : 左端をテキストパネルの黒へ滑らかに繋ぐ */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-transparent md:bg-gradient-to-r md:from-black md:via-transparent md:to-transparent" />
+            <div className="pointer-events-none absolute inset-0 bg-twilight-rose/10 mix-blend-multiply" />
+
+            {/* since バッジ (スマホのみ: 写真右上に配置。下部テキストと衝突しない) */}
+            <div className="absolute right-4 top-4 rounded-sm bg-twilight-rose px-3.5 py-2 text-[10px] font-black uppercase tracking-wide text-white shadow-[4px_4px_0_rgba(0,0,0,0.6)] md:hidden">
+              since 2026
+            </div>
           </div>
         </div>
       </section>
