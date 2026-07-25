@@ -4,6 +4,7 @@ import { SignUpSchema } from '@idol/shared';
 import { hashPassword } from '@/lib/password';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { ensureMemberNumber } from '@/lib/points';
 import { sendVerificationCodeEmail } from '@/lib/email';
 import { generateVerificationCode, verificationCodeExpiryDate, VERIFICATION_CODE_TTL_MINUTES } from '@/lib/verification-code';
 
@@ -38,6 +39,22 @@ export const POST = handle(async (req: Request) => {
   });
 
   await logAudit({ userId: user.id, action: 'user.signup' });
+
+  // 会員番号を登録時点で採番する (全プラン共通)。
+  // 会員カードを開いていないユーザーに番号が付かない問題を防ぐため、ここで確実に付与する。
+  // 採番は外部依存の無い DB 内トランザクションだが、万一失敗してもアカウント作成は
+  // 成功として扱う (後から会員カード表示・一括採番でフォローできる)。
+  try {
+    await ensureMemberNumber(user.id);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[signup] member number assignment failed', err);
+    await logAudit({
+      userId: user.id,
+      action: 'user.signup_member_number_failed',
+      metadata: { reason: err instanceof Error ? err.message : 'unknown' },
+    });
+  }
 
   // メール認証コードを送信する。
   // メール送信は外部 (SES) 依存のため、失敗してもアカウント作成自体は成功とする。
