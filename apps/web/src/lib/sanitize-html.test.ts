@@ -37,4 +37,20 @@ describe('sanitizeContentBody', () => {
     const clean = sanitizeContentBody(html);
     expect(clean).toContain('rel="noopener noreferrer"');
   });
+
+  // ===== リッチテキストエディタ (TipTap) の出力互換性 =====
+  it('下線 (u タグ) を保持する', () => {
+    const clean = sanitizeContentBody('<p><u>下線</u></p>');
+    expect(clean).toContain('<u>下線</u>');
+  });
+
+  it('揃え指定 (text-align の style) を保持する', () => {
+    const clean = sanitizeContentBody('<p style="text-align: center">中央</p>');
+    expect(clean).toContain('text-align');
+  });
+
+  it('エディタが付与する画像の class を保持する', () => {
+    const clean = sanitizeContentBody('<img src="https://example.com/a.png" class="rounded-lg" alt="" />');
+    expect(clean).toContain('class="rounded-lg"');
+  });
 });
