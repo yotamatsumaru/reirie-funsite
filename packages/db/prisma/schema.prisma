@@ -44,6 +44,24 @@ enum AccessLevel {
   PREMIUM
 }
 
+/// お問い合わせの対応状況
+enum ContactStatus {
+  NEW        // 新規 (未対応)
+  IN_PROGRESS // 対応中
+  RESOLVED   // 対応済み
+  CLOSED     // クローズ (対応不要 / スパム等)
+}
+
+/// お問い合わせの種別
+enum ContactCategory {
+  GENERAL      // 一般
+  ACCOUNT      // アカウント / ログイン
+  BILLING      // 支払い / 会員プラン
+  SHIPPING     // 配送 / グッズ
+  BUG          // 不具合報告
+  OTHER        // その他
+}
+
 enum ContentType {
   BLOG
   GALLERY
@@ -399,6 +417,9 @@ model User {
 
   // Direct Message (REIRIE への DM)
   directMessages DirectMessage[]
+
+  // お問い合わせ (ログイン中に送信した場合に紐づく。ゲスト送信は null)
+  contactMessages ContactMessage[]
 
   // 運営からの警告通知 (このユーザーが受け取った警告)
   warningsReceived UserWarning[] @relation("UserWarningTarget")
@@ -1757,4 +1778,38 @@ model Announcement {
   @@index([status, publishedAt])
   @@index([emailStatus])
   @@map("announcements")
+}
+
+// =====================================================================
+// Contact (お問い合わせ)
+// =====================================================================
+
+/// サイトのお問い合わせフォームから送信されたメッセージ。
+/// - ログイン中のユーザーは userId が紐づく。ゲスト送信は userId = null。
+/// - 管理画面 (/super-admin/contact) で一覧・対応状況の更新を行う。
+model ContactMessage {
+  id        String          @id @default(uuid()) @db.Uuid
+  // 送信者情報 (フォーム入力値。ログイン中でもフォーム値を保存する)
+  name      String
+  email     String
+  category  ContactCategory @default(GENERAL)
+  subject   String
+  message   String          @db.Text
+  // 対応状況 (管理側で更新)
+  status    ContactStatus   @default(NEW)
+  // 管理者用メモ (対応内容の記録など。ユーザーには見えない)
+  adminNote String?         @map("admin_note") @db.Text
+  // 濫用対策・調査用のメタ情報
+  ipAddress String?         @map("ip_address")
+  userAgent String?         @map("user_agent")
+  // ログイン中に送信した場合の紐づけ (ゲストは null)
+  userId    String?         @map("user_id") @db.Uuid
+  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("contact_messages")
 }
