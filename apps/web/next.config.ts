@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@idol/shared', '@idol/db'],
   // EC2 + PM2 配置を想定 (standalone build)
   output: 'standalone',
+  // pdfkit を Next のバンドル対象から外し、実行時に node_modules から require させる。
+  //   pdfkit は標準フォントのメトリクス (js/data/*.afm) を
+  //   `fs.readFileSync(__dirname + '/data/Helvetica.afm')` のように
+  //   「実行時の文字列パス」で読み込む。output:'standalone' の依存トレーサは
+  //   静的 require で参照されないこの .afm データ群を .next/standalone へ
+  //   コピーしないため、本番では Helvetica.afm が ENOENT となり
+  //   支払明細書 PDF の生成が INTERNAL_ERROR で失敗していた。
+  //   serverExternalPackages に指定すると pdfkit はバンドルされず、
+  //   パッケージ一式 (data/ 含む) が node_modules ごとトレース対象になる。
+  serverExternalPackages: ['pdfkit'],
   experimental: {
     typedRoutes: true,
   },
