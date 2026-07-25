@@ -26,6 +26,8 @@ import {
   handleSubscriptionUpsert,
 } from './handlers/subscription';
 import { handleCheckoutCompleted } from './handlers/checkout';
+import { handleRewardPointPurchase } from './handlers/reward-point';
+import { handleGamePurchase } from './handlers/game-purchase';
 import { handleInvoiceFailed, handleInvoicePaid } from './handlers/invoice';
 import {
   handlePaymentIntentFailed,
@@ -195,11 +197,21 @@ export const handler = async (
   let result: { ok: boolean; reason?: string } = { ok: true };
   try {
     switch (stripeEvent.type) {
-      case 'checkout.session.completed':
-        result = await handleCheckoutCompleted(
-          stripeEvent.data.object as Stripe.Checkout.Session,
-        );
+      case 'checkout.session.completed': {
+        const session = stripeEvent.data.object as Stripe.Checkout.Session;
+        const kind = (session.metadata ?? {})['kind'];
+        if (kind === 'REWARD_POINT_PURCHASE') {
+          // Pui パック購入は専用ハンドラで確定 + Pui 付与
+          result = await handleRewardPointPurchase(session);
+        } else if (kind === 'GAME_PURCHASE') {
+          // ゲーム内課金 (章/アイテム) は専用ハンドラでインベントリ付与
+          result = await handleGamePurchase(session);
+        } else {
+          // 物販 Order (metadata.orderId) 等は従来ハンドラで処理
+          result = await handleCheckoutCompleted(session);
+        }
         break;
+      }
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
