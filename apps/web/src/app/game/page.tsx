@@ -75,7 +75,10 @@ export default async function GameTopPage() {
       {/* ===== ミニゲーム ===== */}
       <section className="mb-12">
         <div className="mb-4 flex items-center gap-2">
-          <h2 className="text-lg font-bold text-slate-900 sm:text-xl">🎮 ミニゲーム</h2>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-twilight-rose text-white shadow-[2px_2px_0_rgba(0,0,0,0.9)]">
+            <GamepadIcon className="h-4 w-4" />
+          </span>
+          <h2 className="text-lg font-bold text-slate-900 sm:text-xl">ミニゲーム</h2>
           <Badge tone="success">ポイントが貯まる</Badge>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -128,7 +131,10 @@ export default async function GameTopPage() {
 
       {/* ===== 恋愛 ADV ストーリー ===== */}
       <div className="mb-4 flex items-center gap-2">
-        <h2 className="text-lg font-bold text-slate-900 sm:text-xl">💗 恋愛 ADV ストーリー</h2>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-twilight-amethyst text-white shadow-[2px_2px_0_rgba(0,0,0,0.9)]">
+          <HeartIcon className="h-4 w-4" />
+        </span>
+        <h2 className="text-lg font-bold text-slate-900 sm:text-xl">恋愛 ADV ストーリー</h2>
       </div>
       <p className="mb-4 text-xs text-slate-500">
         ※ 課金はすべて確定報酬型 DLC です。ガチャ要素はありません。
@@ -198,5 +204,37 @@ export default async function GameTopPage() {
         })}
       </section>
     </main>
+  );
+}
+
+/* ===== セクション見出しアイコン (ブランド SVG) =====
+   OS 依存でバラつく絵文字 (🎮 / 💗) の代わりに、サイトのネオブルータリズム
+   バッジ内で使うインライン SVG。currentColor で塗る。 */
+function GamepadIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M7 8.5h10a4.5 4.5 0 0 1 4.4 5.4l-.7 3.3A2.4 2.4 0 0 1 16.4 18l-1.2-1.6a2 2 0 0 0-1.6-.8h-3.2a2 2 0 0 0-1.6.8L7.6 18a2.4 2.4 0 0 1-4.3-.8l-.7-3.3A4.5 4.5 0 0 1 7 8.5Z" />
+      <line x1="7.5" y1="12" x2="9.5" y2="12" />
+      <line x1="8.5" y1="11" x2="8.5" y2="13" />
+      <circle cx="15" cy="11.5" r="0.6" fill="currentColor" />
+      <circle cx="16.5" cy="13" r="0.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HeartIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 20.5l-1.3-1.15C6.1 15.2 3 12.4 3 8.95 3 6.3 5.05 4.3 7.65 4.3c1.5 0 2.95.7 3.85 1.8.9-1.1 2.35-1.8 3.85-1.8C21 4.3 21 6.3 21 8.95c0 3.45-3.1 6.25-7.7 10.4L12 20.5Z" />
+    </svg>
   );
 }
