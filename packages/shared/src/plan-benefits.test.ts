@@ -8,8 +8,6 @@ import {
   MAX_VIDEO_QUALITY,
   LIVE_ARCHIVE_RETENTION_DAYS,
   CAN_POST_COMMENT,
-  HIDE_ADS,
-  SHOW_PREMIUM_BADGE,
   PREMIUM_INCLUDES_SCENARIOS,
   PLAN_BENEFITS_TABLE,
   PLAN_HIGHLIGHTS,
@@ -98,19 +96,7 @@ describe('CAN_POST_COMMENT', () => {
   });
 });
 
-describe('HIDE_ADS / SHOW_PREMIUM_BADGE / PREMIUM_INCLUDES_SCENARIOS', () => {
-  it('広告非表示は STANDARD 以上', () => {
-    expect(HIDE_ADS.FREE).toBe(false);
-    expect(HIDE_ADS.STANDARD).toBe(true);
-    expect(HIDE_ADS.PREMIUM).toBe(true);
-  });
-
-  it('プレミアムバッジは PREMIUM のみ', () => {
-    expect(SHOW_PREMIUM_BADGE.FREE).toBe(false);
-    expect(SHOW_PREMIUM_BADGE.STANDARD).toBe(false);
-    expect(SHOW_PREMIUM_BADGE.PREMIUM).toBe(true);
-  });
-
+describe('PREMIUM_INCLUDES_SCENARIOS', () => {
   it('プレミアム会員はゲーム章が読み放題', () => {
     expect(PREMIUM_INCLUDES_SCENARIOS.FREE).toBe(false);
     expect(PREMIUM_INCLUDES_SCENARIOS.STANDARD).toBe(false);
@@ -129,8 +115,8 @@ describe('PLAN_BENEFITS_TABLE', () => {
     }
   });
 
-  it('30 行以上ある', () => {
-    expect(PLAN_BENEFITS_TABLE.length).toBeGreaterThanOrEqual(25);
+  it('20 行以上ある', () => {
+    expect(PLAN_BENEFITS_TABLE.length).toBeGreaterThanOrEqual(20);
   });
 
   it('「注目」ハイライトが少なくとも 3 つある', () => {

@@ -181,25 +181,6 @@ export const PREMIUM_INCLUDES_SCENARIOS: Record<PlanTypeLiteral, boolean> = {
 };
 
 /**
- * 広告非表示
- * - 現状コードに広告システムは未実装。将来用意する想定で仕様だけ定義。
- */
-export const HIDE_ADS: Record<PlanTypeLiteral, boolean> = {
-  FREE: false,
-  STANDARD: true,
-  PREMIUM: true,
-};
-
-/**
- * プレミアムバッジ (UI 表示)
- */
-export const SHOW_PREMIUM_BADGE: Record<PlanTypeLiteral, boolean> = {
-  FREE: false,
-  STANDARD: false,
-  PREMIUM: true,
-};
-
-/**
  * コメント投稿可能か (STANDARD 以上)
  */
 export const CAN_POST_COMMENT: Record<PlanTypeLiteral, boolean> = {
@@ -273,9 +254,6 @@ export const PLAN_BENEFITS_TABLE: PlanBenefitRow[] = [
   { category: 'チケット', label: '一般販売', free: TICK, standard: TICK, premium: TICK },
   { category: 'チケット', label: 'スタンダード先行予約', free: DASH, standard: TICK, premium: TICK },
   { category: 'チケット', label: 'プレミアム最速先行', free: DASH, standard: DASH, premium: TICK },
-  // ===== その他 =====
-  { category: 'その他', label: '広告非表示', free: DASH, standard: TICK, premium: TICK },
-  { category: 'その他', label: 'プレミアムバッジ', free: DASH, standard: DASH, premium: TICK },
 ];
 
 /**
