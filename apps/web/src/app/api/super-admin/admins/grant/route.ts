@@ -1,8 +1,9 @@
 /**
  * POST /api/super-admin/admins/grant
- *   - SUPER_ADMIN 限定: 指定メールのユーザーに ADMIN / SUPER_ADMIN を付与
+ *   - SUPER_ADMIN 限定: 指定メールのユーザーに ADMIN / STAFF / SUPER_ADMIN を付与
  *
- * body: { email: string, role: 'ADMIN' | 'SUPER_ADMIN' }
+ * body: { email: string, role: 'ADMIN' | 'STAFF' | 'SUPER_ADMIN' }
+ *   - STAFF: スタッフ管理者 (閲覧のみ)。ADMIN のような capabilities は持たない。
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -16,7 +17,7 @@ export const runtime = 'nodejs';
 
 const Schema = z.object({
   email: z.email(),
-  role: z.enum(['ADMIN', 'SUPER_ADMIN']),
+  role: z.enum(['ADMIN', 'STAFF', 'SUPER_ADMIN']),
   capabilities: z.array(AdminCapabilitySchema).optional(),
 });
 
