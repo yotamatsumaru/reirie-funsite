@@ -64,6 +64,29 @@ function toDate(unix: number | null | undefined): Date | null {
   return new Date(unix * 1000);
 }
 
+/**
+ * Checkout 時に付与された metadata.plan からプランを判定する。
+ * Price ID マッピングより優先することで、本番 Price ID の設定ミスで
+ * PREMIUM 申込が STANDARD に誤登録された既存行もここで正しく修復できる。
+ */
+function planFromMetadata(
+  metadata: Record<string, string> | null | undefined,
+): PlanType | null {
+  const raw = metadata?.plan?.trim().toUpperCase();
+  if (raw === 'STANDARD') return 'STANDARD';
+  if (raw === 'PREMIUM') return 'PREMIUM';
+  return null;
+}
+
+function intervalFromMetadata(
+  metadata: Record<string, string> | null | undefined,
+): BillingInterval | null {
+  const raw = metadata?.interval?.trim().toUpperCase();
+  if (raw === 'MONTH' || raw === 'MONTHLY') return 'MONTH';
+  if (raw === 'YEAR' || raw === 'YEARLY') return 'YEAR';
+  return null;
+}
+
 /** Stripe Subscription から customer email を取り出す (展開済み前提) */
 function customerEmail(sub: Stripe.Subscription): string | null {
   const c = sub.customer;
@@ -138,8 +161,13 @@ export async function POST(): Promise<NextResponse> {
           continue;
         }
         const priceId = item.price.id;
-        const planType: PlanType = (await planFromPriceId(priceId)) ?? 'STANDARD';
-        const billingInterval: BillingInterval = (await intervalFromPriceId(priceId)) ?? 'MONTH';
+        // metadata.plan / interval を最優先 (Price ID 設定ミスの誤登録も修復)。
+        // 次に Price ID マッピング、最後に fallback。
+        const meta = (sub.metadata as Record<string, string> | null) ?? null;
+        const planType: PlanType =
+          planFromMetadata(meta) ?? (await planFromPriceId(priceId)) ?? 'STANDARD';
+        const billingInterval: BillingInterval =
+          intervalFromMetadata(meta) ?? (await intervalFromPriceId(priceId)) ?? 'MONTH';
         const status = mapStatus(sub.status);
 
         const userId = await resolveUserId(sub);

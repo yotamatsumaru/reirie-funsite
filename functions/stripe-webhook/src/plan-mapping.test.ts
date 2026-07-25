@@ -1,4 +1,10 @@
-import { planFromPriceId, intervalFromPriceId, mapSubscriptionStatus } from './plan-mapping';
+import {
+  planFromPriceId,
+  intervalFromPriceId,
+  mapSubscriptionStatus,
+  planFromMetadata,
+  intervalFromMetadata,
+} from './plan-mapping';
 
 describe('plan-mapping', () => {
   const ORIGINAL_ENV = process.env;
@@ -58,5 +64,28 @@ describe('plan-mapping', () => {
     expect(planFromPriceId('price_test_pm', partial)).toBe('PREMIUM');
     // standardMonthly は未指定 → 環境変数 price_sm が使われる
     expect(planFromPriceId('price_sm', partial)).toBe('STANDARD');
+  });
+
+  it('planFromMetadata は metadata.plan からプランを判定する', () => {
+    expect(planFromMetadata({ plan: 'PREMIUM' })).toBe('PREMIUM');
+    expect(planFromMetadata({ plan: 'STANDARD' })).toBe('STANDARD');
+    // 大文字小文字・前後空白を許容
+    expect(planFromMetadata({ plan: 'premium' })).toBe('PREMIUM');
+    expect(planFromMetadata({ plan: '  Standard  ' })).toBe('STANDARD');
+    // FREE や不明値・未指定は null (呼び出し側で Price ID / fallback へ)
+    expect(planFromMetadata({ plan: 'FREE' })).toBeNull();
+    expect(planFromMetadata({ plan: 'xxx' })).toBeNull();
+    expect(planFromMetadata({})).toBeNull();
+    expect(planFromMetadata(null)).toBeNull();
+  });
+
+  it('intervalFromMetadata は metadata.interval から請求間隔を判定する', () => {
+    expect(intervalFromMetadata({ interval: 'MONTH' })).toBe('MONTH');
+    expect(intervalFromMetadata({ interval: 'year' })).toBe('YEAR');
+    // checkout が 'monthly'/'yearly' を渡すケースも許容
+    expect(intervalFromMetadata({ interval: 'monthly' })).toBe('MONTH');
+    expect(intervalFromMetadata({ interval: 'yearly' })).toBe('YEAR');
+    expect(intervalFromMetadata({})).toBeNull();
+    expect(intervalFromMetadata(null)).toBeNull();
   });
 });

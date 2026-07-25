@@ -44,6 +44,35 @@ export function intervalFromPriceId(priceId: string, prices?: PriceMap): Billing
 }
 
 /**
+ * Checkout 時に付与された metadata.plan から PlanType を判定する。
+ *
+ * checkout ルートは metadata / subscription_data.metadata の双方に
+ * { userId, plan, interval } を必ず設定するため、Price ID マッピングが
+ * (本番 Price ID 未設定などで) 失敗しても metadata から正しいプランを復元できる。
+ * これにより「プレミアム申込なのにスタンダード扱い」を防ぐ。
+ */
+export function planFromMetadata(
+  metadata: Record<string, string> | null | undefined,
+): PlanType | null {
+  const raw = metadata?.plan?.trim().toUpperCase();
+  if (raw === 'STANDARD') return 'STANDARD';
+  if (raw === 'PREMIUM') return 'PREMIUM';
+  return null;
+}
+
+/**
+ * Checkout 時に付与された metadata.interval から BillingInterval を判定する。
+ */
+export function intervalFromMetadata(
+  metadata: Record<string, string> | null | undefined,
+): BillingInterval | null {
+  const raw = metadata?.interval?.trim().toUpperCase();
+  if (raw === 'MONTH' || raw === 'MONTHLY') return 'MONTH';
+  if (raw === 'YEAR' || raw === 'YEARLY') return 'YEAR';
+  return null;
+}
+
+/**
  * Stripe SubscriptionStatus → 内部 Enum
  */
 export function mapSubscriptionStatus(
