@@ -15,7 +15,7 @@ import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { type UserRoleLiteral } from '@idol/shared';
+import { PLAN_LABELS, type PlanTypeLiteral, type UserRoleLiteral } from '@idol/shared';
 import { UserRowActions } from './user-row-actions';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { RankTiersClient } from './rank-tiers-client';
@@ -77,6 +77,54 @@ export default async function SuperAdminUsersPage({
     filtered.map((u) => u.id),
     rankTiers,
   );
+
+  // ---------------------------------------------------------------------------
+  // 各ユーザーの「現在有効なプラン」を集計する。
+  //   - 有効 = status が ACTIVE / TRIALING / PAST_DUE のサブスク。
+  //   - 表示は最新 (createdAt desc) の 1 件をそのユーザーのプランとみなす。
+  //   - 有効サブスクが 2 件以上ある場合は「二重契約」の可能性があるため
+  //     activeCount で件数を持ち、一覧上で警告アイコンを出す。
+  //   - 有効サブスクが 0 件なら FREE (無料会員) 扱い。
+  // ---------------------------------------------------------------------------
+  const filteredIds = filtered.map((u) => u.id);
+  const liveSubs = filteredIds.length
+    ? ((await prisma.subscription.findMany({
+        where: {
+          userId: { in: filteredIds },
+          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+        },
+        select: {
+          userId: true,
+          planType: true,
+          billingInterval: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })) as unknown as Array<{
+        userId: string;
+        planType: PlanTypeLiteral;
+        billingInterval: 'MONTH' | 'YEAR';
+        createdAt: Date;
+      }>)
+    : [];
+
+  const planByUser = new Map<
+    string,
+    { plan: PlanTypeLiteral; interval: 'MONTH' | 'YEAR'; activeCount: number }
+  >();
+  for (const s of liveSubs) {
+    const cur = planByUser.get(s.userId);
+    if (!cur) {
+      // liveSubs は createdAt desc なので最初に来たものが最新
+      planByUser.set(s.userId, {
+        plan: s.planType,
+        interval: s.billingInterval,
+        activeCount: 1,
+      });
+    } else {
+      cur.activeCount += 1;
+    }
+  }
 
   return (
     <main>
@@ -171,6 +219,7 @@ export default async function SuperAdminUsersPage({
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <tr>
                   <th className="px-4 py-3">ユーザー</th>
+                  <th className="px-4 py-3">プラン</th>
                   <th className="px-4 py-3">ランク / ログイン</th>
                   <th className="px-4 py-3">最終ログイン</th>
                   {tab === 'trash' ? (
@@ -185,7 +234,7 @@ export default async function SuperAdminUsersPage({
               <tbody className="divide-y divide-slate-100">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
                       {tab === 'trash'
                         ? 'ゴミ箱は空です。'
                         : '該当するファンユーザーが見つかりません。'}
@@ -194,6 +243,7 @@ export default async function SuperAdminUsersPage({
                 )}
                 {filtered.map((u) => {
                   const ru = ranksByUser[u.id];
+                  const planInfo = planByUser.get(u.id);
                   return (
                     <tr key={u.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
@@ -202,6 +252,9 @@ export default async function SuperAdminUsersPage({
                         </p>
                         <p className="text-xs text-slate-500">{u.email}</p>
                         {u.fullName && <p className="text-xs text-slate-400">{u.fullName}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <PlanCell info={planInfo} />
                       </td>
                       <td className="px-4 py-3">
                         {ru ? (
@@ -259,6 +312,35 @@ export default async function SuperAdminUsersPage({
         </CardBody>
       </Card>
     </main>
+  );
+}
+
+/** ユーザーの現在プランを表示するセル。有効サブスク 0 件なら無料会員扱い。 */
+function PlanCell({
+  info,
+}: {
+  info: { plan: PlanTypeLiteral; interval: 'MONTH' | 'YEAR'; activeCount: number } | undefined;
+}) {
+  if (!info) {
+    return (
+      <Badge tone="gray">{PLAN_LABELS.FREE}</Badge>
+    );
+  }
+  const tone = info.plan === 'PREMIUM' ? 'danger' : 'warning';
+  const intervalLabel = info.interval === 'YEAR' ? '年額' : '月額';
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <Badge tone={tone}>{PLAN_LABELS[info.plan]}</Badge>
+      <span className="text-[11px] text-slate-400">{intervalLabel}</span>
+      {info.activeCount > 1 && (
+        <span
+          className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"
+          title="有効なサブスクリプションが複数あります（二重契約の可能性）"
+        >
+          ⚠ 二重契約 {info.activeCount}件
+        </span>
+      )}
+    </div>
   );
 }
 

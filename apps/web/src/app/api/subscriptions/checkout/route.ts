@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { CreateCheckoutSessionSchema } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
-import { handle, errors } from '@/lib/errors';
+import { handle, errors, ApiError } from '@/lib/errors';
 import { getStripe, getPriceId, verifyStripeCustomer } from '@/lib/stripe';
 import { logAudit } from '@/lib/audit';
 import { env } from '@/lib/env';
@@ -74,6 +74,49 @@ export const POST = handle(async (req: Request) => {
       where: { id: user.id },
       data: { stripeCustomerId: customerId },
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // 二重購入の防止（Stripe を正とする最終チェック）
+  //   上の DB チェックだけでは、Webhook (customer.subscription.*) の取りこぼしで
+  //   DB に Subscription 行が無いケースを検知できず、同一ユーザーが Stripe 上で
+  //   複数のサブスクを契約してしまう恐れがある（今回のプラン反映バグで実際に発生）。
+  //   そこで Checkout 直前に Stripe 側の実データを確認し、既に有効
+  //   (active / trialing / past_due / unpaid) なサブスクがあれば加入を拒否する。
+  // -------------------------------------------------------------------------
+  try {
+    const existing = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 100,
+    });
+    const BLOCKING = new Set(['active', 'trialing', 'past_due', 'unpaid']);
+    const hasLive = existing.data.some((s) => BLOCKING.has(s.status));
+    if (hasLive) {
+      // DB とズレていた場合に備え、監査ログに残しておく。
+      await logAudit({
+        userId: user.id,
+        action: 'subscription.checkout.blocked_duplicate',
+        metadata: {
+          plan: input.plan,
+          interval: input.interval,
+          customerId,
+          liveSubscriptionIds: existing.data
+            .filter((s) => BLOCKING.has(s.status))
+            .map((s) => s.id),
+        },
+      });
+      throw errors.badRequest(
+        '現在ご契約中のプランがあります。プラン変更は「プラン変更を予約」からお手続きください（現在の契約満了時に切り替わります）。反映されていない場合は時間をおいて再度ご確認ください。',
+      );
+    }
+  } catch (e) {
+    // 二重契約ブロック (ApiError) はそのまま伝播させる。
+    if (e instanceof ApiError) throw e;
+    // Stripe API 通信エラー等は決済フローを止めないよう握りつぶす
+    // （DB チェックは既に通過済みのため、フェイルオープン）。
+    // eslint-disable-next-line no-console
+    console.warn('[checkout] Stripe 既存サブスク確認に失敗（続行）:', e);
   }
 
   const checkout = await stripe.checkout.sessions.create({

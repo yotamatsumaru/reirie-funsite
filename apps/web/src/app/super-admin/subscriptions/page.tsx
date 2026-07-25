@@ -85,6 +85,31 @@ export default async function SuperAdminSubscriptionsPage({
   const liveSubs = subs.filter((s) => LIVE_STATUSES.has(s.status));
   const activeCount = liveSubs.length;
 
+  // ---------------------------------------------------------------------------
+  // 二重契約（重複購入）の検出
+  //   同一ユーザーが有効 (ACTIVE / TRIALING) なサブスクを 2 件以上持っている場合、
+  //   プラン反映バグ等で二重に購入してしまった可能性が高い。
+  //   ここで userId ごとに件数を数え、2 件以上のユーザーを洗い出す。
+  // ---------------------------------------------------------------------------
+  const liveCountByUser = new Map<string, number>();
+  for (const s of liveSubs) {
+    liveCountByUser.set(s.userId, (liveCountByUser.get(s.userId) ?? 0) + 1);
+  }
+  const duplicateUserIds = new Set(
+    [...liveCountByUser.entries()].filter(([, c]) => c >= 2).map(([id]) => id),
+  );
+  // 表示用: 重複ユーザーの情報（メール / 件数）
+  const duplicateUsers = [...duplicateUserIds].map((uid) => {
+    const rows = liveSubs.filter((s) => s.userId === uid);
+    const u = rows[0]?.user;
+    return {
+      userId: uid,
+      email: u?.email ?? '—',
+      displayName: u?.displayName ?? '（不明）',
+      count: rows.length,
+    };
+  });
+
   // 今月の新規加入
   const newThisMonth = subs.filter((s) => new Date(s.createdAt) >= monthStart).length;
 
@@ -173,6 +198,29 @@ export default async function SuperAdminSubscriptionsPage({
         </div>
         <ReconcileButton />
       </header>
+
+      {/* 二重契約の警告バナー */}
+      {duplicateUsers.length > 0 && (
+        <div className="mb-6 rounded-md border border-rose-300 bg-rose-50 px-4 py-3">
+          <p className="text-sm font-bold text-rose-800">
+            ⚠ 二重契約の可能性があるユーザーが {duplicateUsers.length} 名います
+          </p>
+          <p className="mt-1 text-xs text-rose-700">
+            同一ユーザーに有効なサブスクリプションが 2 件以上あります。プラン反映の遅延などで
+            重複購入された可能性があります。下記の契約一覧で
+            <span className="mx-1 rounded bg-rose-200 px-1 font-semibold">重複</span>
+            マークの付いた契約を確認し、不要な方を「強制解約」してください（返金が必要な場合は Stripe 管理画面から対応）。
+          </p>
+          <ul className="mt-2 space-y-1">
+            {duplicateUsers.map((d) => (
+              <li key={d.userId} className="text-xs text-rose-800">
+                ・{d.displayName}（{d.email}）—{' '}
+                <span className="font-bold">{d.count} 件</span>の有効契約
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ① KPI カード */}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -393,11 +441,28 @@ export default async function SuperAdminSubscriptionsPage({
                   </tr>
                 )}
                 {filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50">
+                  <tr
+                    key={s.id}
+                    className={
+                      duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status)
+                        ? 'bg-rose-50 hover:bg-rose-100'
+                        : 'hover:bg-slate-50'
+                    }
+                  >
                     <td className="px-4 py-3">
-                      <p className="font-medium text-slate-900">
-                        {s.user?.displayName ?? '（不明）'}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-slate-900">
+                          {s.user?.displayName ?? '（不明）'}
+                        </p>
+                        {duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status) && (
+                          <span
+                            className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
+                            title="このユーザーは有効な契約を複数持っています（二重契約の可能性）"
+                          >
+                            重複
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-500">{s.user?.email ?? '—'}</p>
                     </td>
                     <td className="px-4 py-3">
