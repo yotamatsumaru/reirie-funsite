@@ -22,18 +22,26 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import type { AcchiDirection } from '@idol/shared';
+import { DirectionIcon } from './DirectionIcon';
 
 /** これ未満のドラッグ距離 (px) で離したらキャンセル扱い。 */
 const RELEASE_THRESHOLD_PX = 26;
 /** ノブの見た目上の最大移動距離 (px)。 */
 const MAX_KNOB_OFFSET_PX = 58;
 
-const DIR_ARROW: Record<AcchiDirection, string> = {
-  UP: '⬆️',
-  DOWN: '⬇️',
-  LEFT: '⬅️',
-  RIGHT: '➡️',
-};
+/** 中央ノブがアイドル状態のときに表示するブランドマーク (十字/照準)。 */
+function KnobIdleMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2.4" />
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+      <line x1="12" y1="1.5" x2="12" y2="5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1="12" y1="19" x2="12" y2="22.5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1="1.5" y1="12" x2="5" y2="12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      <line x1="19" y1="12" x2="22.5" y2="12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 /** ドラッグ量 (dx, dy) から 4 方向のいずれかを決定する。 */
 function resolveDirection(dx: number, dy: number): AcchiDirection {
@@ -163,11 +171,13 @@ export function DirectionTrigger({ onSelect, disabled = false }: Props) {
           return (
             <span
               key={dir}
-              className={`pointer-events-none absolute text-2xl transition-all duration-100 ${pos} ${
-                isActive ? 'scale-125 opacity-100' : 'opacity-30'
+              className={`pointer-events-none absolute transition-all duration-100 ${pos} ${
+                isActive
+                  ? 'scale-125 text-twilight-amethyst opacity-100'
+                  : 'text-twilight-amethyst/50 opacity-40'
               }`}
             >
-              {DIR_ARROW[dir]}
+              <DirectionIcon dir={dir} className="h-6 w-6" />
             </span>
           );
         })}
@@ -177,7 +187,7 @@ export function DirectionTrigger({ onSelect, disabled = false }: Props) {
 
         {/* つまんで動かすノブ (トリガー本体) */}
         <div
-          className={`pointer-events-none flex h-20 w-20 items-center justify-center rounded-full border-2 text-3xl shadow-md transition-transform ${
+          className={`pointer-events-none flex h-20 w-20 items-center justify-center rounded-full border-2 shadow-md transition-transform ${
             dragging
               ? 'border-twilight-amethyst bg-twilight-amethyst/90 text-white duration-0'
               : 'border-twilight-amethyst/50 bg-white text-twilight-amethyst duration-200'
@@ -186,7 +196,11 @@ export function DirectionTrigger({ onSelect, disabled = false }: Props) {
             transform: `translate(${knobOffset.x}px, ${knobOffset.y}px)`,
           }}
         >
-          {activeDir ? DIR_ARROW[activeDir] : '🎮'}
+          {activeDir ? (
+            <DirectionIcon dir={activeDir} className="h-9 w-9" strokeWidth={2.8} />
+          ) : (
+            <KnobIdleMark className="h-9 w-9" />
+          )}
         </div>
       </div>
       <p className="text-xs text-slate-400">
