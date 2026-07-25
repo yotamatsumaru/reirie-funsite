@@ -7,7 +7,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { CheckoutSchema, canAccess } from '@idol/shared';
+import { CheckoutSchema, canAccess, canUseShop } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { calculateOrderTotals, effectiveUnitPrice, generateOrderNumber } from '@/lib/pricing';
@@ -21,6 +21,12 @@ export const POST = handle(async (req: Request) => {
   const session = await requireApiSession(req);
   const userId = session.user.id;
   const plan = session.user.plan;
+
+  // 無料会員 (FREE) / 未認証プランは物販 (EC) を利用できない
+  if (!canUseShop(plan)) {
+    throw errors.forbidden('物販（ショップ）のご利用にはスタンダード以上のプランが必要です');
+  }
+
   const body = CheckoutSchema.parse(await req.json());
 
   // デモモードでは Stripe / DB を無効化しているため、決済フローを実行できない。
