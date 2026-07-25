@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Tailwind Typography — .prose クラス (ブログ本文 / リッチテキストエディタの表示) */
+@plugin '@tailwindcss/typography';
+
 @theme {
   /* ===== City Editorial — ReiRieRoom ブランドカラー (2026 リニューアル) =====
    * トンマナ刷新: 背景=ラベンダー #b9b2d8 / ポイントカラー=マゼンタ #c263a2 / 文字=黒。
@@ -354,4 +357,39 @@ button {
   .animate-acchi-pop {
     animation: none;
   }
+}
+
+/* ===== リッチテキストエディタ (TipTap / ProseMirror) ===== */
+.ProseMirror {
+  min-height: 320px;
+}
+.ProseMirror:focus {
+  outline: none;
+}
+/* 空のエディタにプレースホルダを表示 (Placeholder 拡張を使わず CSS で実装) */
+.ProseMirror.is-editor-empty:first-child::before,
+.ProseMirror p.is-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #94a3b8; /* slate-400 */
+}
+/* 本文中の画像は選択時に枠を出す */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--color-brand-500);
+}
+.ProseMirror hr {
+  border: none;
+  border-top: 2px solid #e2e8f0; /* slate-200 */
+  margin: 1.25rem 0;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid var(--color-brand-300);
+  padding-left: 1rem;
+  color: #475569; /* slate-600 */
 }

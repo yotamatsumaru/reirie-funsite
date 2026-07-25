@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { toast } from '@/stores/ui-store';
 
 export type ContentType = 'BLOG' | 'GALLERY';
@@ -78,6 +79,8 @@ export function ContentForm({
   const [error, setError] = useState<string | null>(null);
   // slug をタイトルから自動生成するか (新規時、ユーザーが slug を手入力するまで自動追従)
   const [autoSlug, setAutoSlug] = useState(mode === 'create');
+  // ブログ本文を「ビジュアル編集(WYSIWYG)」か「HTMLソース編集」で切り替える
+  const [sourceMode, setSourceMode] = useState(false);
 
   const set = <K extends keyof ContentInitial>(k: K, v: ContentInitial[K]) =>
     setForm((s) => ({ ...s, [k]: v }));
@@ -220,18 +223,47 @@ export function ContentForm({
                 maxLength={500}
                 placeholder="一覧やSNSシェアで表示される短い説明文"
               />
-              <Textarea
-                label={isBlog ? '本文 (HTML可)' : '説明文 (HTML可)'}
-                value={form.body}
-                onChange={(e) => set('body', e.target.value)}
-                rows={isBlog ? 16 : 6}
-                placeholder={
-                  isBlog
-                    ? '<p>本文をHTMLで入力できます。</p>\n<h2>見出し</h2>\n<p>段落…</p>'
-                    : 'ギャラリーの説明文'
-                }
-                hint="安全なHTMLタグのみ許可されます（危険なタグ/属性は自動除去）。"
-              />
+              {isBlog ? (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-slate-700">本文</label>
+                    <button
+                      type="button"
+                      onClick={() => setSourceMode((v) => !v)}
+                      className="text-xs text-slate-500 hover:text-brand-600 hover:underline"
+                    >
+                      {sourceMode ? '← ビジュアル編集に戻す' : 'HTMLソースを編集'}
+                    </button>
+                  </div>
+                  {sourceMode ? (
+                    <Textarea
+                      value={form.body}
+                      onChange={(e) => set('body', e.target.value)}
+                      rows={16}
+                      className="font-mono text-xs"
+                      placeholder={'<p>本文をHTMLで入力できます。</p>\n<h2>見出し</h2>\n<p>段落…</p>'}
+                    />
+                  ) : (
+                    <RichTextEditor
+                      value={form.body}
+                      onChange={(html) => set('body', html)}
+                      placeholder="ここに記事本文を入力してください。ツールバーで見出し・太字・リスト・画像などを挿入できます。"
+                    />
+                  )}
+                  <p className="text-xs text-slate-500">
+                    ツールバーで見出し・強調・リスト・リンク・画像などを挿入できます。保存時に安全なHTMLのみに整形されます。
+                  </p>
+                </div>
+              ) : (
+                <Textarea
+                  label="説明文 (HTML可)"
+                  value={form.body}
+                  onChange={(e) => set('body', e.target.value)}
+                  rows={6}
+                  placeholder="ギャラリーの説明文"
+                  hint="安全なHTMLタグのみ許可されます（危険なタグ/属性は自動除去）。"
+                />
+              )}
             </CardBody>
           </Card>
         </div>
