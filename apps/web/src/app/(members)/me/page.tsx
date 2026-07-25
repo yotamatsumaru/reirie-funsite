@@ -19,6 +19,7 @@ import { getUnifiedOrderHistory } from '@/lib/order-history';
 import { ManageSubscriptionButtons } from '@/components/auth/ManageSubscriptionButtons';
 import { WithdrawSection } from './withdraw-section';
 import { SubscribedRefresh } from './subscribed-refresh';
+import { ProfileSection } from './profile-section';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -51,6 +52,21 @@ export default async function MePage() {
   const plan = (sub?.planType as PlanTypeLiteral) ?? 'FREE';
   const memberPoints = user?.pui ?? 0;
   const maxQuality = MAX_VIDEO_QUALITY[plan];
+
+  // 登録情報 (お届け先) セクション用。birthDate は <input type="date"> と
+  // 揃えるため YYYY-MM-DD の文字列に正規化する。
+  const profileInfo = {
+    fullName: user?.fullName ?? null,
+    furigana: user?.furigana ?? null,
+    phone: user?.phone ?? null,
+    birthDate: user?.birthDate
+      ? new Date(user.birthDate).toISOString().slice(0, 10)
+      : null,
+    postalCode: user?.postalCode ?? null,
+    prefecture: user?.prefecture ?? null,
+    addressLine1: user?.addressLine1 ?? null,
+    addressLine2: user?.addressLine2 ?? null,
+  };
   const freeShippingThreshold = FREE_SHIPPING_THRESHOLD_BY_PLAN[plan];
   // 無料会員は物販 (EC) を利用できないため、送料特典ではなく「利用不可」を表示する。
   const canShop = canUseShop(plan);
@@ -249,6 +265,16 @@ export default async function MePage() {
               })}
             </ul>
           )}
+        </CardBody>
+      </Card>
+
+      {/* 登録情報 (お届け先) — グッズ発送に必要な情報の表示・編集 */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">登録情報（お届け先）</h2>
+        </CardHeader>
+        <CardBody>
+          <ProfileSection initial={profileInfo} />
         </CardBody>
       </Card>
 
