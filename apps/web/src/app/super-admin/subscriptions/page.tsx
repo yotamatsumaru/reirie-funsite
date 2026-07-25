@@ -108,7 +108,14 @@ export default async function SuperAdminSubscriptionsPage({
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const liveSubs = subs.filter((s) => LIVE_STATUSES.has(s.status));
+  // 有効 (=売上に寄与している) 契約。
+  //   返金済み契約は Stripe 側で課金が取り消されており、実質的に売上・
+  //   加入数に寄与していないため、ステータスが ACTIVE/TRIALING のままでも
+  //   有効契約から除外する。これにより有効契約数・MRR・プラン別内訳などの
+  //   KPI が返金後に正しく減る。
+  const liveSubs = subs.filter(
+    (s) => LIVE_STATUSES.has(s.status) && !refundedSubIds.has(s.id),
+  );
   const activeCount = liveSubs.length;
 
   // ---------------------------------------------------------------------------
@@ -117,10 +124,10 @@ export default async function SuperAdminSubscriptionsPage({
   //   プラン反映バグ等で二重に購入してしまった可能性が高い。
   //   ここで userId ごとに件数を数え、2 件以上のユーザーを洗い出す。
   // ---------------------------------------------------------------------------
-  //   返金済みの契約は「解決済み」とみなし、重複カウントから除外する。
+  //   返金済みの契約は liveSubs から除外済みのため、ここでは自然と
+  //   重複カウントの対象外になる (解決済みとして扱われる)。
   const liveCountByUser = new Map<string, number>();
   for (const s of liveSubs) {
-    if (refundedSubIds.has(s.id)) continue;
     liveCountByUser.set(s.userId, (liveCountByUser.get(s.userId) ?? 0) + 1);
   }
   const duplicateUserIds = new Set(
@@ -384,7 +391,11 @@ export default async function SuperAdminSubscriptionsPage({
           <p className="text-xs font-semibold text-slate-500">ステータス別（全期間）</p>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
             {['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED'].map((st) => {
-              const c = subs.filter((s) => s.status === st).length;
+              // 有効系ステータスは返金済みを除いた実効件数を表示する
+              const c =
+                st === 'ACTIVE' || st === 'TRIALING'
+                  ? subs.filter((s) => s.status === st && !refundedSubIds.has(s.id)).length
+                  : subs.filter((s) => s.status === st).length;
               return (
                 <span key={st}>
                   {STATUS_LABELS[st]}:{' '}
@@ -392,6 +403,12 @@ export default async function SuperAdminSubscriptionsPage({
                 </span>
               );
             })}
+            {refundedSubIds.size > 0 && (
+              <span>
+                返金済み:{' '}
+                <span className="font-bold text-emerald-700">{refundedSubIds.size}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
