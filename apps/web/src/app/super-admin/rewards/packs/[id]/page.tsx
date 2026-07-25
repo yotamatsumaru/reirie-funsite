@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { PackForm } from '../pack-form';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,7 @@ export default async function EditRewardPointPackPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const { id } = await params;
   const pack = await prisma.rewardPointPack.findUnique({ where: { id } });
   if (!pack) notFound();

@@ -12,6 +12,7 @@
  */
 import Link from 'next/link';
 import { prisma } from '@idol/db';
+import { auth } from '@/auth';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -50,6 +51,10 @@ export default async function SuperAdminUsersPage({
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() ?? '';
+
+  // スタッフ管理者は閲覧のみ (作成/BAN/ランク編集は不可)
+  const viewerSession = await auth();
+  const readOnly = viewerSession?.user?.role === 'STAFF';
   const tab = sp.tab === 'trash' ? 'trash' : 'active';
 
   // ファンユーザー (role=USER) のみを対象にする。管理者はこの画面に表示しない。
@@ -154,12 +159,12 @@ export default async function SuperAdminUsersPage({
           </p>
         </CardHeader>
         <CardBody>
-          <CreateFanUserForm />
+          {!readOnly && <CreateFanUserForm />}
         </CardBody>
       </Card>
 
       {/* 会員ランク 昇格条件 (非公開・管理者専用) */}
-      <RankTiersClient initial={rankTiers} />
+      {!readOnly && <RankTiersClient initial={rankTiers} />}
 
       {/* タブ: アクティブ / ゴミ箱 */}
       <div className="mb-4 flex gap-2 border-b border-slate-200">
@@ -301,6 +306,7 @@ export default async function SuperAdminUsersPage({
                           currentRole={u.role}
                           isBanned={!!u.deletedAt}
                           showRoleSelect={false}
+                          readOnly={readOnly}
                         />
                       </td>
                     </tr>

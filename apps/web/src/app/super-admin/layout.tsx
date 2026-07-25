@@ -68,20 +68,37 @@ const NAV: NavItem[] = [
 export default async function SuperAdminLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/super-admin');
-  if (session.user.role !== 'SUPER_ADMIN') redirect('/');
+  // SUPER_ADMIN は全操作可、STAFF は閲覧のみ許可。それ以外はトップへ。
+  const role = session.user.role;
+  if (role !== 'SUPER_ADMIN' && role !== 'STAFF') redirect('/');
+  const isStaffViewer = role === 'STAFF';
 
   return (
     <AdminThemeProvider>
       <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
-        {/* SUPER_ADMIN バナー */}
-        <div className="border-b border-rose-200/70 bg-rose-50/80 px-3 py-2 sm:px-4">
+        {/* モードバナー (SUPER_ADMIN / STAFF) */}
+        <div
+          className={`border-b px-3 py-2 sm:px-4 ${
+            isStaffViewer
+              ? 'border-sky-200/70 bg-sky-50/80'
+              : 'border-rose-200/70 bg-rose-50/80'
+          }`}
+        >
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 text-xs">
-            <p className="flex items-center gap-2 font-semibold text-rose-700">
+            <p
+              className={`flex items-center gap-2 font-semibold ${
+                isStaffViewer ? 'text-sky-700' : 'text-rose-700'
+              }`}
+            >
               <ShieldAlert className="h-4 w-4" aria-hidden />
-              SUPER ADMIN モード
+              {isStaffViewer ? 'スタッフ管理者モード（閲覧のみ）' : 'SUPER ADMIN モード'}
             </p>
             <div className="flex items-center gap-3">
-              <p className="hidden text-rose-600/80 sm:block">
+              <p
+                className={`hidden sm:block ${
+                  isStaffViewer ? 'text-sky-600/80' : 'text-rose-600/80'
+                }`}
+              >
                 {session.user.email} としてログイン中
               </p>
               <AdminThemeToggle />

@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { prisma } from '@idol/db';
+import { auth } from '@/auth';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { RankBadge } from '@/components/membership/RankBadge';
@@ -45,6 +46,10 @@ export default async function SuperAdminUserDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  // スタッフ管理者は閲覧のみ (BAN/ロール変更/警告/プロモ操作は不可)
+  const viewerSession = await auth();
+  const readOnly = viewerSession?.user?.role === 'STAFF';
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user || user.role !== 'USER') notFound();
@@ -138,6 +143,7 @@ export default async function SuperAdminUserDetailPage({
           currentRole={user.role}
           isBanned={!!user.deletedAt}
           showRoleSelect={false}
+          readOnly={readOnly}
         />
       </header>
 
@@ -274,6 +280,7 @@ export default async function SuperAdminUserDetailPage({
           <PromoPanel
             userId={user.id}
             initialPromoUntil={promoUntil ? promoUntil.toISOString() : null}
+            readOnly={readOnly}
           />
         </CardBody>
       </Card>
@@ -287,7 +294,7 @@ export default async function SuperAdminUserDetailPage({
           </p>
         </CardHeader>
         <CardBody>
-          <WarningPanel userId={user.id} initialWarnings={warnings} />
+          <WarningPanel userId={user.id} initialWarnings={warnings} readOnly={readOnly} />
         </CardBody>
       </Card>
 

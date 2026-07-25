@@ -16,12 +16,15 @@ export function UserRowActions({
   currentRole,
   isBanned,
   showRoleSelect = true,
+  readOnly = false,
 }: {
   userId: string;
   currentRole: UserRoleLiteral;
   isBanned: boolean;
   /** ロール変更セレクトを表示するか。ファンユーザー管理画面では false（昇格は管理者画面に集約）。 */
   showRoleSelect?: boolean;
+  /** スタッフ管理者など閲覧のみの場合 true。BAN/ロール変更/消去などの書き込み操作を非表示にする。 */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -106,6 +109,20 @@ export function UserRowActions({
     });
   }
 
+  // 閲覧のみ (スタッフ管理者): 詳細リンクのみ表示し、書き込み操作は非表示
+  if (readOnly) {
+    return (
+      <div className="flex items-center justify-end gap-2">
+        <Link
+          href={`/super-admin/users/${userId}`}
+          className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          詳細
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-end gap-2">
       <Link
@@ -124,6 +141,7 @@ export function UserRowActions({
         >
           <option value="USER">USER</option>
           <option value="ADMIN">ADMIN</option>
+          <option value="STAFF">STAFF</option>
           <option value="SUPER_ADMIN">SUPER_ADMIN</option>
         </select>
       )}

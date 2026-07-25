@@ -20,7 +20,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getStripe } from '@/lib/stripe';
@@ -119,7 +119,7 @@ async function backfillOrphanSubscriptionPayments(sub: {
 
 /** 対象サブスクに紐づく課金一覧 (返金 UI 用) を返す */
 export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const { id } = await ctx.params;
 
   const sub = await prisma.subscription.findUnique({

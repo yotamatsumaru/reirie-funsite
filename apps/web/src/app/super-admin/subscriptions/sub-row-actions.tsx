@@ -48,10 +48,13 @@ export function SubRowActions({
   subId,
   status,
   cancelAtPeriodEnd,
+  readOnly = false,
 }: {
   subId: string;
   status: string;
   cancelAtPeriodEnd: boolean;
+  /** スタッフ管理者など閲覧のみの場合 true。書き込み操作ボタンを非表示にする */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -66,6 +69,15 @@ export function SubRowActions({
   const [notice, setNotice] = useState<string | null>(null);
 
   const isCanceled = status === 'CANCELED';
+
+  // 閲覧のみ (スタッフ管理者): 書き込み操作は不可
+  if (readOnly) {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <span className="text-[11px] text-slate-400">閲覧のみ</span>
+      </div>
+    );
+  }
 
   async function callApi(body: Record<string, unknown>) {
     setError(null);

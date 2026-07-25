@@ -7,7 +7,7 @@
  */
 import { NextResponse } from 'next/server';
 import { AcchiWinSettingsByPlanSchema } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getAcchiWinSettings, setAcchiWinSettings } from '@/lib/app-setting';
@@ -15,7 +15,7 @@ import { getAcchiWinSettings, setAcchiWinSettings } from '@/lib/app-setting';
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const settings = await getAcchiWinSettings();
   return NextResponse.json({ settings });
 });

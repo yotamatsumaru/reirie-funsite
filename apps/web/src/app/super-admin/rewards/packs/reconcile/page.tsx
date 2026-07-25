@@ -6,7 +6,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ReconcileClient } from './reconcile-client';
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: 'Pui 付与の再照合' };
 export const dynamic = 'force-dynamic';
 
 export default async function ReconcilePage() {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
 
   return (
     <div className="space-y-4">

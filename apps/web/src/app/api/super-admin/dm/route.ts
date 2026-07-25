@@ -5,13 +5,13 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { handle } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
 
   const url = new URL(req.url);
   const status = url.searchParams.get('status'); // 'SENT' | 'READ' | 'REPLIED' | null

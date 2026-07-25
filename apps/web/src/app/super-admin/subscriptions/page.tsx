@@ -10,6 +10,7 @@
  */
 import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
+import { auth } from '@/auth';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { PLAN_LABELS, PLAN_PRICES, type PlanTypeLiteral } from '@idol/shared';
@@ -75,6 +76,10 @@ export default async function SuperAdminSubscriptionsPage({
   const sp = await searchParams;
   const statusFilter = sp.status ?? '';
   const planFilter = sp.plan ?? '';
+
+  // スタッフ管理者は閲覧のみ (返金/解約/再照合などの書き込み操作は不可)
+  const session = await auth();
+  const readOnly = session?.user?.role === 'STAFF';
 
   const subs = (await prisma.subscription.findMany({
     include: {
@@ -231,7 +236,7 @@ export default async function SuperAdminSubscriptionsPage({
             売上には出ているのに件数が合わない場合は「Stripe と再照合」で最新化できます。
           </p>
         </div>
-        <ReconcileButton />
+        {!readOnly && <ReconcileButton />}
       </header>
 
       {/* 二重契約の警告バナー */}
@@ -569,6 +574,7 @@ export default async function SuperAdminSubscriptionsPage({
                         subId={s.id}
                         status={s.status}
                         cancelAtPeriodEnd={s.cancelAtPeriodEnd}
+                        readOnly={readOnly}
                       />
                     </td>
                   </tr>

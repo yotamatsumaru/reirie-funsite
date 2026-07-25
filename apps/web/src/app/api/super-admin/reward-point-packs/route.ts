@@ -5,14 +5,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AdminRewardPointPackInputSchema } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const packs = await prisma.rewardPointPack.findMany({
     orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }],
     include: { _count: { select: { purchases: true } } },

@@ -33,9 +33,12 @@ function formatDateTime(iso: string): string {
 export function WarningPanel({
   userId,
   initialWarnings,
+  readOnly = false,
 }: {
   userId: string;
   initialWarnings: WarningItem[];
+  /** スタッフ管理者など閲覧のみの場合 true。警告メール送信フォームを非表示にし、履歴のみ表示する。 */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [warnings, setWarnings] = useState(initialWarnings);
@@ -83,6 +86,7 @@ export function WarningPanel({
 
   return (
     <div>
+      {!readOnly && (
       <div className="mb-4">
         <label className="mb-1 block text-xs font-semibold text-slate-700">
           警告理由 (メール本文としてそのまま送信されます)
@@ -107,6 +111,7 @@ export function WarningPanel({
           </Button>
         </div>
       </div>
+      )}
 
       {warnings.length === 0 ? (
         <p className="text-sm text-slate-400">警告履歴はありません。</p>

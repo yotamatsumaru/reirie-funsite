@@ -9,7 +9,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendAdminInvitationEmail } from '@/lib/email';
@@ -33,7 +33,7 @@ async function sweepExpired(): Promise<void> {
 }
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   await sweepExpired();
 
   const invitations = await prisma.adminInvitation.findMany({

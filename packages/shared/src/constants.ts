@@ -8,22 +8,26 @@ export type AccessLevelLiteral = (typeof ACCESS_LEVELS)[number];
  * ユーザーロール (Prisma UserRole enum と同期)
  *  - USER:        通常会員
  *  - ADMIN:       運営編集者 (コンテンツ・商品・ゲーム編集権限)
+ *  - STAFF:       スタッフ管理者。SUPER_ADMIN と同じ管理画面を「閲覧」できるが、
+ *                 返金 / BAN / ロール変更などの書き込み操作はできない (read-only 運営)。
  *  - SUPER_ADMIN: システム最高権限 (KPI / 課金 / ユーザー BAN / 管理者管理 / 監査)
  */
-export const USER_ROLES = ['USER', 'ADMIN', 'SUPER_ADMIN'] as const;
+export const USER_ROLES = ['USER', 'ADMIN', 'STAFF', 'SUPER_ADMIN'] as const;
 export type UserRoleLiteral = (typeof USER_ROLES)[number];
 
 export const USER_ROLE_LABELS: Record<UserRoleLiteral, string> = {
   USER: '一般会員',
   ADMIN: '管理者',
+  STAFF: 'スタッフ管理者',
   SUPER_ADMIN: 'スーパー管理者',
 };
 
-/** ロール階層: SUPER_ADMIN > ADMIN > USER */
+/** ロール階層: SUPER_ADMIN > STAFF > ADMIN > USER */
 const ROLE_RANK: Record<UserRoleLiteral, number> = {
   USER: 0,
   ADMIN: 1,
-  SUPER_ADMIN: 2,
+  STAFF: 2,
+  SUPER_ADMIN: 3,
 };
 
 export function hasRoleAtLeast(
@@ -40,6 +44,20 @@ export function isAdmin(role: UserRoleLiteral | undefined | null): boolean {
 
 export function isSuperAdmin(role: UserRoleLiteral | undefined | null): boolean {
   return role === 'SUPER_ADMIN';
+}
+
+/** スタッフ管理者か (SUPER_ADMIN と同じ画面を閲覧できるが書き込み不可)。 */
+export function isStaff(role: UserRoleLiteral | undefined | null): boolean {
+  return role === 'STAFF';
+}
+
+/**
+ * スーパー管理画面 (/super-admin) を「閲覧」できるか。
+ *  - SUPER_ADMIN: 閲覧＋操作すべて可
+ *  - STAFF:       閲覧のみ (書き込み操作は個別に requireSuperAdmin で拒否)
+ */
+export function canViewSuperAdmin(role: UserRoleLiteral | undefined | null): boolean {
+  return role === 'SUPER_ADMIN' || role === 'STAFF';
 }
 
 /**

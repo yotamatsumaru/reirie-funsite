@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Wallet, ListChecks } from 'lucide-react';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminView } from '@/auth';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: 'Pui 設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminPointsPage() {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
 
   const [rates, totalPoints, txCount, anomalies] = await Promise.all([
     getPuiRates(),

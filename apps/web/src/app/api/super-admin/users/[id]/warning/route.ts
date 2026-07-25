@@ -11,7 +11,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendWarningEmail } from '@/lib/email';
@@ -24,7 +24,7 @@ const PostSchema = z.object({
 
 export const GET = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    await requireSuperAdmin();
+    await requireSuperAdminView();
     const { id } = await ctx.params;
 
     const target = await prisma.user.findUnique({ where: { id }, select: { id: true } });

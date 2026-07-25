@@ -7,7 +7,7 @@
  */
 import { NextResponse } from 'next/server';
 import { MemberRankTiersSchema } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { getMemberRankTiers, setMemberRankTiers } from '@/lib/app-setting';
@@ -15,7 +15,7 @@ import { getMemberRankTiers, setMemberRankTiers } from '@/lib/app-setting';
 export const runtime = 'nodejs';
 
 export const GET = handle(async () => {
-  await requireSuperAdmin();
+  await requireSuperAdminView();
   const tiers = await getMemberRankTiers();
   return NextResponse.json({ tiers });
 });
