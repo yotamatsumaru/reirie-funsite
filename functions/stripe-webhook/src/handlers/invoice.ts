@@ -116,6 +116,18 @@ export async function handleInvoicePaid(
     return { ok: false, reason: 'user_not_found' };
   }
 
+  // userId は解決できたが Subscription 行に結び付けられなかった場合、
+  // Payment.subscriptionId が null で保存され、管理画面の返金一覧
+  // (subscriptionId 完全一致検索) に載らなくなる。運用で気付けるよう警告を残す。
+  // (super-admin の返金 API 側で Stripe を真実として後追い backfill する)
+  if (subscriptionId && !subscriptionRecordId) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[stripe-webhook] invoice.paid subscription row unresolved; payment saved without subscriptionId',
+      { invoiceId: invoice.id, stripeSubscriptionId: subscriptionId },
+    );
+  }
+
   // payment_intent / charge の解決
   // 注: stripe-node v22 (Dahlia API 型) では Invoice.payment_intent が型定義上
   // 削除されているが、pin している apiVersion ('2024-10-28.acacia') では

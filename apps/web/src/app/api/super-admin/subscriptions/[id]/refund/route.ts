@@ -33,6 +33,90 @@ const PostSchema = z.object({
   amount: z.number().int().positive().optional(),
 });
 
+/**
+ * 対象サブスクに紐づく「はぐれ課金」を Stripe 上の真実で特定し、
+ * Payment.subscriptionId を backfill (補正) する。
+ *
+ * ## なぜ必要か
+ *   サブスク継続課金の Payment は invoice.payment_succeeded webhook で作られるが、
+ *   その時点で Subscription 行が未作成 (customer.subscription.* の取りこぼし等) だと
+ *   userId は customer から救済される一方で subscriptionId が null のまま保存される
+ *   ことがある。すると本 API の「subscriptionId 完全一致」検索に引っかからず、
+ *   返金モーダルで「この契約に紐づく課金がありません」と表示されてしまう。
+ *
+ * ## 何をするか
+ *   同じ userId・kind=SUBSCRIPTION で subscriptionId が null の課金を対象に、
+ *   Stripe 上の Invoice.subscription が当該サブスクの stripeSubscriptionId と
+ *   一致するものだけを、この契約 (sub.id) に結び付ける。
+ *   Stripe 参照が無い等で確認できない課金は触らない (誤紐付けを避ける)。
+ *
+ *   Stripe 呼び出しに失敗しても致命的ではないため握りつぶす (一覧表示は継続)。
+ */
+async function backfillOrphanSubscriptionPayments(sub: {
+  id: string;
+  userId: string;
+  stripeSubscriptionId: string;
+}): Promise<void> {
+  const orphans = await prisma.payment.findMany({
+    where: {
+      userId: sub.userId,
+      kind: 'SUBSCRIPTION',
+      subscriptionId: null,
+    },
+    select: {
+      id: true,
+      stripeInvoiceId: true,
+      stripePaymentIntentId: true,
+      stripeChargeId: true,
+    },
+  });
+  if (orphans.length === 0) return;
+
+  let stripe: Awaited<ReturnType<typeof getStripe>>;
+  try {
+    stripe = await getStripe();
+  } catch {
+    // Stripe クライアントが用意できない環境では補正をスキップ
+    return;
+  }
+
+  for (const o of orphans) {
+    if (!o.stripeInvoiceId) continue;
+    try {
+      const invoice = await stripe.invoices.retrieve(o.stripeInvoiceId);
+      const subId = (invoice as unknown as { subscription?: string | { id: string } })
+        .subscription;
+      const invoiceSubId = typeof subId === 'string' ? subId : subId?.id;
+      if (!invoiceSubId || invoiceSubId !== sub.stripeSubscriptionId) continue;
+
+      // この契約の課金と確定。subscriptionId を補正しつつ、
+      // 返金に必要な PaymentIntent / Charge が欠けていれば Invoice から補完する。
+      const invoicePi = (invoice as unknown as { payment_intent?: string | { id: string } })
+        .payment_intent;
+      const paymentIntentId =
+        typeof invoicePi === 'string' ? invoicePi : (invoicePi?.id ?? null);
+      const invoiceCharge = (invoice as unknown as { charge?: string | { id: string } }).charge;
+      const chargeId =
+        typeof invoiceCharge === 'string' ? invoiceCharge : (invoiceCharge?.id ?? null);
+
+      await prisma.payment.update({
+        where: { id: o.id },
+        data: {
+          subscriptionId: sub.id,
+          ...(o.stripePaymentIntentId == null && paymentIntentId != null
+            ? { stripePaymentIntentId: paymentIntentId }
+            : {}),
+          ...(o.stripeChargeId == null && chargeId != null
+            ? { stripeChargeId: chargeId }
+            : {}),
+        },
+      });
+    } catch {
+      // 個別 Invoice の取得失敗は無視して次へ
+    }
+  }
+}
+
 /** 対象サブスクに紐づく課金一覧 (返金 UI 用) を返す */
 export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
   await requireSuperAdmin();
@@ -40,9 +124,19 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
 
   const sub = await prisma.subscription.findUnique({
     where: { id },
-    select: { id: true, userId: true, planType: true, billingInterval: true },
+    select: {
+      id: true,
+      userId: true,
+      planType: true,
+      billingInterval: true,
+      stripeSubscriptionId: true,
+    },
   });
   if (!sub) throw errors.notFound('サブスクが見つかりません');
+
+  // 先にはぐれ課金を Stripe の真実で当該契約へ補正する。
+  // (webhook 実行時に subscriptionId が null のまま保存された課金を救済)
+  await backfillOrphanSubscriptionPayments(sub);
 
   const payments = await prisma.payment.findMany({
     where: { subscriptionId: id, kind: 'SUBSCRIPTION' },
@@ -61,7 +155,12 @@ export const GET = handle(async (_req: Request, ctx: { params: Promise<{ id: str
   });
 
   return NextResponse.json({
-    subscription: sub,
+    subscription: {
+      id: sub.id,
+      userId: sub.userId,
+      planType: sub.planType,
+      billingInterval: sub.billingInterval,
+    },
     payments: payments.map((p) => ({
       ...p,
       // 返金可能かどうか (成功済み かつ Stripe 参照がある)

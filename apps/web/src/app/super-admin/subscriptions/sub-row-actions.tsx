@@ -307,9 +307,13 @@ function RefundModal({
         {loading && <p className="py-6 text-center text-sm text-slate-500">読み込み中…</p>}
 
         {!loading && payments && payments.length === 0 && (
-          <p className="py-6 text-center text-sm text-slate-500">
-            この契約に紐づく課金がありません。
-          </p>
+          <div className="py-6 text-center text-sm text-slate-500">
+            <p>この契約に紐づく課金が見つかりませんでした。</p>
+            <p className="mt-1 text-xs text-slate-400">
+              まだ請求が発生していないか、決済情報が同期されていない可能性があります。
+              時間をおいて再度お試しいただくか、Stripe 管理画面をご確認ください。
+            </p>
+          </div>
         )}
 
         {!loading && payments && payments.length > 0 && (
