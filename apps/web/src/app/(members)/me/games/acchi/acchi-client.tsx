@@ -34,6 +34,7 @@ import { Button } from '@/components/ui/Button';
 import { CharacterAvatar } from './CharacterAvatar';
 import { CHARACTER_NAME, DIRECTION_POSE, type CharacterPose } from './character';
 import { DirectionTrigger } from './DirectionTrigger';
+import { DirectionIcon } from './DirectionIcon';
 import { useAcchiSound } from './useAcchiSound';
 
 type Initial = {
@@ -63,12 +64,6 @@ type PlayResponse = {
   remaining: number;
 };
 
-const DIR_EMOJI: Record<AcchiDirection, string> = {
-  UP: '☝️',
-  DOWN: '👇',
-  LEFT: '👈',
-  RIGHT: '👉',
-};
 const DIR_LABEL: Record<AcchiDirection, string> = {
   UP: '上',
   DOWN: '下',
@@ -476,16 +471,20 @@ function ResultCard({
 
       {/* 対戦内容 */}
       <div className="mt-5 flex items-center justify-center gap-6 text-sm text-slate-600">
-        <div>
+        <div className="flex flex-col items-center">
           <p className="mb-1 text-xs text-slate-400">あなた</p>
-          <p className="text-3xl">{DIR_EMOJI[direction.player]}</p>
-          <p className="text-[11px] text-slate-400">{DIR_LABEL[direction.player]}</p>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-black bg-twilight-rose text-white shadow-[3px_3px_0_rgba(0,0,0,0.9)]">
+            <DirectionIcon dir={direction.player} className="h-6 w-6" strokeWidth={2.8} />
+          </span>
+          <p className="mt-1 text-[11px] text-slate-400">{DIR_LABEL[direction.player]}</p>
         </div>
         <p className="text-lg font-bold text-slate-400">VS</p>
-        <div>
+        <div className="flex flex-col items-center">
           <p className="mb-1 text-xs text-slate-400">{CHARACTER_NAME}</p>
-          <p className="text-3xl">{DIR_EMOJI[direction.cpu]}</p>
-          <p className="text-[11px] text-slate-400">{DIR_LABEL[direction.cpu]}</p>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-black bg-twilight-amethyst text-white shadow-[3px_3px_0_rgba(0,0,0,0.9)]">
+            <DirectionIcon dir={direction.cpu} className="h-6 w-6" strokeWidth={2.8} />
+          </span>
+          <p className="mt-1 text-[11px] text-slate-400">{DIR_LABEL[direction.cpu]}</p>
         </div>
       </div>
 
