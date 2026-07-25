@@ -117,32 +117,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ===== 会員ランク ===== */}
-      <section className="relative mx-auto max-w-6xl px-4 py-14 sm:py-20">
-        <SectionHeading en="Membership" ja="会員ランク" />
-        <div className="mt-10 grid gap-5 sm:gap-6 md:grid-cols-3">
-          <RankCard
-            no="01"
-            rank="Crystal"
-            ja="クリスタル"
-            desc="まずはこちらから。お知らせと一部コンテンツを楽しめる入口の階。"
-          />
-          <RankCard
-            no="02"
-            rank="Amethyst"
-            ja="アメジスト"
-            desc="限定コンテンツとライブ配信が解放。最も人気のスタンダードな階。"
-            featured
-          />
-          <RankCard
-            no="03"
-            rank="Royal"
-            ja="ロイヤル"
-            desc="見逃し配信・特別動画・会員価格グッズ・特典会優先。最上階の特別な部屋。"
-          />
-        </div>
-      </section>
-
       {/* ===== 最新お知らせ ===== */}
       {latestNotices.length > 0 && (
         <section className="relative mx-auto max-w-6xl px-4 pb-4 sm:pb-8">
@@ -304,52 +278,6 @@ function SectionHeading({
   );
 }
 
-/* ===== 会員ランクカード ===== */
-function RankCard({
-  no,
-  rank,
-  ja,
-  desc,
-  featured,
-}: {
-  no: string;
-  rank: string;
-  ja: string;
-  desc: string;
-  featured?: boolean;
-}) {
-  return (
-    <div
-      className={`relative overflow-hidden rounded-sm border-2 border-black p-6 transition hover:-translate-y-1 sm:p-7 ${
-        featured ? 'bg-twilight-rose text-white' : 'bg-white text-black'
-      }`}
-      style={{
-        boxShadow: featured ? '8px 8px 0 rgba(0,0,0,0.9)' : '4px 4px 0 rgba(0,0,0,0.9)',
-      }}
-    >
-      {featured && (
-        <span className="absolute right-5 top-5">
-          <Badge tone="gray" className="bg-black text-white">
-            人気
-          </Badge>
-        </span>
-      )}
-      <p
-        className={`mb-3 text-xs font-bold uppercase tracking-[0.2em] ${featured ? 'text-white/70' : 'text-black/40'}`}
-      >
-        {no}
-      </p>
-      <h3 className="text-3xl font-black uppercase">{rank}</h3>
-      <p className={`mt-0.5 text-sm font-bold ${featured ? 'text-white/85' : 'text-twilight-rose'}`}>
-        {ja}
-      </p>
-      <p className={`mt-3 text-sm leading-relaxed ${featured ? 'text-white/90' : 'text-black/75'}`}>
-        {desc}
-      </p>
-    </div>
-  );
-}
-
 /* ===== 特典カード（アウトライン数字） ===== */
 function FeatureCard({
   no,
@@ -378,6 +306,33 @@ function FeatureCard({
   );
 }
 
+/* ===== プランごとの特典リスト =====
+   運用の実態に合わせた内容。表記ゆれを避けるためここで一元管理する。 */
+const PLAN_FEATURES: Record<'FREE' | 'STANDARD' | 'PREMIUM', string[]> = {
+  FREE: ['アカウント作成のみで利用可能', '基本コンテンツの閲覧', 'ポイント付与率 ×1.0'],
+  STANDARD: [
+    'デジタル会員証',
+    '会員限定コンテンツの閲覧・利用',
+    'ポイント付与率 ×1.2',
+    '限定グッズ販売',
+    'チケット優先申込',
+    'イベント申込',
+    '誕生日メッセージ',
+    'メールマガジン',
+  ],
+  PREMIUM: [
+    '会報誌（年2回）',
+    'デジタル会員証',
+    '会員限定コンテンツの閲覧・利用',
+    'ポイント付与率 ×2.0（一番お得）',
+    '限定グッズ販売',
+    'チケット優先申込',
+    'イベント申込',
+    '誕生日メッセージ',
+    'メールマガジン',
+  ],
+};
+
 /* ===== プランカード ===== */
 function PlanCard({
   plan,
@@ -390,6 +345,7 @@ function PlanCard({
   const interval = PLAN_BILLING_INTERVAL[plan]; // null / 'MONTH' / 'YEAR'
   const isYearly = interval === 'YEAR';
   const mainPrice = isYearly ? price.yearly : price.monthly;
+  const features = PLAN_FEATURES[plan];
   return (
     <div
       className={`flex flex-col rounded-sm border-2 border-black p-6 transition sm:p-7 ${
@@ -411,40 +367,14 @@ function PlanCard({
           <span className="text-base font-normal">/{isYearly ? '年' : '月'}</span>
         )}
       </p>
-      {plan === 'PREMIUM' && (
-        <p className="text-center text-sm text-black/60">会報誌 年2回 / ポイント付与率 ×2.0</p>
-      )}
       <ul
         className={`mt-6 flex-1 space-y-2.5 text-left text-sm ${highlight ? 'text-white/85' : 'text-black/80'}`}
       >
-        <li className="flex gap-2">
-          <Check highlight={highlight} /> お知らせ閲覧
-        </li>
-        {plan !== 'FREE' && (
-          <li className="flex gap-2">
-            <Check highlight={highlight} /> 限定コンテンツ視聴
+        {features.map((f) => (
+          <li key={f} className="flex gap-2">
+            <Check highlight={highlight} /> {f}
           </li>
-        )}
-        {plan !== 'FREE' && (
-          <li className="flex gap-2">
-            <Check highlight={highlight} /> ライブ配信視聴
-          </li>
-        )}
-        {plan === 'PREMIUM' && (
-          <li className="flex gap-2">
-            <Check highlight={highlight} /> 見逃し配信・特別動画
-          </li>
-        )}
-        {plan === 'PREMIUM' && (
-          <li className="flex gap-2">
-            <Check highlight={highlight} /> 会員価格でグッズ購入
-          </li>
-        )}
-        {plan !== 'FREE' && (
-          <li className="flex gap-2">
-            <Check highlight={highlight} /> 先行チケット申込
-          </li>
-        )}
+        ))}
       </ul>
       <Link
         href={plan === 'FREE' ? '/signup' : '/me'}
