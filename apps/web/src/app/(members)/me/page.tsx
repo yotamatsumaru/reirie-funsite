@@ -22,6 +22,8 @@ import { ManageSubscriptionButtons } from '@/components/auth/ManageSubscriptionB
 import { WithdrawSection } from './withdraw-section';
 import { SubscribedRefresh } from './subscribed-refresh';
 import { ProfileSection } from './profile-section';
+import { BirthdayMailSection } from './birthday-mail-section';
+import { listUserBirthdayMails } from '@/lib/birthday-mail';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -30,7 +32,7 @@ export default async function MePage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me');
 
-  const [user, recentHistory] = await Promise.all([
+  const [user, recentHistory, birthdayMails] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
@@ -44,6 +46,8 @@ export default async function MePage() {
     // EC 注文 (グッズ) とサブスク課金を統合した「最近の注文」表示用の履歴。
     // 全件取得後にマージ済みなので、ここでは先頭 5 件だけ使う。
     getUnifiedOrderHistory(session.user.id, 5),
+    // 運営から届いた誕生日メール (新しい年順)。
+    listUserBirthdayMails(session.user.id),
   ]);
   const orders = recentHistory.slice(0, 5);
 
@@ -159,6 +163,21 @@ export default async function MePage() {
           </div>
         </CardBody>
       </Card>
+
+      {/* 運営から届いた誕生日メール (ある場合のみ表示) */}
+      {birthdayMails.length > 0 && (
+        <BirthdayMailSection
+          mails={birthdayMails.map((m) => ({
+            id: m.id,
+            year: m.year,
+            subject: m.subject,
+            body: m.body,
+            imageUrl: m.imageUrl,
+            sentAt: m.sentAt.toISOString(),
+            readAt: m.readAt ? m.readAt.toISOString() : null,
+          }))}
+        />
+      )}
 
       {/* プラン特典の利用状況 */}
       <Card>
