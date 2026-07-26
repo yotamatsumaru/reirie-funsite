@@ -74,6 +74,26 @@ export const BirthdayMailSendSchema = z.object({
 });
 export type BirthdayMailSendInput = z.infer<typeof BirthdayMailSendSchema>;
 
+/**
+ * テスト送信リクエストのスキーマ。
+ *  - 指定年のテンプレートを、任意のメールアドレスへ 1 通だけ送る (配信記録は残さない)。
+ *  - name は差し込み変数 {name} の確認用 (省略可)。
+ */
+export const BirthdayMailTestSendSchema = z.object({
+  year: z
+    .number()
+    .int()
+    .min(BIRTHDAY_MAIL_YEAR_MIN)
+    .max(BIRTHDAY_MAIL_YEAR_MAX),
+  to: z
+    .string({ error: 'メールアドレスを入力してください' })
+    .trim()
+    .min(1, 'メールアドレスを入力してください')
+    .email('メールアドレスの形式が正しくありません'),
+  name: z.string().trim().max(60, '名前は60文字以内で入力してください').optional(),
+});
+export type BirthdayMailTestSendInput = z.infer<typeof BirthdayMailTestSendSchema>;
+
 /** 差し込み変数を実際の値に置換する (件名・本文で共通利用) */
 export function renderBirthdayMailText(
   template: string,
