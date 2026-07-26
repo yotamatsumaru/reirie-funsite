@@ -8,6 +8,7 @@
  *  - 画像 (ヘッダー画像) があればカード上部に表示し、メールと同じ雰囲気に。
  */
 import { useState } from 'react';
+import { Gift } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJstDate } from '@idol/shared';
@@ -27,7 +28,12 @@ export function BirthdayMailSection({ mails }: { mails: BirthdayMailItem[] }) {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <span aria-hidden className="text-xl">🎂</span>
+          <span
+            aria-hidden
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-brand-600"
+          >
+            <Gift className="h-4 w-4" />
+          </span>
           <h2 className="text-lg font-semibold">お誕生日メッセージ</h2>
         </div>
       </CardHeader>

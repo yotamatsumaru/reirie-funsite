@@ -420,39 +420,47 @@ export function buildBirthdayMailHtml(params: {
   // ヒーロー画像。読み込めなかった場合でも壊れた「?」アイコンや大きな空白が
   // 目立たないよう、alt を空にし、背景をブランドカラーで塗り、高さを抑える。
   const hero = params.imageUrl
-    ? `<a href="${escapeHtml(mypageUrl)}" style="display:block;line-height:0;text-decoration:none;background:linear-gradient(135deg,#c263a2 0%,#7c5295 55%,#4a2d5c 100%);"><img src="${escapeHtml(params.imageUrl)}" alt="" width="600" style="display:block;width:100%;max-width:100%;height:auto;max-height:340px;border:0;outline:none;-ms-interpolation-mode:bicubic;object-fit:cover;" /></a>`
+    ? `<a href="${escapeHtml(mypageUrl)}" style="display:block;line-height:0;text-decoration:none;background:linear-gradient(135deg,#c263a2 0%,#a84f89 50%,#6a2f57 100%);"><img src="${escapeHtml(params.imageUrl)}" alt="" width="600" style="display:block;width:100%;max-width:100%;height:auto;max-height:340px;border:0;outline:none;-ms-interpolation-mode:bicubic;object-fit:cover;" /></a>`
     : '';
 
+  // サイトのトンマナに合わせたヘッダー。
+  //  - 絵文字は使わず、サイトと同じ「ReiRieRoom」ロゴタイプ（太字・字間広め）を主役に。
+  //  - 装飾は上品なシンボル（✦ / 細いディバイダー）で、ブランドのマゼンタ〜ラベンダー基調。
   return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Happy Birthday</title></head>
-<body style="margin:0;padding:0;background:#f4f1f7;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#2d2235;">
+<body style="margin:0;padding:0;background:#efeaf4;font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic',sans-serif;color:#2b1522;">
   <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
-    <div style="border-radius:18px;overflow:hidden;box-shadow:0 10px 30px rgba(74,45,92,.15);background:#ffffff;">
+    <div style="border-radius:20px;overflow:hidden;box-shadow:0 12px 34px rgba(106,47,87,.18);background:#ffffff;">
       ${hero}
-      <div style="background:linear-gradient(135deg,#c263a2 0%,#7c5295 55%,#4a2d5c 100%);padding:${hero ? '22px' : '40px'} 24px 26px;text-align:center;">
-        <div style="font-size:40px;line-height:1;margin-bottom:6px;">&#127874;&#127881;</div>
-        <h1 style="margin:8px 0 0;color:#fdf8ff;font-size:24px;letter-spacing:.06em;font-weight:900;">
-          Happy Birthday!
+      <div style="background:linear-gradient(135deg,#c263a2 0%,#a84f89 52%,#6a2f57 100%);padding:${hero ? '26px' : '44px'} 24px 30px;text-align:center;">
+        <div style="font-size:16px;font-weight:900;letter-spacing:.22em;color:#ffffff;padding-left:.22em;">
+          ReiRieRoom
+        </div>
+        <div style="margin:12px auto 0;width:44px;height:2px;background:rgba(255,255,255,.55);border-radius:2px;"></div>
+        <div style="margin:16px 0 4px;color:#f3d9ea;font-size:12px;letter-spacing:.3em;padding-left:.3em;">&#10022; HAPPY BIRTHDAY &#10022;</div>
+        <h1 style="margin:6px 0 0;color:#ffffff;font-size:26px;letter-spacing:.04em;font-weight:900;line-height:1.35;">
+          お誕生日<br style="display:none">おめでとうございます
         </h1>
-        <p style="margin:10px 0 0;color:#f3e3ef;font-size:14px;font-weight:700;">
-          ${escapeHtml(params.name)}さん、お誕生日おめでとうございます
+        <p style="margin:12px 0 0;color:#f6e5f0;font-size:14px;font-weight:700;letter-spacing:.02em;">
+          ${escapeHtml(params.name)} さんへ
         </p>
       </div>
-      <div style="padding:28px 26px 8px;">
-        <p style="margin:0 0 20px;font-size:15px;line-height:1.9;color:#4a3d55;">
+      <div style="padding:30px 28px 8px;">
+        <p style="margin:0 0 20px;font-size:15px;line-height:1.95;color:#3a1c2d;">
           ${safeBody}
         </p>
-        <div style="text-align:center;margin:26px 0 20px;">
+        <div style="text-align:center;margin:28px 0 22px;">
           <a href="${escapeHtml(mypageUrl)}"
-             style="display:inline-block;background:linear-gradient(135deg,#c263a2,#7c5295);color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:13px 30px;border-radius:999px;box-shadow:0 4px 14px rgba(124,82,149,.35);">
-            マイページで見る &#127873;
+             style="display:inline-block;background:linear-gradient(135deg,#c263a2,#a84f89);color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;letter-spacing:.04em;padding:14px 34px;border-radius:999px;box-shadow:0 6px 16px rgba(168,79,137,.38);">
+            マイページで見る &#8594;
           </a>
         </div>
       </div>
-      <div style="border-top:1px solid #efeaf4;padding:18px 26px 24px;text-align:center;">
-        <p style="margin:0;font-size:11px;color:#a99fb3;line-height:1.7;">
-          このメールは ReiRieRoom 会員の方の誕生日にお送りしています。<br>
-          ReiRieRoom | REIRIE 公式ファンクラブ &#183; ${params.year}
+      <div style="border-top:1px solid #f0e2ec;padding:20px 26px 26px;text-align:center;">
+        <div style="font-size:12px;font-weight:900;letter-spacing:.28em;color:#a84f89;padding-left:.28em;">ReiRieRoom</div>
+        <p style="margin:8px 0 0;font-size:11px;color:#b09bab;line-height:1.8;">
+          REIRIE 公式ファンクラブ<br>
+          このメールは会員のみなさまの誕生日にお送りしています &#183; ${params.year}
         </p>
       </div>
     </div>
