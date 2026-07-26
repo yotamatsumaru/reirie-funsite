@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { toast } from '@/stores/ui-store';
+import { formatJstDateTime } from '@idol/shared';
 
 type Status = {
   enabled: boolean;
@@ -194,7 +195,7 @@ export function TotpSetupClient({ initialStatus }: Props) {
             <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
               TOTP は有効です。
               {status.verifiedAt
-                ? ` (有効化日時: ${new Date(status.verifiedAt).toLocaleString('ja-JP')})`
+                ? ` (有効化日時: ${formatJstDateTime(status.verifiedAt)})`
                 : null}
               <br />
               残りバックアップコード: {status.backupCodesRemaining} 件

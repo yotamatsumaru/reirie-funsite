@@ -11,6 +11,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { CreateEventForm } from './CreateEventForm';
 import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: '特典会イベント一覧' };
 export const dynamic = 'force-dynamic';
@@ -86,7 +87,7 @@ export default async function AdminCallEventsPage() {
                         {e.performer.displayName ?? e.performer.email}
                       </td>
                       <td className="px-4 py-2 text-slate-600">
-                        {new Date(e.startsAt).toLocaleString('ja-JP')}
+                        {formatJstDateTime(e.startsAt)}
                       </td>
                       <td className="px-4 py-2">
                         <StatusBadge status={e.status} />

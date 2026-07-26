@@ -12,6 +12,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { EventControlPanel } from './EventControlPanel';
 import { TicketRow } from './TicketRow';
 import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: '特典会イベント詳細' };
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,7 @@ export default async function AdminCallEventDetailPage({ params }: Props) {
           <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">{event.title}</h1>
           <p className="mt-1 text-sm text-slate-500">
             演者: {event.performer.displayName ?? event.performer.email} ／ 開始:{' '}
-            {new Date(event.startsAt).toLocaleString('ja-JP')} ／ 1人{event.perFanSeconds}秒 ／ 状態:{' '}
+            {formatJstDateTime(event.startsAt)} ／ 1人{event.perFanSeconds}秒 ／ 状態:{' '}
             {event.status}
           </p>
         </div>

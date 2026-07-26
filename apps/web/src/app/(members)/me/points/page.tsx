@@ -5,6 +5,7 @@ import { prisma } from '@idol/db';
 import type { PuiTransaction, RewardRedemption } from '@idol/db';
 import {
   REWARD_REDEMPTION_STATUS_LABELS,
+  formatJstDateTime,
   type RewardRedemptionStatusLiteral,
 } from '@idol/shared';
 import { auth } from '@/auth';
@@ -136,7 +137,7 @@ export default async function PointsHistoryPage() {
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {new Date(t.createdAt).toLocaleString('ja-JP')}
+                      {formatJstDateTime(t.createdAt)}
                       {t.note ? ` ・ ${t.note}` : ''}
                     </p>
                   </div>
@@ -178,7 +179,7 @@ export default async function PointsHistoryPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-800">{r.itemName}</p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {new Date(r.createdAt).toLocaleString('ja-JP')}
+                      {formatJstDateTime(r.createdAt)}
                       {r.trackingNumber ? ` ・ 追跡番号: ${r.trackingNumber}` : ''}
                     </p>
                   </div>

@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { auth } from '@/auth';
 import { prisma } from '@idol/db';
 import { WaitingRoom } from './WaitingRoom';
+import { formatJstDateTime } from '@idol/shared';
 
 export const runtime = 'nodejs';
 
@@ -68,7 +69,7 @@ export default async function CallWaitingPage({ params }: PageProps) {
           演者: {event.performer.displayName ?? event.performer.email}
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          開始: {new Date(event.startsAt).toLocaleString('ja-JP')} / 1人 {event.perFanSeconds}{' '}
+          開始: {formatJstDateTime(event.startsAt)} / 1人 {event.perFanSeconds}{' '}
           秒
         </p>
       </header>

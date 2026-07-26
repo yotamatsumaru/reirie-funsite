@@ -4,6 +4,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'コンテンツ管理' };
 export const dynamic = 'force-dynamic';
@@ -71,7 +72,7 @@ export default async function AdminContentsPage() {
                 </div>
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>閲覧 {c.viewCount}</span>
-                  <span>{new Date(c.updatedAt).toLocaleString('ja-JP')}</span>
+                  <span>{formatJstDateTime(c.updatedAt)}</span>
                 </div>
               </CardBody>
             </Card>
@@ -108,7 +109,7 @@ export default async function AdminContentsPage() {
                   </td>
                   <td className="px-4 py-3">{c.viewCount}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(c.updatedAt).toLocaleString('ja-JP')}
+                    {formatJstDateTime(c.updatedAt)}
                   </td>
                 </tr>
               ))}

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess } from '@idol/shared';
+import { canAccess, formatJstDate} from '@idol/shared';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
@@ -52,7 +52,7 @@ export default async function ContentDetailPage({
       <h1 className="text-2xl font-bold leading-snug text-slate-800 sm:text-3xl">{content.title}</h1>
       <p className="mt-2 text-xs text-slate-500 sm:text-sm">
         {content.publishedAt
-          ? new Date(content.publishedAt).toLocaleDateString('ja-JP')
+          ? formatJstDate(content.publishedAt)
           : ''}
         {content.authorName ? ` ・ ${content.authorName}` : ''}
       </p>

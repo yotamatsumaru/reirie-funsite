@@ -5,6 +5,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
 import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: '注文管理' };
 export const dynamic = 'force-dynamic';
@@ -54,7 +55,7 @@ export default async function AdminOrdersPage() {
                 </p>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500">
-                    {new Date(o.createdAt).toLocaleString('ja-JP')}
+                    {formatJstDateTime(o.createdAt)}
                   </span>
                   <span className="text-sm font-semibold text-slate-800">
                     {formatJpy(o.totalAmount)}
@@ -93,7 +94,7 @@ export default async function AdminOrdersPage() {
                     <Badge tone={tone(o.status)}>{o.status}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(o.createdAt).toLocaleString('ja-JP')}
+                    {formatJstDateTime(o.createdAt)}
                   </td>
                 </tr>
               ))}

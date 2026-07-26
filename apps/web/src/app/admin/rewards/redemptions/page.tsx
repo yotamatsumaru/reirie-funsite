@@ -8,8 +8,7 @@ import {
   REWARD_REDEMPTION_STATUSES,
   REWARD_REDEMPTION_STATUS_LABELS,
   REWARD_CATALOG_ITEM_KIND_LABELS,
-  type RewardRedemptionStatusLiteral,
-} from '@idol/shared';
+  type RewardRedemptionStatusLiteral, formatJstDateTime} from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
@@ -113,7 +112,7 @@ export default async function AdminRedemptionsPage({
               </p>
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span>{REWARD_CATALOG_ITEM_KIND_LABELS[r.itemKind]}</span>
-                <span>{new Date(r.createdAt).toLocaleString('ja-JP')}</span>
+                <span>{formatJstDateTime(r.createdAt)}</span>
               </div>
             </CardBody>
           </Card>
@@ -156,7 +155,7 @@ export default async function AdminRedemptionsPage({
                   </Badge>
                 </td>
                 <td className="px-4 py-2 text-xs text-slate-500">
-                  {new Date(r.createdAt).toLocaleString('ja-JP')}
+                  {formatJstDateTime(r.createdAt)}
                 </td>
                 <td className="px-4 py-2 text-right">
                   <Link

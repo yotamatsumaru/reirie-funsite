@@ -5,7 +5,7 @@ import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { ORDER_STATUS_LABELS } from '@idol/shared';
+import { ORDER_STATUS_LABELS, formatJstDate } from '@idol/shared';
 import { OrderRowActions } from './order-row-actions';
 
 export const metadata: Metadata = { title: '注文・売上管理 | Super Admin' };
@@ -118,7 +118,7 @@ export default async function SuperAdminOrdersPage({
                   <div
                     className={`w-full rounded-t ${s.amount > 0 ? 'bg-brand-500' : 'bg-slate-200'}`}
                     style={{ height: `${h}%` }}
-                    title={`${s.date.toLocaleDateString('ja-JP')}: ${fmtJpy(s.amount)}`}
+                    title={`${formatJstDate(s.date)}: ${fmtJpy(s.amount)}`}
                   />
                   <span className="text-[10px] text-slate-400">
                     {s.date.getMonth() + 1}/{s.date.getDate()}
@@ -232,6 +232,7 @@ export default async function SuperAdminOrdersPage({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">
                       {new Date(o.createdAt).toLocaleDateString('ja-JP', {
+                        timeZone: 'Asia/Tokyo',
                         month: '2-digit',
                         day: '2-digit',
                       })}

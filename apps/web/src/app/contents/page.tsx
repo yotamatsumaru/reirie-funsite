@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess } from '@idol/shared';
+import { canAccess, formatJstDate} from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
@@ -72,7 +72,7 @@ export default async function ContentsPage() {
                   )}
                   {c.publishedAt && (
                     <p className="mt-2 text-xs text-slate-400">
-                      {new Date(c.publishedAt).toLocaleDateString('ja-JP')}
+                      {formatJstDate(c.publishedAt)}
                     </p>
                   )}
                 </CardBody>

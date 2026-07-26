@@ -125,6 +125,7 @@ export function InvitationList({
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600">
                     {new Date(inv.expiresAt).toLocaleString('ja-JP', {
+                      timeZone: 'Asia/Tokyo',
                       year: 'numeric',
                       month: '2-digit',
                       day: '2-digit',

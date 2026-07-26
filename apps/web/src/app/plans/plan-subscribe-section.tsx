@@ -39,6 +39,7 @@ interface Props {
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
       year: 'numeric',
       month: 'long',
       day: 'numeric',

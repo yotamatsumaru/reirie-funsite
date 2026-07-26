@@ -6,8 +6,7 @@ import {
   REWARD_REDEMPTION_STATUS_LABELS,
   requiresShipping,
   type RewardCatalogItemKindLiteral,
-  type RewardRedemptionStatusLiteral,
-} from '@idol/shared';
+  type RewardRedemptionStatusLiteral, formatJstDateTime} from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
@@ -83,24 +82,24 @@ export default async function RedemptionDetailPage({
             </p>
             <p>
               <span className="text-slate-500">申請日時: </span>
-              {new Date(redemption.createdAt).toLocaleString('ja-JP')}
+              {formatJstDateTime(redemption.createdAt)}
             </p>
             {redemption.shippedAt && (
               <p>
                 <span className="text-slate-500">発送日時: </span>
-                {new Date(redemption.shippedAt).toLocaleString('ja-JP')}
+                {formatJstDateTime(redemption.shippedAt)}
               </p>
             )}
             {redemption.completedAt && (
               <p>
                 <span className="text-slate-500">完了日時: </span>
-                {new Date(redemption.completedAt).toLocaleString('ja-JP')}
+                {formatJstDateTime(redemption.completedAt)}
               </p>
             )}
             {redemption.canceledAt && (
               <p>
                 <span className="text-slate-500">キャンセル日時: </span>
-                {new Date(redemption.canceledAt).toLocaleString('ja-JP')}
+                {formatJstDateTime(redemption.canceledAt)}
               </p>
             )}
           </div>

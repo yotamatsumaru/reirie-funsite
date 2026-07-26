@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { requireCapabilityPage } from '@/auth';
 import { ContentForm, type ContentInitial } from '../content-form';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'コンテンツ編集' };
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,7 @@ export default async function EditContentPage({
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           閲覧数 {content.viewCount.toLocaleString()} 回 ・ 最終更新{' '}
-          {new Date(content.updatedAt).toLocaleString('ja-JP')}
+          {formatJstDateTime(content.updatedAt)}
         </p>
       </div>
 
