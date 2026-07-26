@@ -45,7 +45,7 @@ export default async function BuyRewardPointsPage({
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Pui を購入</h1>
           <p className="mt-1 text-sm text-slate-500">
-            クレジットカード決済 (Stripe) で Pui を購入できます。購入した Pui は景品カタログとの交換や、ゲーム内購入にも使えます。
+            クレジットカード決済 (Stripe) で Pui を購入できます。購入した Pui はミニゲームの追加プレイや、景品カタログとの交換に使えます。
           </p>
         </div>
         <Link href="/me/rewards" className="text-sm text-brand-600 hover:underline">

@@ -140,7 +140,7 @@ export default async function MePage() {
               {memberPoints.toLocaleString()}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              毎日のログインやSNSシェアで Pui が貯まります
+              ログイン・SNSシェア・ミニゲームで貯まり、購入も可能です
             </p>
           </div>
           <div className="flex gap-2">
