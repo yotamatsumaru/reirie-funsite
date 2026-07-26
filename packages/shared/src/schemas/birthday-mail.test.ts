@@ -2,6 +2,7 @@ import {
   renderBirthdayMailText,
   BirthdayMailTemplateSchema,
   BirthdayMailSendSchema,
+  BirthdayMailTestSendSchema,
 } from './birthday-mail';
 
 describe('renderBirthdayMailText', () => {
@@ -83,6 +84,32 @@ describe('BirthdayMailSendSchema', () => {
 
   it('rejects non-uuid userIds', () => {
     const r = BirthdayMailSendSchema.safeParse({ year: 2026, userIds: ['nope'] });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe('BirthdayMailTestSendSchema', () => {
+  it('accepts year + valid email', () => {
+    const r = BirthdayMailTestSendSchema.safeParse({ year: 2026, to: 'test@example.com' });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts an optional name', () => {
+    const r = BirthdayMailTestSendSchema.safeParse({
+      year: 2026,
+      to: 'test@example.com',
+      name: '理江',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects an invalid email', () => {
+    const r = BirthdayMailTestSendSchema.safeParse({ year: 2026, to: 'not-an-email' });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects a missing email', () => {
+    const r = BirthdayMailTestSendSchema.safeParse({ year: 2026, to: '' });
     expect(r.success).toBe(false);
   });
 });

@@ -340,6 +340,37 @@ export async function sendBirthdayMails(params: {
   return result;
 }
 
+/**
+ * テスト送信: 指定年のテンプレートを、任意のメールアドレスへ 1 通だけ送る。
+ *  - 本番の配信記録 (BirthdayMailDelivery) は作成しない (マイページにも出ない)。
+ *  - テンプレートが無効でも、確認用に送信を許可する。
+ *  - 宛名は指定があればそれを、無ければ「テスト」を使う。
+ *  - 件名の先頭に [テスト] を付け、本番と取り違えないようにする。
+ */
+export async function sendBirthdayTestMail(params: {
+  year: number;
+  to: string;
+  name?: string;
+}): Promise<void> {
+  const template = await getBirthdayTemplate(params.year);
+  if (!template) {
+    throw new Error(`${params.year} 年の誕生日メールテンプレートが未設定です。`);
+  }
+
+  const name = params.name?.trim() || 'テスト';
+  const subject = `[テスト] ${renderBirthdayMailText(template.subject, { name, year: params.year })}`;
+  const body = renderBirthdayMailText(template.body, { name, year: params.year });
+  const html = buildBirthdayMailHtml({
+    name,
+    body,
+    imageUrl: absoluteUrl(template.imageUrl),
+    year: params.year,
+  });
+  const text = buildBirthdayMailText({ body, year: params.year });
+
+  await sendEmail({ to: params.to, subject, text, html });
+}
+
 // ---------------------------------------------------------------------------
 // マイページ用: 会員が受け取った誕生日メール
 // ---------------------------------------------------------------------------
