@@ -94,8 +94,8 @@ export default async function PointsHistoryPage() {
             {fanBalance.toLocaleString()}
           </p>
           <p className="mt-2 text-xs text-slate-500">
-            ログイン・SNSシェア・ミニゲームで貯まり、購入 or サブスク月次特典でも増えます。
-            恋愛ADVの購入やミニゲームの追加プレイ、景品カタログとの交換に使えます。
+            ログイン・SNSシェア・ミニゲームで貯まり、購入も可能。
+            ミニゲームの追加プレイ、景品カタログとの交換に使えます。
           </p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             <Link href="/game" className="inline-block text-xs text-brand-600 hover:underline">
