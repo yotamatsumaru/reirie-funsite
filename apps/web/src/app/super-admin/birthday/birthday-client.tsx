@@ -76,6 +76,11 @@ export function BirthdayMailClient({
   const [savingTpl, setSavingTpl] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // テスト送信
+  const [testTo, setTestTo] = useState('');
+  const [testName, setTestName] = useState('');
+  const [testSending, setTestSending] = useState(false);
+
   // 対象者一覧
   const [month, setMonth] = useState(today.month);
   const [day, setDay] = useState(today.day);
@@ -180,6 +185,32 @@ export function BirthdayMailClient({
       toast.success('画像を削除しました');
     } catch {
       toast.error('画像の削除に失敗しました');
+    }
+  }
+
+  // --- テスト送信 -------------------------------------------------------
+  async function sendTest() {
+    const to = testTo.trim();
+    if (!to) {
+      toast.warning('送信先のメールアドレスを入力してください');
+      return;
+    }
+    setTestSending(true);
+    try {
+      const res = await fetch('/api/super-admin/birthday/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, to, name: testName.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error?.message ?? 'テスト送信に失敗しました');
+      }
+      toast.success(`${to} にテストメールを送信しました`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'テスト送信に失敗しました');
+    } finally {
+      setTestSending(false);
     }
   }
 
@@ -380,6 +411,48 @@ export function BirthdayMailClient({
               </div>
             </>
           )}
+        </CardBody>
+      </Card>
+
+      {/* テスト送信 */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">テスト送信</h2>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <p className="text-sm text-slate-600">
+            {year}年版の内容を、任意のメールアドレスへ1通だけ送って見た目を確認できます。
+            <br />
+            テスト送信は配信記録に残らず、会員のマイページにも表示されません。件名の先頭に
+            <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-brand-700">[テスト]</code>
+            が付きます。
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="送信先メールアドレス"
+              type="email"
+              placeholder="test@example.com"
+              value={testTo}
+              onChange={(e) => setTestTo(e.target.value)}
+            />
+            <Input
+              label="差し込み名 (任意)"
+              placeholder="例: 理江"
+              value={testName}
+              onChange={(e) => setTestName(e.target.value)}
+              hint="本文の {name} に入る名前。未入力なら「テスト」になります。"
+            />
+          </div>
+          <div>
+            <Button
+              variant="secondary"
+              type="button"
+              loading={testSending}
+              onClick={sendTest}
+            >
+              このアドレスにテスト送信
+            </Button>
+          </div>
         </CardBody>
       </Card>
 
