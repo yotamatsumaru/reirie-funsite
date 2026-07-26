@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PREFECTURES } from '@idol/shared';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { lookupPostalCode, normalizePostalCode } from '@/lib/postal-lookup';
 
 const INITIAL = {
   displayName: '',
@@ -25,10 +26,41 @@ export function SignUpForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 郵便番号 → 住所 自動補完の状態表示用 (検索中 / 見つからなかった)
+  const [postalLookingUp, setPostalLookingUp] = useState(false);
+  const [postalNotFound, setPostalNotFound] = useState(false);
+
   const update =
     (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [k]: e.target.value }));
+
+  // 郵便番号の変更ハンドラ。7桁揃ったら zipcloud で住所を自動補完する。
+  //  - 都道府県 (prefecture) を上書きする。
+  //  - 市区町村・番地 (addressLine1) は「まだ空のときだけ」市区町村＋町域を差し込む
+  //    (ユーザーが番地まで入力済みの場合に消してしまわないため)。
+  const onPostalChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setForm((prev) => ({ ...prev, postalCode: value }));
+    setPostalNotFound(false);
+
+    const zip = normalizePostalCode(value);
+    if (!zip) return;
+
+    setPostalLookingUp(true);
+    const result = await lookupPostalCode(zip);
+    setPostalLookingUp(false);
+
+    if (!result) {
+      setPostalNotFound(true);
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      prefecture: result.prefecture || prev.prefecture,
+      addressLine1: prev.addressLine1.trim() === '' ? result.city : prev.addressLine1,
+    }));
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,11 +184,18 @@ export function SignUpForm() {
           type="text"
           name="postalCode"
           autoComplete="postal-code"
+          inputMode="numeric"
           required
           placeholder="例: 1234567"
-          hint="ハイフンあり・なしどちらでも可"
+          hint={
+            postalLookingUp
+              ? '住所を検索中…'
+              : postalNotFound
+                ? '住所が見つかりませんでした。都道府県・住所をご確認ください'
+                : '7桁を入力すると都道府県・市区町村を自動入力します（ハイフンあり・なし可）'
+          }
           value={form.postalCode}
-          onChange={update('postalCode')}
+          onChange={onPostalChange}
         />
         <Select
           label="都道府県"
@@ -183,12 +222,13 @@ export function SignUpForm() {
           onChange={update('addressLine1')}
         />
         <Input
-          label="建物名・部屋番号 (任意)"
+          label="建物名・部屋番号"
           type="text"
           name="addressLine2"
           autoComplete="address-line2"
           maxLength={200}
           placeholder="例: ○○マンション 101号室"
+          hint="マンション・アパートにお住まいの場合は、確実な発送のため必ずご入力ください"
           value={form.addressLine2}
           onChange={update('addressLine2')}
         />
