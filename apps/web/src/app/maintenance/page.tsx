@@ -9,9 +9,12 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Sparkles, Info } from 'lucide-react';
 import { DEFAULT_MAINTENANCE_MESSAGE } from '@idol/shared';
 import { getMaintenanceSetting } from '@/lib/app-setting';
+import { isMaintenanceModeAsync } from '@/lib/maintenance-flag';
+import { MaintenanceWatcher } from './maintenance-watcher';
 
 export const metadata: Metadata = {
   title: 'メンテナンス中',
@@ -22,6 +25,13 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function MaintenancePage() {
+  // メンテナンスが既に解除されているのにこのページを開いた (リロード / 直リンク /
+  // 終了後の再アクセス) 場合は、メンテ画面を見せずにトップへ戻す。
+  // proxy.ts は /maintenance を常に通すため、ここで明示的に判定する。
+  if (!(await isMaintenanceModeAsync())) {
+    redirect('/');
+  }
+
   const setting = await getMaintenanceSetting();
   const message = setting.message.trim() || DEFAULT_MAINTENANCE_MESSAGE;
 
@@ -55,14 +65,17 @@ export default async function MaintenancePage() {
         </p>
 
         <div className="mt-2 flex items-center justify-center gap-3 text-xs">
-          <Link href="/" className="text-brand-600 hover:underline">
-            再読み込み
+          <Link href="/" prefetch={false} className="text-brand-600 hover:underline">
+            トップへ戻る
           </Link>
           <span className="text-slate-300">|</span>
           <Link href="/signin" className="text-slate-500 hover:underline">
             管理者ログイン
           </Link>
         </div>
+
+        {/* メンテナンス解除を検知したら自動でトップへ遷移する */}
+        <MaintenanceWatcher />
       </div>
     </div>
   );
