@@ -33,7 +33,14 @@ const SESSION_COOKIE_NAMES = [
  * ※ ここには /admin や /super-admin を含めない。
  *   「スーパー管理者以外は閲覧不可」を満たすため、role で判定する。
  */
-const MAINTENANCE_ALWAYS_ALLOW_PREFIXES = ['/maintenance', '/signin', '/api/auth'];
+const MAINTENANCE_ALWAYS_ALLOW_PREFIXES = [
+  '/maintenance',
+  '/signin',
+  '/api/auth',
+  // メンテナンス解除を検知して自動でトップへ戻すためのポーリング用公開 API。
+  // メンテナンス中でも 503 にせず状態 (ON/OFF) を返せるようにする。
+  '/api/maintenance-status',
+];
 
 async function isSuperAdmin(req: NextRequest): Promise<boolean> {
   try {
