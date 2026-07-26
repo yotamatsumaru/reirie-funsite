@@ -37,3 +37,23 @@ export const SubscriptionResponseSchema = z.object({
   currentPeriodEnd: z.iso.datetime(),
   cancelAtPeriodEnd: z.boolean(),
 });
+
+/**
+ * 管理画面 (SUPER_ADMIN) からの 1ユーザー分サブスク操作。
+ *   - action='sync'  : この顧客の Stripe サブスクを取得して DB を修復する
+ *                       (決済成功後に押せば INCOMPLETE → ACTIVE に直る)。
+ *   - action='grant' : Stripe を介さず DB に有料プランを手動付与する
+ *                       (コンプ/サポート対応)。months で有効期間 (月数) を指定可。
+ */
+export const AdminUserSubscriptionActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('sync') }),
+  z.object({
+    action: z.literal('grant'),
+    plan: z.enum(['STANDARD', 'PREMIUM']),
+    interval: z.enum(BILLING_INTERVALS),
+    months: z.number().int().min(1).max(60).optional(),
+  }),
+]);
+export type AdminUserSubscriptionActionInput = z.infer<
+  typeof AdminUserSubscriptionActionSchema
+>;

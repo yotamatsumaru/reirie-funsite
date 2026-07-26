@@ -16,6 +16,7 @@ import { RankBadge } from '@/components/membership/RankBadge';
 import { UserRowActions } from '../user-row-actions';
 import { WarningPanel, type WarningItem } from './warning-panel';
 import { PromoPanel } from './promo-panel';
+import { SubscriptionPanel } from './subscription-panel';
 import { getMemberRank } from '@/lib/membership-rank';
 import { getMemberRankTiers } from '@/lib/app-setting';
 import { safeGetPromoUntil } from '@/lib/points';
@@ -225,6 +226,15 @@ export default async function SuperAdminUserDetailPage({
                 }
               />
             </dl>
+
+            {/* サブスク修復 / 手動付与 (SUPER_ADMIN のみ / スタッフは閲覧のみ) */}
+            {!readOnly && (
+              <SubscriptionPanel
+                userId={user.id}
+                currentPlan={subscription?.planType ?? null}
+                currentStatus={subscription?.status ?? null}
+              />
+            )}
           </CardBody>
         </Card>
       </div>
