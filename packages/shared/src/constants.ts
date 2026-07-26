@@ -208,6 +208,22 @@ export const FREE_SHIPPING_THRESHOLD = 8000; // 円
 export const VIDEO_SIGNED_URL_TTL_SEC = 60 * 60 * 4; // 4時間
 export const LIVE_SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6時間
 
+/**
+ * サイト名・SEO メタ情報の共通定数。
+ *
+ * トップページ (root layout の metadata) とメンテナンスページで同じ値を使うことで、
+ * メンテナンス中でも <title> やサイトタイトルが変わらないようにする
+ * (メンテナンス中も SEO タイトルを固定するため)。
+ *
+ *  - SITE_NAME:           サイト略称 (title テンプレートのサフィックス等に使用)
+ *  - SITE_TITLE_DEFAULT:  ページ側で title を指定しない場合の既定タイトル (トップと共通)
+ *  - SITE_DESCRIPTION:    既定の meta description
+ */
+export const SITE_NAME = 'ReiRieRoom';
+export const SITE_TITLE_DEFAULT = 'ReiRieRoom | REIRIE 公式ファンクラブ';
+export const SITE_DESCRIPTION =
+  'REIRIE（黒宮れい × 金子理江）公式ファンクラブ「ReiRieRoom」。限定コンテンツ・ライブ配信・特典会・先行チケット・公式グッズ。';
+
 /** 都道府県一覧 (会員登録・配送先などの住所入力で共通利用) */
 export const PREFECTURES = [
   '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県',

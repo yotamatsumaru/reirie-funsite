@@ -5,6 +5,7 @@ import { Providers } from '@/components/layout/Providers';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Footer } from '@/components/layout/Footer';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
+import { SITE_NAME, SITE_TITLE_DEFAULT, SITE_DESCRIPTION } from '@idol/shared';
 
 // ===== City Editorial タイポグラフィ =====
 // 旧: Cormorant Garamond（英字セリフ）+ Zen Maru Gothic（丸ゴシック）+ Shrikhand（装飾）
@@ -19,11 +20,10 @@ const zenKaku = Zen_Kaku_Gothic_New({
 
 export const metadata: Metadata = {
   title: {
-    default: 'ReiRieRoom | REIRIE 公式ファンクラブ',
-    template: '%s | ReiRieRoom',
+    default: SITE_TITLE_DEFAULT,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    'REIRIE（黒宮れい × 金子理江）公式ファンクラブ「ReiRieRoom」。限定コンテンツ・ライブ配信・特典会・先行チケット・公式グッズ。',
+  description: SITE_DESCRIPTION,
   robots: { index: true, follow: true },
 };
 
