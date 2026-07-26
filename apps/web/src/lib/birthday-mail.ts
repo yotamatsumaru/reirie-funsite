@@ -417,8 +417,10 @@ export function buildBirthdayMailHtml(params: {
 }): string {
   const safeBody = escapeHtml(params.body).replace(/\n/g, '<br>');
   const mypageUrl = `${env.appBaseUrl.replace(/\/$/, '')}/me`;
+  // ヒーロー画像。読み込めなかった場合でも壊れた「?」アイコンや大きな空白が
+  // 目立たないよう、alt を空にし、背景をブランドカラーで塗り、高さを抑える。
   const hero = params.imageUrl
-    ? `<img src="${escapeHtml(params.imageUrl)}" alt="Happy Birthday" width="100%" style="display:block;width:100%;max-width:100%;height:auto;border-radius:16px 16px 0 0;" />`
+    ? `<a href="${escapeHtml(mypageUrl)}" style="display:block;line-height:0;text-decoration:none;background:linear-gradient(135deg,#c263a2 0%,#7c5295 55%,#4a2d5c 100%);"><img src="${escapeHtml(params.imageUrl)}" alt="" width="600" style="display:block;width:100%;max-width:100%;height:auto;max-height:340px;border:0;outline:none;-ms-interpolation-mode:bicubic;object-fit:cover;" /></a>`
     : '';
 
   return `<!DOCTYPE html>

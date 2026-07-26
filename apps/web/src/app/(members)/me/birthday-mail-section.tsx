@@ -43,6 +43,7 @@ export function BirthdayMailSection({ mails }: { mails: BirthdayMailItem[] }) {
 function BirthdayMailCard({ mail }: { mail: BirthdayMailItem }) {
   const [open, setOpen] = useState(false);
   const [read, setRead] = useState(Boolean(mail.readAt));
+  const [imageFailed, setImageFailed] = useState(false);
 
   async function toggle() {
     const next = !open;
@@ -81,12 +82,13 @@ function BirthdayMailCard({ mail }: { mail: BirthdayMailItem }) {
 
       {open && (
         <div className="border-t border-brand-100 bg-white">
-          {mail.imageUrl && (
+          {mail.imageUrl && !imageFailed && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={mail.imageUrl}
-              alt="お誕生日メッセージ"
-              className="w-full object-cover"
+              alt=""
+              className="max-h-80 w-full object-cover"
+              onError={() => setImageFailed(true)}
             />
           )}
           <div className="px-4 py-4">
