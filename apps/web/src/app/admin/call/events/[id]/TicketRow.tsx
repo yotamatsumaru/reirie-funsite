@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
+import { formatJstDateTime } from '@idol/shared';
 
 type TicketStatus = 'WAITING' | 'IN_WAITING_ROOM' | 'IN_MAIN_ROOM' | 'DONE' | 'NO_SHOW';
 
@@ -83,7 +84,7 @@ export function TicketRow({
             limitSeconds={perFanSeconds}
           />
         ) : enteredMainAt ? (
-          new Date(enteredMainAt).toLocaleTimeString('ja-JP')
+          formatJstDateTime(enteredMainAt)
         ) : (
           '—'
         )}

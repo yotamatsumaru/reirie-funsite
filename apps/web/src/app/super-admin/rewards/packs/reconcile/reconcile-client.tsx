@@ -6,6 +6,7 @@
  *  - 「支払い済みを付与する」で確定 (Pui 付与)
  */
 import { useState } from 'react';
+import { formatJstDateTime } from '@idol/shared';
 
 type Candidate = {
   purchaseId: string;
@@ -201,7 +202,7 @@ export function ReconcileClient() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-500">
-                      {new Date(c.createdAt).toLocaleString('ja-JP')}
+                      {formatJstDateTime(c.createdAt)}
                     </td>
                   </tr>
                 ))}

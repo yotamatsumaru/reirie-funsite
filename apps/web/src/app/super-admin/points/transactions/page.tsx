@@ -12,6 +12,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { findPuiAnomalies } from '@/lib/points';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'Pui 取引ログ | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -214,7 +215,7 @@ export default async function PointsTransactionsPage({
                   transactions.map((t) => (
                     <tr key={t.id}>
                       <td className="px-4 py-3 text-xs text-slate-500">
-                        {new Date(t.createdAt).toLocaleString('ja-JP')}
+                        {formatJstDateTime(t.createdAt)}
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-slate-700">{t.user?.email ?? t.userId}</p>

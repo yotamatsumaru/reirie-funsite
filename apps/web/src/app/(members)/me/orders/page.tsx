@@ -12,7 +12,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from '@idol/shared';
+import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, formatJstDateTime } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
@@ -78,7 +78,7 @@ export default async function MeOrdersPage() {
                             <p className="font-mono text-sm text-slate-700">{entry.documentNumber}</p>
                           </div>
                           <p className="mt-0.5 text-xs text-slate-500">
-                            {new Date(entry.createdAt).toLocaleString('ja-JP')}
+                            {formatJstDateTime(entry.createdAt)}
                           </p>
                           <p className="mt-1 text-xs text-slate-400">{entry.summaryLabel}</p>
                         </div>
@@ -116,7 +116,7 @@ export default async function MeOrdersPage() {
                           </p>
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500">
-                          {new Date(entry.createdAt).toLocaleString('ja-JP')}
+                          {formatJstDateTime(entry.createdAt)}
                         </p>
                       </div>
                       <div className="text-right">

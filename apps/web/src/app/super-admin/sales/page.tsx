@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/Badge';
 import {
   PAYMENT_KIND_LABELS,
   PAYMENT_STATUS_LABELS,
+  formatJstDate,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { Download } from 'lucide-react';
@@ -202,7 +203,7 @@ export default async function SuperAdminSalesPage({
                   <div
                     className={`w-full rounded-t ${s.amount > 0 ? 'bg-brand-500' : 'bg-slate-200'}`}
                     style={{ height: `${h}%` }}
-                    title={`${s.date.toLocaleDateString('ja-JP')}: ${fmtJpy(s.amount)}`}
+                    title={`${formatJstDate(s.date)}: ${fmtJpy(s.amount)}`}
                   />
                   <span className="text-[10px] text-slate-400">
                     {s.date.getMonth() + 1}/{s.date.getDate()}
@@ -316,6 +317,7 @@ export default async function SuperAdminSalesPage({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-600">
                       {new Date(p.createdAt).toLocaleDateString('ja-JP', {
+                        timeZone: 'Asia/Tokyo',
                         month: '2-digit',
                         day: '2-digit',
                       })}

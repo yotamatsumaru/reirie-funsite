@@ -204,6 +204,7 @@ export async function sendAdminInvitationEmail(params: {
   note?: string | null;
 }): Promise<void> {
   const expiry = params.expiresAt.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

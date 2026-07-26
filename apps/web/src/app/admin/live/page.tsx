@@ -4,6 +4,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'ライブ配信管理' };
 export const dynamic = 'force-dynamic';
@@ -69,7 +70,7 @@ export default async function AdminLivePage() {
                 </div>
                 <p className="text-xs text-slate-500">
                   {l.scheduledStartAt
-                    ? new Date(l.scheduledStartAt).toLocaleString('ja-JP')
+                    ? formatJstDateTime(l.scheduledStartAt)
                     : '-'}
                 </p>
               </CardBody>
@@ -101,7 +102,7 @@ export default async function AdminLivePage() {
                   <td className="px-4 py-3">{l.accessLevel}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">
                     {l.scheduledStartAt
-                      ? new Date(l.scheduledStartAt).toLocaleString('ja-JP')
+                      ? formatJstDateTime(l.scheduledStartAt)
                       : '-'}
                   </td>
                   <td className="px-4 py-3">

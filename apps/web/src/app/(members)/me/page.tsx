@@ -10,6 +10,8 @@ import {
   FREE_SHIPPING_THRESHOLD_BY_PLAN,
   PLAN_PUI_MULTIPLIER,
   canUseShop,
+  formatJstDate,
+  formatJstDateTime,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -106,7 +108,7 @@ export default async function MePage() {
           </div>
           {sub?.currentPeriodEnd && (
             <p className="text-sm text-slate-500">
-              次回更新日: {new Date(sub.currentPeriodEnd).toLocaleDateString('ja-JP')}
+              次回更新日: {formatJstDate(sub.currentPeriodEnd)}
             </p>
           )}
           {plan === 'FREE' && (
@@ -250,7 +252,7 @@ export default async function MePage() {
                           <p className="text-sm text-slate-700">{label}</p>
                         </div>
                         <p className="mt-0.5 text-xs text-slate-500">
-                          {new Date(entry.createdAt).toLocaleString('ja-JP')}
+                          {formatJstDateTime(entry.createdAt)}
                         </p>
                       </div>
                       <div className="text-right">

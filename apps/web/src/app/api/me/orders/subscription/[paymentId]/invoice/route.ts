@@ -9,7 +9,7 @@
 import { prisma } from '@idol/db';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
-import { PAYMENT_STATUS_LABELS, PLAN_LABELS, type PlanTypeLiteral } from '@idol/shared';
+import { PAYMENT_STATUS_LABELS, PLAN_LABELS, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { renderInvoicePdf, type InvoiceDocument } from '@/lib/invoice-pdf';
 
 export const runtime = 'nodejs';
@@ -41,7 +41,7 @@ function buildSubscriptionInvoiceDocument(payment: {
 
   const periodLabel =
     payment.subscription != null
-      ? `対象期間: ${payment.subscription.currentPeriodStart.toLocaleDateString('ja-JP')} 〜 ${payment.subscription.currentPeriodEnd.toLocaleDateString('ja-JP')}`
+      ? `対象期間: ${formatJstDate(payment.subscription.currentPeriodStart)} 〜 ${formatJstDate(payment.subscription.currentPeriodEnd)}`
       : undefined;
 
   return {

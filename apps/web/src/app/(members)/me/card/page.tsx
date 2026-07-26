@@ -9,6 +9,7 @@ import {
   CARD_BG_SLOT_BY_PLAN,
   jstDateKey,
   previousJstDateKey,
+  formatJstDate,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { auth } from '@/auth';
@@ -196,7 +197,7 @@ export default async function MemberCardPage() {
                 {user?.displayName ?? 'ファン'} 様
               </p>
               <p className={`mt-1.5 text-[10px] sm:text-xs ${theme.accent}`}>
-                加入日 {new Date(joinedAt).toLocaleDateString('ja-JP')}
+                加入日 {formatJstDate(joinedAt)}
               </p>
             </div>
             <div className="shrink-0 text-right">

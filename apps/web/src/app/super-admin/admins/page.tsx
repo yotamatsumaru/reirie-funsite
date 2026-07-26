@@ -12,8 +12,7 @@ import {
   type UserRoleLiteral,
   normalizeAdminCapabilities,
   type AdminCapabilityLiteral,
-  ADMIN_CAPABILITY_LABELS,
-} from '@idol/shared';
+  ADMIN_CAPABILITY_LABELS, formatJstDate} from '@idol/shared';
 import { AdminRowActions } from './admin-row-actions';
 import { AdminCapabilityEditor } from './admin-capability-editor';
 import { GrantAdminForm } from './grant-admin-form';
@@ -274,7 +273,7 @@ function AdminTable({ users, readOnly = false }: { users: UserRow[]; readOnly?: 
                   )}
                 </td>
                 <td className="px-4 py-3 align-top text-xs text-slate-600">
-                  {new Date(u.createdAt).toLocaleDateString('ja-JP')}
+                  {formatJstDate(u.createdAt)}
                 </td>
                 {!readOnly && (
                   <td className="px-4 py-3 text-right align-top">

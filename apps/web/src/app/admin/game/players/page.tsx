@@ -6,6 +6,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'プレイヤー進捗' };
 export const dynamic = 'force-dynamic';
@@ -96,7 +97,7 @@ export default async function AdminPlayersPage() {
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">{p.totalPlayMinutes} 分</td>
                 <td className="px-4 py-2 text-xs text-slate-500">
-                  {p.updatedAt.toLocaleString('ja-JP')}
+                  {formatJstDateTime(p.updatedAt)}
                 </td>
               </tr>
             ))}
