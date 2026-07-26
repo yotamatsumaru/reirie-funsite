@@ -192,6 +192,12 @@ export default async function MePage() {
             {plan !== 'PREMIUM' && (
               <p className="mt-1 text-xs text-slate-500">プレミアムで 1080p に</p>
             )}
+            <Link
+              href="/me/videos"
+              className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline"
+            >
+              動画を見る →
+            </Link>
           </div>
           {/* 物販 (ショップ) / 送料 */}
           {canShop ? (

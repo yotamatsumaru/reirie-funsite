@@ -1,0 +1,113 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { prisma } from '@idol/db';
+import { Card, CardBody, CardHeader } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { requireCapabilityPage } from '@/auth';
+import { formatJstDateTime } from '@idol/shared';
+import { VideoAdminActions } from './actions';
+
+export const metadata: Metadata = { title: '動画詳細' };
+export const dynamic = 'force-dynamic';
+
+const STATUS_LABEL: Record<string, string> = {
+  UPLOADING: 'アップロード済み（未エンコード）',
+  PROCESSING: 'エンコード中',
+  READY: '公開可能（READY）',
+  FAILED: '失敗',
+};
+
+function tone(status: string): 'success' | 'danger' | 'info' | 'warning' {
+  if (status === 'READY') return 'success';
+  if (status === 'FAILED') return 'danger';
+  if (status === 'PROCESSING') return 'warning';
+  return 'info';
+}
+
+export default async function AdminVideoDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  await requireCapabilityPage('CONTENT');
+  const { id } = await params;
+
+  const video = await prisma.video.findUnique({
+    where: { id },
+    include: { _count: { select: { viewLogs: true } } },
+  });
+  if (!video) notFound();
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-4">
+      <div>
+        <Link href="/admin/videos" className="text-sm text-slate-500 hover:text-slate-700">
+          ← 動画管理へ戻る
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">{video.title}</h1>
+          <Badge tone={tone(video.status)}>{STATUS_LABEL[video.status] ?? video.status}</Badge>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">基本情報</h2>
+        </CardHeader>
+        <CardBody>
+          <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-2">
+            <Field label="アクセス範囲" value={video.accessLevel} />
+            <Field
+              label="尺"
+              value={video.durationSeconds ? `${Math.floor(video.durationSeconds / 60)}分${video.durationSeconds % 60}秒` : '—'}
+            />
+            <Field label="視聴回数" value={`${video._count.viewLogs} 回`} />
+            <Field
+              label="公開日時"
+              value={video.publishedAt ? formatJstDateTime(video.publishedAt) : '未公開'}
+            />
+            <Field
+              label="配信期限"
+              value={video.expiresAt ? formatJstDateTime(video.expiresAt) : 'なし'}
+            />
+            <Field label="作成" value={formatJstDateTime(video.createdAt)} />
+          </dl>
+          {video.description && (
+            <p className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-3 text-sm text-slate-600">
+              {video.description}
+            </p>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">エンコード / ストレージ</h2>
+        </CardHeader>
+        <CardBody>
+          <dl className="grid grid-cols-1 gap-y-2 text-sm">
+            <Field label="ソースキー (S3)" value={video.s3SourceKey} mono />
+            <Field label="HLSキー (S3)" value={video.s3HlsKey ?? '未生成'} mono />
+            <Field label="MediaConvert ジョブ" value={video.mediaConvertJob ?? '—'} mono />
+          </dl>
+        </CardBody>
+      </Card>
+
+      <VideoAdminActions
+        videoId={video.id}
+        status={video.status}
+        hasHls={Boolean(video.s3HlsKey)}
+      />
+    </div>
+  );
+}
+
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex flex-col">
+      <dt className="text-xs text-slate-400">{label}</dt>
+      <dd className={`text-slate-700 ${mono ? 'break-all font-mono text-xs' : ''}`}>{value}</dd>
+    </div>
+  );
+}

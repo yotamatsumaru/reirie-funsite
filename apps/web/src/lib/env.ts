@@ -90,6 +90,22 @@ export const env = {
     assetBucket: optional('S3_ASSET_BUCKET') ?? '',
   },
 
+  /**
+   * AWS Elemental MediaConvert (動画 HLS エンコード)
+   *   - endpoint : アカウント固有の MediaConvert エンドポイント
+   *       (`aws mediaconvert describe-endpoints` で取得)。空なら SDK が
+   *        describeEndpoints で自動解決する。
+   *   - roleArn  : MediaConvert が S3 を読み書きするための IAM ロール ARN
+   *   - queueArn : (任意) 使用するキュー ARN。空ならデフォルトキュー
+   *   - outputKeyPrefix : HLS 出力の S3 プレフィックス (videoBucket 内)
+   */
+  mediaConvert: {
+    endpoint: optional('MEDIACONVERT_ENDPOINT') ?? '',
+    roleArn: optional('MEDIACONVERT_ROLE_ARN') ?? '',
+    queueArn: optional('MEDIACONVERT_QUEUE_ARN') ?? '',
+    outputKeyPrefix: optional('MEDIACONVERT_OUTPUT_PREFIX') ?? 'hls',
+  },
+
   cloudfront: {
     videoDomain: optional('CLOUDFRONT_VIDEO_DOMAIN') ?? '',
     assetDomain: optional('CLOUDFRONT_ASSET_DOMAIN') ?? '',
