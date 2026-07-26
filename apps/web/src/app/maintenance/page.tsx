@@ -11,14 +11,18 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Sparkles, Info } from 'lucide-react';
-import { DEFAULT_MAINTENANCE_MESSAGE } from '@idol/shared';
+import { DEFAULT_MAINTENANCE_MESSAGE, SITE_TITLE_DEFAULT, SITE_DESCRIPTION } from '@idol/shared';
 import { getMaintenanceSetting } from '@/lib/app-setting';
 import { isMaintenanceModeAsync } from '@/lib/maintenance-flag';
 import { MaintenanceWatcher } from './maintenance-watcher';
 
 export const metadata: Metadata = {
-  title: 'メンテナンス中',
-  description: 'システムメンテナンス中です',
+  // 【重要 / SEO】メンテナンス中はトップページ等が /maintenance にリダイレクトされるため、
+  // ここで独自タイトル (例: 「メンテナンス中」) を出すと、その間だけサイトの
+  // <title> やSEOタイトルが変わってしまう。これを防ぐため、トップページと同じ
+  // 固定タイトル・説明を absolute で指定し、テンプレートも適用させない。
+  title: { absolute: SITE_TITLE_DEFAULT },
+  description: SITE_DESCRIPTION,
   robots: { index: false, follow: false },
 };
 
