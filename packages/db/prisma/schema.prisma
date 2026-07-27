@@ -404,9 +404,10 @@ model User {
   callSerialsUsed       CallSerial[] @relation("CallSerialUsedBy")
 
   // Membership / Pui (会員カード & Pui)
-  puiTransactions   PuiTransaction[]
-  loginBonusGrants  LoginBonusGrant[]
-  socialShareGrants SocialShareGrant[]
+  puiTransactions    PuiTransaction[]
+  loginBonusGrants   LoginBonusGrant[]
+  socialShareGrants  SocialShareGrant[]
+  socialShareIntents SocialShareIntent[]
 
   // Mini Game (あっち向いてホイ等)
   miniGamePlays      MiniGamePlay[]
@@ -1538,6 +1539,27 @@ model SocialShareGrant {
   @@unique([userId, date, platform])
   @@index([userId, date])
   @@map("social_share_grants")
+}
+
+/// SNS シェア「意図」の記録。
+/// 実際にシェアボタン (X の共有インテント / Web 共有 API 等) を開いたときに 1 行作成する。
+/// Pui の受取 (SocialShareGrant 作成) は、この意図が存在し、かつ一定の
+/// 経過時間 (dwell) を満たした場合のみ許可する。これにより「シェアせずに
+/// 受取ボタンだけ押して Pui を得る」不正を防ぐ (サーバー側で強制)。
+/// userId + date + platform のユニーク制約で 1 日 1 意図に集約する。
+model SocialShareIntent {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  date      String // JST 基準の "YYYY-MM-DD"
+  platform  SocialPlatform
+  openedAt  DateTime       @default(now()) @map("opened_at") // 直近でシェアを開いた時刻
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, platform])
+  @@index([userId, date])
+  @@map("social_share_intents")
 }
 
 /// ミニゲームの 1 プレイ記録。
