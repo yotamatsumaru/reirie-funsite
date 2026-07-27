@@ -29,7 +29,15 @@ export default async function AdminOrdersPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">注文管理</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">注文管理</h1>
+        <Link
+          href="/admin/orders/shipping"
+          className="inline-flex items-center rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          一括発送 (ヤマトB2)
+        </Link>
+      </div>
 
       {/* モバイル: カードリスト */}
       <div className="space-y-3 md:hidden">
