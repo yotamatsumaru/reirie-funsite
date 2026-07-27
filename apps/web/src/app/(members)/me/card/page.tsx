@@ -88,26 +88,32 @@ export default async function MemberCardPage() {
   // 会員カード背景: スーパー管理者がアップロードした画像 (プランごと・16:10) を優先し、
   // 未設定ならコード同梱の初期デザイン (public/card/*.webp) にフォールバックする。
   const uploadedCardBg = await getSiteImageUrl(CARD_BG_SLOT_BY_PLAN[plan]);
-  const [user, rates, loginGrant, todayGrant, shareGrants] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { displayName: true, email: true, pui: true, createdAt: true },
-    }),
-    getPuiRates(),
-    // 連続日数算出のため前日の付与を見る
-    prisma.loginBonusGrant.findUnique({
-      where: { userId_date: { userId, date: previousJstDateKey(today) } },
-      select: { streak: true },
-    }),
-    prisma.loginBonusGrant.findUnique({
-      where: { userId_date: { userId, date: today } },
-      select: { streak: true },
-    }),
-    prisma.socialShareGrant.findMany({
-      where: { userId, date: today },
-      select: { platform: true },
-    }),
-  ]);
+  const [user, rates, loginGrant, todayGrant, shareGrants, shareIntents] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true, email: true, pui: true, createdAt: true },
+      }),
+      getPuiRates(),
+      // 連続日数算出のため前日の付与を見る
+      prisma.loginBonusGrant.findUnique({
+        where: { userId_date: { userId, date: previousJstDateKey(today) } },
+        select: { streak: true },
+      }),
+      prisma.loginBonusGrant.findUnique({
+        where: { userId_date: { userId, date: today } },
+        select: { streak: true },
+      }),
+      prisma.socialShareGrant.findMany({
+        where: { userId, date: today },
+        select: { platform: true },
+      }),
+      // 当日「シェアボタンを開いた」記録 (未受取のとき受取ボタンの有効判定に使う)
+      prisma.socialShareIntent.findMany({
+        where: { userId, date: today },
+        select: { platform: true },
+      }),
+    ]);
 
   const theme = CARD_THEME[plan] ?? CARD_THEME.FREE;
   // アップロード画像があればそれを、無ければ初期デザインを背景に使う。
@@ -129,9 +135,11 @@ export default async function MemberCardPage() {
   });
 
   const claimedSet = new Set(shareGrants.map((g) => g.platform));
+  const intendedSet = new Set(shareIntents.map((i) => i.platform));
   const shares = SOCIAL_PLATFORMS.map((p) => ({
     platform: p,
     claimedToday: claimedSet.has(p),
+    sharedToday: intendedSet.has(p),
   }));
 
   const shareUrl = env.appBaseUrl;

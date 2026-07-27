@@ -5,18 +5,21 @@
  *  - ログインボーナス受取 (1日1回)
  *  - SNS シェア (X / Instagram, 各1日1回)
  *
- * シェアは「共有ウィンドウを開く → 報告して付与」方式。
+ * シェアは「シェアボタンを開く (= 意図を記録) → 数秒後に受取」の 2 段階方式。
+ * シェアボタンを一度も押していないと受取ボタンは押せず、サーバー側でも
+ * 意図が無い / 待機不足の受取は拒否する (シェアせずに Pui を得る不正を防ぐ)。
  * X はインテント URL でその場で共有可能。Instagram は Web 共有 API か
- * 公式アプリ誘導 + 手動報告とする (Instagram には汎用 Web 共有インテントが無いため)。
+ * 公式アプリ誘導とする (Instagram には汎用 Web 共有インテントが無いため)。
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { buildLoginBonusCalendar } from '@idol/shared';
+import { buildLoginBonusCalendar, SOCIAL_SHARE_MIN_DWELL_SEC } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoginBonusCalendar } from './login-bonus-calendar';
 
-type ShareState = { platform: 'X' | 'INSTAGRAM'; claimedToday: boolean };
+type Platform = 'X' | 'INSTAGRAM';
+type ShareState = { platform: Platform; claimedToday: boolean; sharedToday?: boolean };
 
 export function PointActions({
   shareUrl,
@@ -44,6 +47,52 @@ export function PointActions({
 
   const xClaimed = shares.find((s) => s.platform === 'X')?.claimedToday ?? false;
   const igClaimed = shares.find((s) => s.platform === 'INSTAGRAM')?.claimedToday ?? false;
+
+  // 各プラットフォームで「シェアボタンを押して受取可能になる時刻(ms)」。
+  // サーバー既存の意図 (sharedToday) があれば即受取可能 (readyAt=0)、
+  // このセッションでシェアした場合は dwell 経過後に受取可能とする。
+  const [readyAt, setReadyAt] = useState<Record<Platform, number | null>>(() => ({
+    X: shares.find((s) => s.platform === 'X')?.sharedToday ? 0 : null,
+    INSTAGRAM: shares.find((s) => s.platform === 'INSTAGRAM')?.sharedToday ? 0 : null,
+  }));
+  // 残り待機秒数の再描画用 tick
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const anyPending = Object.values(readyAt).some(
+      (t) => t !== null && t > Date.now(),
+    );
+    if (!anyPending) return;
+    const id = setInterval(() => setTick((n) => n + 1), 500);
+    return () => clearInterval(id);
+  }, [readyAt]);
+
+  const remainingSec = useCallback(
+    (platform: Platform): number => {
+      const t = readyAt[platform];
+      if (t === null) return -1; // まだシェアしていない
+      return Math.max(0, Math.ceil((t - Date.now()) / 1000));
+    },
+    [readyAt],
+  );
+
+  /** シェア意図をサーバーに記録し、dwell 後に受取可能にする。 */
+  const markShared = useCallback(async (platform: Platform) => {
+    // 楽観的に「待機開始」状態へ (シェアウィンドウを開いた直後に呼ばれる)
+    setReadyAt((prev) => ({
+      ...prev,
+      [platform]: Date.now() + SOCIAL_SHARE_MIN_DWELL_SEC * 1000,
+    }));
+    try {
+      await fetch('/api/me/social-share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, action: 'intent' }),
+      });
+    } catch {
+      /* 意図記録の失敗は致命ではない (受取時にサーバーが再判定する) */
+    }
+  }, []);
 
   async function claimLogin() {
     setBusy('login');
@@ -81,7 +130,7 @@ export function PointActions({
       const res = await fetch('/api/me/social-share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform }),
+        body: JSON.stringify({ platform, action: 'claim' }),
       });
       const j = (await res.json()) as {
         granted?: boolean;
@@ -107,28 +156,42 @@ export function PointActions({
       shareText,
     )}&url=${encodeURIComponent(shareUrl)}`;
     window.open(intent, '_blank', 'noopener,noreferrer,width=600,height=500');
+    // シェアウィンドウを開いた = シェア意図。受取を dwell 後に解禁する。
+    void markShared('X');
+    setMessage({
+      tone: 'ok',
+      text: `X で投稿したら、${SOCIAL_SHARE_MIN_DWELL_SEC} 秒ほど待って「受取」を押してください`,
+    });
   }
 
   async function shareToInstagram() {
     // Instagram には汎用 Web 共有インテントが無いため、Web 共有 API を試し、
     // 使えなければリンクをコピーしてアプリでの共有を促す。
     const data = { title: 'Reirie', text: shareText, url: shareUrl };
+    let shared = false;
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share(data);
-        return;
+        shared = true;
       }
     } catch {
       /* ユーザーがキャンセルした場合などは無視 */
     }
-    try {
-      await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-      setMessage({
-        tone: 'ok',
-        text: 'シェア用テキストをコピーしました。Instagram に貼り付けて投稿してください',
-      });
-    } catch {
-      setMessage({ tone: 'err', text: 'コピーに失敗しました。手動でシェアしてください' });
+    if (!shared) {
+      try {
+        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        setMessage({
+          tone: 'ok',
+          text: 'シェア用テキストをコピーしました。Instagram に貼り付けて投稿してください',
+        });
+        shared = true;
+      } catch {
+        setMessage({ tone: 'err', text: 'コピーに失敗しました。手動でシェアしてください' });
+      }
+    }
+    if (shared) {
+      // 共有 API 成功 or コピー完了 = シェア意図。受取を dwell 後に解禁する。
+      void markShared('INSTAGRAM');
     }
   }
 
@@ -194,50 +257,87 @@ export function PointActions({
 
         <div className="mt-3 space-y-3">
           {/* X */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-slate-700">X (旧Twitter)</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={shareToX}>
-                Xでシェア
-              </Button>
-              {xClaimed ? (
-                <Badge tone="success">受取済み</Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  loading={busy === 'X'}
-                  onClick={() => reportShare('X')}
-                >
-                  +{rates.socialSharePui} Pui 受取
-                </Button>
-              )}
-            </div>
-          </div>
+          <ShareRow
+            label="X (旧Twitter)"
+            shareLabel="Xでシェア"
+            claimed={xClaimed}
+            remaining={remainingSec('X')}
+            busy={busy === 'X'}
+            reward={rates.socialSharePui}
+            onShare={shareToX}
+            onClaim={() => reportShare('X')}
+          />
 
           {/* Instagram */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-slate-700">Instagram</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={shareToInstagram}>
-                Instagramでシェア
-              </Button>
-              {igClaimed ? (
-                <Badge tone="success">受取済み</Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  loading={busy === 'INSTAGRAM'}
-                  onClick={() => reportShare('INSTAGRAM')}
-                >
-                  +{rates.socialSharePui} Pui 受取
-                </Button>
-              )}
-            </div>
-          </div>
+          <ShareRow
+            label="Instagram"
+            shareLabel="Instagramでシェア"
+            claimed={igClaimed}
+            remaining={remainingSec('INSTAGRAM')}
+            busy={busy === 'INSTAGRAM'}
+            reward={rates.socialSharePui}
+            onShare={shareToInstagram}
+            onClaim={() => reportShare('INSTAGRAM')}
+          />
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
-          ※ シェアボタンで投稿後、「受取」を押すと Pui が付与されます。
+          ※ まず「シェア」ボタンから投稿してください。投稿後に「受取」を押すと Pui が付与されます。
+          シェアせずに受け取ることはできません。
         </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * SNS 1 行ぶんの UI。
+ *  - remaining === -1 : まだシェアしていない → 受取ボタンは無効 (シェアを促す)
+ *  - remaining  >  0 : シェア済みだが待機中 → 「あとN秒」表示で無効
+ *  - remaining === 0 : 受取可能
+ */
+function ShareRow({
+  label,
+  shareLabel,
+  claimed,
+  remaining,
+  busy,
+  reward,
+  onShare,
+  onClaim,
+}: {
+  label: string;
+  shareLabel: string;
+  claimed: boolean;
+  remaining: number;
+  busy: boolean;
+  reward: number;
+  onShare: () => void;
+  onClaim: () => void;
+}) {
+  const notShared = remaining === -1;
+  const waiting = remaining > 0;
+  const claimDisabled = notShared || waiting || busy;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <span className="text-sm text-slate-700">{label}</span>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={onShare} disabled={claimed}>
+          {shareLabel}
+        </Button>
+        {claimed ? (
+          <Badge tone="success">受取済み</Badge>
+        ) : (
+          <Button
+            size="sm"
+            loading={busy}
+            disabled={claimDisabled}
+            title={notShared ? 'まず「シェア」ボタンから投稿してください' : undefined}
+            onClick={onClaim}
+          >
+            {waiting ? `受取まであと ${remaining} 秒` : `+${reward} Pui 受取`}
+          </Button>
+        )}
       </div>
     </div>
   );

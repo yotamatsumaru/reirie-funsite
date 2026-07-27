@@ -29,6 +29,7 @@ import {
   requiresShipping,
   canTransitionRedemptionStatus,
   isPromoActive,
+  SOCIAL_SHARE_MIN_DWELL_SEC,
   type PuiRateSettings,
   type PlanTypeLiteral,
   type SocialPlatformLiteral,
@@ -321,11 +322,50 @@ export async function grantLoginBonus(
 
 export type SocialShareResult =
   | { granted: true; amount: number; balance: number; alreadyGranted: false }
-  | { granted: false; alreadyGranted: true; balance: number };
+  | { granted: false; alreadyGranted: true; balance: number }
+  // シェア意図が無い / 待機時間が不足しているため受取を拒否
+  | {
+      granted: false;
+      alreadyGranted: false;
+      reason: 'no_intent' | 'too_soon';
+      retryAfterSec?: number;
+    };
+
+/**
+ * SNS シェアの「意図」を記録する (シェアボタンを開いた瞬間に呼ぶ)。
+ *  - Pui はまだ付与しない。openedAt を現在時刻に更新 (upsert)。
+ *  - 既に当日受取済みなら意図は不要 (no-op) として扱う。
+ */
+export async function recordSocialShareIntent(
+  userId: string,
+  platform: SocialPlatformLiteral,
+  now: Date = new Date(),
+): Promise<{ ok: true; alreadyGranted: boolean; minDwellSec: number }> {
+  const today = jstDateKey(now);
+
+  const grant = await prisma.socialShareGrant.findUnique({
+    where: { userId_date_platform: { userId, date: today, platform } },
+    select: { id: true },
+  });
+  if (grant) {
+    return { ok: true, alreadyGranted: true, minDwellSec: SOCIAL_SHARE_MIN_DWELL_SEC };
+  }
+
+  await prisma.socialShareIntent.upsert({
+    where: { userId_date_platform: { userId, date: today, platform } },
+    create: { userId, date: today, platform, openedAt: now },
+    update: { openedAt: now },
+  });
+
+  return { ok: true, alreadyGranted: false, minDwellSec: SOCIAL_SHARE_MIN_DWELL_SEC };
+}
 
 /**
  * SNS シェアによる Pui 付与。
  *  - 1 プラットフォーム 1 日 1 回まで (userId+date+platform のユニーク制約)。
+ *  - 事前に recordSocialShareIntent で当日のシェア意図が記録されており、
+ *    かつ意図から SOCIAL_SHARE_MIN_DWELL_SEC 秒以上経過している場合のみ付与する。
+ *    これにより「シェアせずに受取だけ押す」不正をサーバー側で防ぐ。
  */
 export async function grantSocialShare(
   userId: string,
@@ -344,6 +384,26 @@ export async function grantSocialShare(
       select: { pui: true },
     });
     return { granted: false, alreadyGranted: true, balance: u?.pui ?? 0 };
+  }
+
+  // --- シェア意図の検証: 当日の意図が無ければ拒否 (シェアボタン未使用) ---
+  const intent = await prisma.socialShareIntent.findUnique({
+    where: { userId_date_platform: { userId, date: today, platform } },
+    select: { openedAt: true },
+  });
+  if (!intent) {
+    return { granted: false, alreadyGranted: false, reason: 'no_intent' };
+  }
+
+  // 意図から一定時間 (dwell) 経過していなければ拒否 (投稿する時間を確保させる)
+  const elapsedSec = Math.floor((now.getTime() - intent.openedAt.getTime()) / 1000);
+  if (elapsedSec < SOCIAL_SHARE_MIN_DWELL_SEC) {
+    return {
+      granted: false,
+      alreadyGranted: false,
+      reason: 'too_soon',
+      retryAfterSec: SOCIAL_SHARE_MIN_DWELL_SEC - elapsedSec,
+    };
   }
 
   try {

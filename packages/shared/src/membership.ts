@@ -58,6 +58,13 @@ export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatformLiteral, string> = {
   INSTAGRAM: 'Instagram',
 };
 
+/**
+ * シェアの意図 (シェアボタンを開いた) を記録してから、Pui 受取を許可するまでの
+ * 最小待機秒数。実際に投稿する時間を確保させ、「開いてすぐ受取」を防ぐ。
+ * また、意図の有効期限もこの日 (JST) の範囲内 (= 当日中) とする。
+ */
+export const SOCIAL_SHARE_MIN_DWELL_SEC = 8;
+
 // ---------------------------------------------------------------------
 // Pui 付与レート設定 (管理画面で変更可能・DB に永続化)
 // ---------------------------------------------------------------------
@@ -211,8 +218,16 @@ export function isPuiBalanceConsistent(
 // API 入力スキーマ
 // ---------------------------------------------------------------------
 
+/**
+ * SNS シェア API の入力。
+ *  - action='intent': シェアボタンを開いた記録を残す (Pui はまだ付与しない)。
+ *  - action='claim' : 受取。事前の intent が存在し dwell を満たす場合のみ付与。
+ *
+ * action 省略時は後方互換のため 'claim' として扱う (サーバー側で補完)。
+ */
 export const SocialShareInputSchema = z.object({
   platform: z.enum(SOCIAL_PLATFORMS),
+  action: z.enum(['intent', 'claim']).optional(),
 });
 export type SocialShareInput = z.infer<typeof SocialShareInputSchema>;
 

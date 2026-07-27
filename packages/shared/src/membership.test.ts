@@ -136,6 +136,20 @@ describe('SocialShareInputSchema', () => {
   it('未知のプラットフォームは拒否', () => {
     expect(SocialShareInputSchema.safeParse({ platform: 'FACEBOOK' }).success).toBe(false);
   });
+  it('action=intent / claim を許可し、省略も許可 (後方互換)', () => {
+    expect(
+      SocialShareInputSchema.safeParse({ platform: 'X', action: 'intent' }).success,
+    ).toBe(true);
+    expect(
+      SocialShareInputSchema.safeParse({ platform: 'X', action: 'claim' }).success,
+    ).toBe(true);
+    expect(SocialShareInputSchema.safeParse({ platform: 'X' }).success).toBe(true);
+  });
+  it('未知の action は拒否', () => {
+    expect(
+      SocialShareInputSchema.safeParse({ platform: 'X', action: 'foo' }).success,
+    ).toBe(false);
+  });
 });
 
 describe('AdminAdjustPuiSchema', () => {
