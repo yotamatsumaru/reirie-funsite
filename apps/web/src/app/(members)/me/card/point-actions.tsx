@@ -24,14 +24,15 @@ type ShareState = { platform: Platform; claimedToday: boolean; sharedToday?: boo
 
 export function PointActions({
   shareUrl,
-  shareText,
+  shareTexts,
   loginClaimedToday,
   loginStreak,
   shares,
   rates,
 }: {
   shareUrl: string;
-  shareText: string;
+  /** プラットフォーム別のシェア文 (管理画面で編集可能)。URL は自動付与のため含めない。 */
+  shareTexts: Record<Platform, string>;
   loginClaimedToday: boolean;
   loginStreak: number;
   shares: ShareState[];
@@ -130,7 +131,7 @@ export function PointActions({
 
   function shareToX() {
     const intent = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-      shareText,
+      shareTexts.X,
     )}&url=${encodeURIComponent(shareUrl)}`;
     window.open(intent, '_blank', 'noopener,noreferrer,width=600,height=500');
     // シェアウィンドウを開いた = シェア意図。受取ボタンを有効化する。
@@ -144,7 +145,7 @@ export function PointActions({
   async function shareToInstagram() {
     // Instagram には汎用 Web 共有インテントが無いため、Web 共有 API を試し、
     // 使えなければリンクをコピーしてアプリでの共有を促す。
-    const data = { title: 'Reirie', text: shareText, url: shareUrl };
+    const data = { title: 'Reirie', text: shareTexts.INSTAGRAM, url: shareUrl };
     let didShare = false;
     try {
       if (typeof navigator !== 'undefined' && navigator.share) {
@@ -156,7 +157,7 @@ export function PointActions({
     }
     if (!didShare) {
       try {
-        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        await navigator.clipboard.writeText(`${shareTexts.INSTAGRAM} ${shareUrl}`);
         setMessage({
           tone: 'ok',
           text: 'シェア用テキストをコピーしました。Instagram に貼り付けて投稿してください',

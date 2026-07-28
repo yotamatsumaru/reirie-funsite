@@ -18,7 +18,7 @@ import { RankBadge } from '@/components/membership/RankBadge';
 import { ensureMemberNumber } from '@/lib/points';
 import { getLivePlan } from '@/lib/plan';
 import { getSiteImageUrl } from '@/lib/site-image';
-import { getPuiRates } from '@/lib/app-setting';
+import { getPuiRates, getShareTemplates } from '@/lib/app-setting';
 import { getMemberRank } from '@/lib/membership-rank';
 import { env } from '@/lib/env';
 import { PointActions } from './point-actions';
@@ -88,13 +88,14 @@ export default async function MemberCardPage() {
   // 会員カード背景: スーパー管理者がアップロードした画像 (プランごと・16:10) を優先し、
   // 未設定ならコード同梱の初期デザイン (public/card/*.webp) にフォールバックする。
   const uploadedCardBg = await getSiteImageUrl(CARD_BG_SLOT_BY_PLAN[plan]);
-  const [user, rates, loginGrant, todayGrant, shareGrants, shareIntents] =
+  const [user, rates, shareTemplates, loginGrant, todayGrant, shareGrants, shareIntents] =
     await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: { displayName: true, email: true, pui: true, createdAt: true },
       }),
       getPuiRates(),
+      getShareTemplates(),
       // 連続日数算出のため前日の付与を見る
       prisma.loginBonusGrant.findUnique({
         where: { userId_date: { userId, date: previousJstDateKey(today) } },
@@ -143,7 +144,9 @@ export default async function MemberCardPage() {
   }));
 
   const shareUrl = env.appBaseUrl;
-  const shareText = '推しを応援しよう！Reirie ファンサイトはこちら';
+  // シェア文は管理画面 (Pui 設定) で編集可能。X / Instagram で別々の文面を持つ。
+  // URL は付与しない (X は intent の url パラメータ、Instagram は本文末尾に自動連結)。
+  const shareTexts = { X: shareTemplates.x, INSTAGRAM: shareTemplates.instagram };
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-10">
@@ -239,7 +242,7 @@ export default async function MemberCardPage() {
         <CardBody>
           <PointActions
             shareUrl={shareUrl}
-            shareText={shareText}
+            shareTexts={shareTexts}
             loginClaimedToday={loginClaimedToday}
             loginStreak={displayStreak}
             shares={shares}

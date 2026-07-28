@@ -96,6 +96,39 @@ export const DEFAULT_PUI_RATES: PuiRateSettings = {
 /** AppSetting に保存する際のキー */
 export const PUI_RATES_SETTING_KEY = 'pui.rates';
 
+// ---------------------------------------------------------------------
+// SNS シェアのテンプレート文 (管理画面で変更可能・DB に永続化)
+// ---------------------------------------------------------------------
+
+/** AppSetting に保存する際のキー (SNS シェアのテンプレート文) */
+export const SHARE_TEMPLATE_SETTING_KEY = 'share.templates';
+
+/** シェア文の最大文字数 (X の実質上限に余裕を持たせた値。URL は自動付与のため別枠) */
+export const SHARE_TEMPLATE_MAX_LENGTH = 200;
+
+/**
+ * SNS シェアのテンプレート文 (プラットフォーム別)。
+ *  - x: X (旧Twitter) 共有時の本文。URL は intent の url パラメータで自動付与される。
+ *  - instagram: Instagram 共有 (Web 共有 API / クリップボード) 時の本文。URL は自動連結される。
+ * いずれも本文に URL を含める必要はない (サイト URL は自動で付与される)。
+ */
+export const ShareTemplateSettingsSchema = z.object({
+  x: z.string().trim().min(1, 'X 用のシェア文を入力してください').max(SHARE_TEMPLATE_MAX_LENGTH),
+  instagram: z
+    .string()
+    .trim()
+    .min(1, 'Instagram 用のシェア文を入力してください')
+    .max(SHARE_TEMPLATE_MAX_LENGTH),
+});
+
+export type ShareTemplateSettings = z.infer<typeof ShareTemplateSettingsSchema>;
+
+/** シェアテンプレート文の既定値 (従来ハードコードされていた文面を踏襲) */
+export const DEFAULT_SHARE_TEMPLATES: ShareTemplateSettings = {
+  x: '推しを応援しよう！Reirie ファンサイトはこちら',
+  instagram: '推しを応援しよう！Reirie ファンサイトはこちら',
+};
+
 /**
  * ある連続ログイン日数 (streak) のときに付与すべき Pui を計算する。
  * - 基本 loginBonusBase

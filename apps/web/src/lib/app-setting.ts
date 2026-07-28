@@ -35,6 +35,10 @@ import {
   DEFAULT_MAINTENANCE_SETTING,
   MaintenanceSettingSchema,
   type MaintenanceSetting,
+  SHARE_TEMPLATE_SETTING_KEY,
+  DEFAULT_SHARE_TEMPLATES,
+  ShareTemplateSettingsSchema,
+  type ShareTemplateSettings,
 } from '@idol/shared';
 
 /**
@@ -76,6 +80,42 @@ export async function setPuiRates(rates: PuiRateSettings): Promise<PuiRateSettin
     update: { value },
   });
   return rates;
+}
+
+/**
+ * SNS シェアのテンプレート文 (X / Instagram) を取得する。
+ * 未設定 / 破損時は既定値を返す (安全側)。欠損フィールドは既定値で補完する。
+ */
+export async function getShareTemplates(): Promise<ShareTemplateSettings> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: SHARE_TEMPLATE_SETTING_KEY },
+    });
+    if (!row) return DEFAULT_SHARE_TEMPLATES;
+    // 欠損フィールドは既定値で補完してからパースする (部分保存 / 旧バージョン対策)。
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    const parsed = ShareTemplateSettingsSchema.safeParse({
+      ...DEFAULT_SHARE_TEMPLATES,
+      ...raw,
+    });
+    return parsed.success ? parsed.data : DEFAULT_SHARE_TEMPLATES;
+  } catch {
+    return DEFAULT_SHARE_TEMPLATES;
+  }
+}
+
+/** SNS シェアのテンプレート文を保存する (SUPER_ADMIN 限定で呼び出すこと) */
+export async function setShareTemplates(
+  templates: ShareTemplateSettings,
+): Promise<ShareTemplateSettings> {
+  const validated = ShareTemplateSettingsSchema.parse(templates);
+  const value = JSON.stringify(validated);
+  await prisma.appSetting.upsert({
+    where: { key: SHARE_TEMPLATE_SETTING_KEY },
+    create: { key: SHARE_TEMPLATE_SETTING_KEY, value },
+    update: { value },
+  });
+  return validated;
 }
 
 /**

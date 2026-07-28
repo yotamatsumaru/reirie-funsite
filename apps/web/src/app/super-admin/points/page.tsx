@@ -5,9 +5,10 @@ import { requireSuperAdminView } from '@/auth';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { getPuiRates } from '@/lib/app-setting';
+import { getPuiRates, getShareTemplates } from '@/lib/app-setting';
 import { findPuiAnomalies } from '@/lib/points';
 import { RatesForm } from './rates-form';
+import { ShareTemplateForm } from './share-template-form';
 
 export const metadata: Metadata = { title: 'Pui 設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -15,8 +16,9 @@ export const dynamic = 'force-dynamic';
 export default async function SuperAdminPointsPage() {
   await requireSuperAdminView();
 
-  const [rates, totalPoints, txCount, anomalies] = await Promise.all([
+  const [rates, shareTemplates, totalPoints, txCount, anomalies] = await Promise.all([
     getPuiRates(),
+    getShareTemplates(),
     prisma.user.aggregate({ _sum: { pui: true } }),
     prisma.puiTransaction.count(),
     findPuiAnomalies(),
@@ -93,6 +95,18 @@ export default async function SuperAdminPointsPage() {
         </CardHeader>
         <CardBody>
           <RatesForm initial={rates} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-base font-semibold text-slate-900">SNS シェアの文面</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            会員カードの SNS シェアで使う文章を X / Instagram 別に設定します。変更は即時反映されます。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <ShareTemplateForm initial={shareTemplates} />
         </CardBody>
       </Card>
     </div>
