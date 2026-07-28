@@ -14,7 +14,7 @@
  * デモモード時は auth.ts 側と同じくパスワード検証をスキップする。
  */
 import { prisma } from '@idol/db';
-import { normalizeAdminCapabilities } from '@idol/shared';
+import { normalizeAdminCapabilities, jstDateKey } from '@idol/shared';
 import type {
   UserRoleLiteral,
   PlanTypeLiteral,
@@ -202,14 +202,29 @@ export async function authenticateCredentials(
     }
   }
 
-  // --- 最終ログイン日時を更新 ---
+  // --- 最終ログイン日時 & ログイン日を記録 ---
   // パスワード検証・メール認証・(必要なら) TOTP まで全て通過した後、つまり
-  // 「ログインが確定した」時点で更新する。Super Admin 管理画面の
-  // 「最終ログイン」表示に使用する。
+  // 「ログインが確定した」時点で更新する。
+  //  - lastLoginAt : Super Admin 管理画面の「最終ログイン」表示に使用。
+  //  - LoginDay    : JST 日付単位で「実際にログインした日」を 1 行記録する。
+  //                  会員ランクのメトリクス「ログイン日数」の集計元。ログイン
+  //                  ボーナスの受取有無とは無関係にカウントする。
+  const now = new Date();
   await prisma.user.update({
     where: { id: user.id },
-    data: { lastLoginAt: new Date() },
+    data: { lastLoginAt: now },
   });
+  // ログイン日の記録 (userId+date のユニーク制約により 1 日 1 行)。
+  // 失敗してもログイン自体は成立させたいので握りつぶす (次回ログインで再記録される)。
+  try {
+    await prisma.loginDay.upsert({
+      where: { userId_date: { userId: user.id, date: jstDateKey(now) } },
+      create: { userId: user.id, date: jstDateKey(now) },
+      update: {},
+    });
+  } catch {
+    /* ログイン日記録の失敗は致命ではない */
+  }
 
   const plan: PlanTypeLiteral = user.subscriptions[0]
     ? (user.subscriptions[0].planType as PlanTypeLiteral)

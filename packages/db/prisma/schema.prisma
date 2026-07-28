@@ -406,6 +406,7 @@ model User {
   // Membership / Pui (会員カード & Pui)
   puiTransactions    PuiTransaction[]
   loginBonusGrants   LoginBonusGrant[]
+  loginDays          LoginDay[]
   socialShareGrants  SocialShareGrant[]
   socialShareIntents SocialShareIntent[]
 
@@ -1522,6 +1523,27 @@ model LoginBonusGrant {
   @@unique([userId, date])
   @@index([userId, date])
   @@map("login_bonus_grants")
+}
+
+/// ユーザーが実際にログインした日の記録 (JST 基準の "YYYY-MM-DD" で 1 日 1 行)。
+/// ログインボーナスの受取有無とは無関係に、ログインが確定した時点で upsert する。
+/// 「ログイン日数」(会員ランクのメトリクス / Super Admin 管理画面表示) の
+/// 集計元。userId + date のユニーク制約で「1 日 1 行」を保証する。
+///
+/// 【設計変更 2026-07】以前は「ログイン日数 = LoginBonusGrant の件数」だったが、
+/// ログインしてもボーナス受取ボタンを押さないユーザーは 0 のままになる不具合が
+/// あったため、実ログイン日を記録する本テーブルを新設し、集計元をこちらに変更した。
+model LoginDay {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  date      String // JST 基準の "YYYY-MM-DD"
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("login_days")
 }
 
 /// SNS シェアによるポイント付与記録。
