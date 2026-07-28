@@ -24,6 +24,8 @@ import { SubscribedRefresh } from './subscribed-refresh';
 import { ProfileSection } from './profile-section';
 import { BirthdayMailSection } from './birthday-mail-section';
 import { listUserBirthdayMails } from '@/lib/birthday-mail';
+import { ContactReplySection } from './contact-reply-section';
+import { listMyContactReplies } from '@/lib/contact-reply';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -32,7 +34,7 @@ export default async function MePage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me');
 
-  const [user, recentHistory, birthdayMails] = await Promise.all([
+  const [user, recentHistory, birthdayMails, contactReplies] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
@@ -48,6 +50,8 @@ export default async function MePage() {
     getUnifiedOrderHistory(session.user.id, 5),
     // 運営から届いた誕生日メール (新しい年順)。
     listUserBirthdayMails(session.user.id),
+    // 運営からのお問い合わせ返信 (新しい順)。
+    listMyContactReplies(session.user.id),
   ]);
   const orders = recentHistory.slice(0, 5);
 
@@ -175,6 +179,19 @@ export default async function MePage() {
             imageUrl: m.imageUrl,
             sentAt: m.sentAt.toISOString(),
             readAt: m.readAt ? m.readAt.toISOString() : null,
+          }))}
+        />
+      )}
+
+      {/* 運営からのお知らせ (お問い合わせへの返信。ある場合のみ表示) */}
+      {contactReplies.length > 0 && (
+        <ContactReplySection
+          replies={contactReplies.map((r) => ({
+            id: r.id,
+            subject: r.subject,
+            body: r.body,
+            createdAt: r.createdAt.toISOString(),
+            readAt: r.readAt ? r.readAt.toISOString() : null,
           }))}
         />
       )}
