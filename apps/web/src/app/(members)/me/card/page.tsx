@@ -157,9 +157,13 @@ export default async function MemberCardPage() {
         </Link>
       </header>
 
-      {/* デジタル会員カード (背景はデザイン画像) */}
+      {/* デジタル会員カード (背景はデザイン画像)
+          スマホでは 16:10 の固定比率だと縦が潰れて文字がはみ出るため、
+          比率は「最小の見た目」を保ちつつ、中身が増えたらカードが縦に伸びる方式にする。
+          - 背景画像は絶対配置でカード全面を object-cover で覆う (どの高さでも隙間なし)。
+          - 情報レイヤーが高さの基準。狭い画面では min-height を確保しつつ折り返し可。 */}
       <div
-        className={`relative aspect-[16/10] w-full overflow-hidden rounded-2xl shadow-xl ${theme.text}`}
+        className={`relative w-full overflow-hidden rounded-2xl shadow-xl ${theme.text}`}
       >
         {/* 背景画像 (管理画面アップロード優先 → 初期デザイン)。
             画像の色をそのまま見せるため、上に敷くスクリム (暗さ/明るさ加工) は無し。 */}
@@ -171,14 +175,17 @@ export default async function MemberCardPage() {
           className="absolute inset-0 h-full w-full object-cover"
         />
 
-        {/* 情報レイヤー。スクリムを外した分、文字自体に控えめな影を付けて可読性を確保する。 */}
-        <div className={`relative flex h-full flex-col justify-between p-5 sm:p-6 ${theme.textShadow}`}>
-          <div className="flex items-start justify-between gap-4">
+        {/* 情報レイヤー。スクリムを外した分、文字自体に控えめな影を付けて可読性を確保する。
+            aspect-[16/10] を min-height 的に使い (下限)、中身が多いときは伸びる。 */}
+        <div
+          className={`relative flex min-h-[62.5vw] flex-col justify-between gap-3 p-5 sm:aspect-[16/10] sm:min-h-0 sm:gap-2 sm:p-6 ${theme.textShadow}`}
+        >
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className={`text-[10px] font-semibold uppercase tracking-widest sm:text-xs ${theme.accent}`}>
                 Reirie Fan Club
               </p>
-              <p className="mt-1 text-base font-bold sm:text-lg">{theme.rank} MEMBER</p>
+              <p className="mt-1 text-sm font-bold sm:text-lg">{theme.rank} MEMBER</p>
               {/* 会員プラン (日本語) を明示。英語表記だけだとプランか会員ランクか分かりにくいため。 */}
               <p className={`mt-0.5 text-[11px] font-medium sm:text-sm ${theme.accent}`}>
                 {PLAN_LABELS[plan]}プラン
@@ -189,17 +196,17 @@ export default async function MemberCardPage() {
             </div>
             <div className="shrink-0 rounded-lg bg-white p-1.5 shadow-sm">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrDataUrl} alt="会員QRコード" className="h-16 w-16 sm:h-20 sm:w-20" />
+              <img src={qrDataUrl} alt="会員QRコード" className="h-14 w-14 sm:h-20 sm:w-20" />
             </div>
           </div>
 
-          <div className="mt-2">
+          <div>
             <p className={`text-[10px] sm:text-xs ${theme.accent}`}>会員番号</p>
-            <p className="font-mono text-xl font-bold tracking-wider sm:text-2xl">{memberNumber}</p>
+            <p className="font-mono text-lg font-bold tracking-wider sm:text-2xl">{memberNumber}</p>
           </div>
 
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+            <div className="min-w-0 flex-1">
               <p className={`text-[10px] sm:text-xs ${theme.accent}`}>お名前</p>
               <p className="truncate text-sm font-semibold sm:text-base">
                 {user?.displayName ?? 'ファン'} 様
@@ -210,7 +217,7 @@ export default async function MemberCardPage() {
             </div>
             <div className="shrink-0 text-right">
               <p className={`text-[10px] sm:text-xs ${theme.accent}`}>保有ポイント</p>
-              <p className="text-xl font-bold sm:text-2xl">
+              <p className="text-lg font-bold sm:text-2xl">
                 {points.toLocaleString()}
                 <span className="ml-1 text-xs font-normal sm:text-sm">pt</span>
               </p>
