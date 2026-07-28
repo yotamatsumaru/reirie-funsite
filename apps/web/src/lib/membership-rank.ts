@@ -2,7 +2,10 @@
  * 会員ランクのサービス層 (DB アクセス + 判定)。
  *
  * メトリクスの定義:
- *  - loginDays     : LoginBonusGrant の件数 (= ログインボーナスを受けた日数)
+ *  - loginDays     : LoginDay の件数 (= 実際にログインした日数)。
+ *                    ログインボーナスの受取有無とは無関係にカウントする。
+ *                    (旧: LoginBonusGrant の件数 = ボーナス受取日数。ログインしても
+ *                     受取ボタンを押さないユーザーが 0 のままになる不具合があったため変更)
  *  - purchaseCount : 入金完了した注文 (Order) の件数
  *                    (status が PAID / PROCESSING / SHIPPED / DELIVERED のもの。
  *                     PENDING / CANCELED / REFUNDED は除外)
@@ -28,7 +31,7 @@ const PURCHASED_ORDER_STATUSES = ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'] 
 /** 単一ユーザーのメトリクス (ログイン日数・買い物数) を集計する。 */
 export async function getMemberMetrics(userId: string): Promise<MemberMetrics> {
   const [loginDays, purchaseCount] = await Promise.all([
-    prisma.loginBonusGrant.count({ where: { userId } }),
+    prisma.loginDay.count({ where: { userId } }),
     prisma.order.count({
       where: { userId, status: { in: [...PURCHASED_ORDER_STATUSES] } },
     }),
@@ -60,7 +63,7 @@ export async function getMemberRanksForUsers(
   const resolvedTiers = tiers ?? (await getMemberRankTiers());
 
   // ログイン日数 (groupBy で 1 クエリ)
-  const loginGroups = await prisma.loginBonusGrant.groupBy({
+  const loginGroups = await prisma.loginDay.groupBy({
     by: ['userId'],
     where: { userId: { in: userIds } },
     _count: { _all: true },
