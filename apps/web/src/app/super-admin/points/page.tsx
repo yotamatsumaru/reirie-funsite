@@ -100,9 +100,9 @@ export default async function SuperAdminPointsPage() {
 
       <Card>
         <CardHeader>
-          <h2 className="text-base font-semibold text-slate-900">SNS シェアの文面</h2>
+          <h2 className="text-base font-semibold text-slate-900">X シェアの文面</h2>
           <p className="mt-1 text-sm text-slate-600">
-            会員カードの SNS シェアで使う文章を X / Instagram 別に設定します。変更は即時反映されます。
+            会員カードの X シェアで使う文章を設定します。変更は即時反映されます。
           </p>
         </CardHeader>
         <CardBody>

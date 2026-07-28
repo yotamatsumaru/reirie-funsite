@@ -129,9 +129,12 @@ describe('buildLoginBonusCalendar', () => {
 });
 
 describe('SocialShareInputSchema', () => {
-  it('X / INSTAGRAM を許可', () => {
+  it('X を許可', () => {
     expect(SocialShareInputSchema.safeParse({ platform: 'X' }).success).toBe(true);
-    expect(SocialShareInputSchema.safeParse({ platform: 'INSTAGRAM' }).success).toBe(true);
+  });
+  it('廃止した INSTAGRAM は拒否', () => {
+    // Instagram シェアは 2026-07 に廃止 (X のみ)。
+    expect(SocialShareInputSchema.safeParse({ platform: 'INSTAGRAM' }).success).toBe(false);
   });
   it('未知のプラットフォームは拒否', () => {
     expect(SocialShareInputSchema.safeParse({ platform: 'FACEBOOK' }).success).toBe(false);

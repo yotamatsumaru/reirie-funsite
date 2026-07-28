@@ -144,9 +144,9 @@ export default async function MemberCardPage() {
   }));
 
   const shareUrl = env.appBaseUrl;
-  // シェア文は管理画面 (Pui 設定) で編集可能。X / Instagram で別々の文面を持つ。
-  // URL は付与しない (X は intent の url パラメータ、Instagram は本文末尾に自動連結)。
-  const shareTexts = { X: shareTemplates.x, INSTAGRAM: shareTemplates.instagram };
+  // シェア文は管理画面 (Pui 設定) で編集可能。シェア対象は X のみ (Instagram は廃止)。
+  // URL は本文に含めず、X の intent の url パラメータで自動付与する。
+  const shareTexts = { X: shareTemplates.x };
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-10">

@@ -19,7 +19,7 @@ const FIELDS: { key: keyof Rates; label: string; help: string; min: number }[] =
   { key: 'loginBonusBase', label: '毎日のログインボーナス (Pui/日)', help: '毎日のログインで付与する基本 Pui', min: 0 },
   { key: 'loginStreakThreshold', label: '連続ログインボーナスの日数', help: 'この日数連続でボーナスを上乗せ (例: 7)', min: 2 },
   { key: 'loginStreakBonus', label: '連続ログインボーナス (Pui)', help: '連続日数に到達した日に上乗せする Pui', min: 0 },
-  { key: 'socialSharePui', label: 'SNSシェア (Pui/回)', help: 'X / Instagram シェア 1 回 (各1日1回) の付与 Pui', min: 0 },
+  { key: 'socialSharePui', label: 'Xシェア (Pui/回)', help: 'X シェア 1 回 (1日1回) の付与 Pui', min: 0 },
 ];
 
 export function RatesForm({ initial }: { initial: Rates }) {

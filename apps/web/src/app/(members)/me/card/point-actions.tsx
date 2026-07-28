@@ -3,14 +3,13 @@
 /**
  * 会員カードページの Pui 獲得アクション。
  *  - ログインボーナス受取 (1日1回)
- *  - SNS シェア (X / Instagram, 各1日1回)
+ *  - SNS シェア (X のみ, 1日1回。Instagram は 2026-07 に廃止)
  *
  * シェアは「シェアボタンを開く (= 意図を記録) → 受取」の 2 段階方式。
  * シェアボタンを一度も押していないと受取ボタンは押せず、サーバー側でも
  * 意図が無い / 待機不足の受取は拒否する (シェアせずに Pui を得る不正を防ぐ)。
  * UI にはカウントダウンは表示しない (待機判定はサーバーに委ねる)。
- * X はインテント URL でその場で共有可能。Instagram は Web 共有 API か
- * 公式アプリ誘導とする (Instagram には汎用 Web 共有インテントが無いため)。
+ * X はインテント URL でその場で共有可能。
  */
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -19,7 +18,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoginBonusCalendar } from './login-bonus-calendar';
 
-type Platform = 'X' | 'INSTAGRAM';
+// シェア対象は X のみ (Instagram は 2026-07 に廃止)。
+type Platform = 'X';
 type ShareState = { platform: Platform; claimedToday: boolean; sharedToday?: boolean };
 
 export function PointActions({
@@ -48,14 +48,12 @@ export function PointActions({
   const [message, setMessage] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
   const xClaimed = shares.find((s) => s.platform === 'X')?.claimedToday ?? false;
-  const igClaimed = shares.find((s) => s.platform === 'INSTAGRAM')?.claimedToday ?? false;
 
-  // 各プラットフォームで「シェアボタンを押したか」。押すまで受取ボタンは無効。
+  // 「シェアボタンを押したか」。押すまで受取ボタンは無効。
   // サーバー既存の意図 (sharedToday) があれば初期状態から受取可能とする。
   // (実際の待機時間の検証はサーバー側で行うため、UI にカウントダウンは出さない)
   const [shared, setShared] = useState<Record<Platform, boolean>>(() => ({
     X: shares.find((s) => s.platform === 'X')?.sharedToday ?? false,
-    INSTAGRAM: shares.find((s) => s.platform === 'INSTAGRAM')?.sharedToday ?? false,
   }));
 
   /** シェア意図をサーバーに記録し、受取ボタンを有効化する。 */
@@ -101,7 +99,7 @@ export function PointActions({
     }
   }
 
-  async function reportShare(platform: 'X' | 'INSTAGRAM') {
+  async function reportShare(platform: Platform) {
     setBusy(platform);
     setMessage(null);
     try {
@@ -140,37 +138,6 @@ export function PointActions({
       tone: 'ok',
       text: 'X で投稿したら「受取」を押してください',
     });
-  }
-
-  async function shareToInstagram() {
-    // Instagram には汎用 Web 共有インテントが無いため、Web 共有 API を試し、
-    // 使えなければリンクをコピーしてアプリでの共有を促す。
-    const data = { title: 'Reirie', text: shareTexts.INSTAGRAM, url: shareUrl };
-    let didShare = false;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.share) {
-        await navigator.share(data);
-        didShare = true;
-      }
-    } catch {
-      /* ユーザーがキャンセルした場合などは無視 */
-    }
-    if (!didShare) {
-      try {
-        await navigator.clipboard.writeText(`${shareTexts.INSTAGRAM} ${shareUrl}`);
-        setMessage({
-          tone: 'ok',
-          text: 'シェア用テキストをコピーしました。Instagram に貼り付けて投稿してください',
-        });
-        didShare = true;
-      } catch {
-        setMessage({ tone: 'err', text: 'コピーに失敗しました。手動でシェアしてください' });
-      }
-    }
-    if (didShare) {
-      // 共有 API 成功 or コピー完了 = シェア意図。受取ボタンを有効化する。
-      void markShared('INSTAGRAM');
-    }
   }
 
   return (
@@ -228,9 +195,9 @@ export function PointActions({
 
       {/* SNS シェア */}
       <div className="rounded-lg border border-slate-200 p-4">
-        <p className="text-sm font-semibold text-slate-800">SNSでシェアして Pui 獲得</p>
+        <p className="text-sm font-semibold text-slate-800">Xでシェアして Pui 獲得</p>
         <p className="mt-0.5 text-xs text-slate-500">
-          各SNS 1日1回まで ／ 1回 {rates.socialSharePui} Pui
+          1日1回まで ／ 1回 {rates.socialSharePui} Pui
         </p>
 
         <div className="mt-3 space-y-3">
@@ -244,18 +211,6 @@ export function PointActions({
             reward={rates.socialSharePui}
             onShare={shareToX}
             onClaim={() => reportShare('X')}
-          />
-
-          {/* Instagram */}
-          <ShareRow
-            label="Instagram"
-            shareLabel="Instagramでシェア"
-            claimed={igClaimed}
-            shared={shared.INSTAGRAM}
-            busy={busy === 'INSTAGRAM'}
-            reward={rates.socialSharePui}
-            onShare={shareToInstagram}
-            onClaim={() => reportShare('INSTAGRAM')}
           />
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
