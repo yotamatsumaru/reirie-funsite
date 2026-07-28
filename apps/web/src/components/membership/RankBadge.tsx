@@ -12,6 +12,7 @@
  *  - バッジ本体はサイト共通の pill + ring-inset スタイルに合わせ、
  *    上位ランクほど彩度・深みが増すよう配色する (ブロンズは主張しすぎない上品な色)。
  */
+import { useId } from 'react';
 import { MEMBER_RANK_LABELS, type MemberRank } from '@idol/shared';
 
 /** バッジ (pill) の配色。サイトの他バッジと同じ ring-inset トーンに揃える。 */
@@ -52,8 +53,14 @@ const RANK_GEM: Record<
  */
 function RankGem({ rank, px }: { rank: MemberRank; px: number }) {
   const c = RANK_GEM[rank];
-  const gid = `rank-gem-${rank}`;
-  const fid = `rank-face-${rank}`;
+  // グラデーション ID は「インスタンスごとに一意」にする。
+  // 同一ページに同じランクのバッジが複数描画されると (例: 会員カードと会員ランク欄で
+  // どちらも「ブロンズ」)、静的 ID だと <linearGradient> が DOM 内で重複し、
+  // モバイル Safari / Chrome でグラデーションが正しく解決されず色が抜けて (白っぽく)
+  // 表示される。useId で毎回ユニークな ID を発行してこの衝突を防ぐ。
+  const uid = useId().replace(/:/g, '');
+  const gid = `rank-gem-${uid}`;
+  const fid = `rank-face-${uid}`;
   return (
     <svg
       width={px}
