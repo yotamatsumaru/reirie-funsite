@@ -507,6 +507,10 @@ export function BirthdayMailClient({
             </div>
           )}
 
+          <p className="text-xs text-slate-400">
+            対象は有料会員（スタンダード / プレミアム）のみです。無料会員は表示されません。
+          </p>
+
           <div>
             <Button
               onClick={sendBulk}
