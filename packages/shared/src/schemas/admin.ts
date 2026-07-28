@@ -59,6 +59,26 @@ export const ShipOrderSchema = z.object({
 });
 export type ShipOrderInput = z.infer<typeof ShipOrderSchema>;
 
+// ---- Bulk shipping (Yamato B2 Cloud CSV workflow) ----
+/**
+ * ヤマト B2クラウドが出力した「発送予定データ」CSV を取り込み、
+ * 送り状番号を注文へ一括で紐づけて発送 (SHIPPED) 通知するための入力。
+ *
+ *  - `entries`: (注文番号, 送り状番号) の組。CSV 取込プレビューで確定した分だけ渡す。
+ *  - `notifyCustomer`: true のとき対象の各注文に発送メールを送る。
+ */
+export const BulkShipEntrySchema = z.object({
+  orderNumber: z.string().min(1).max(80),
+  trackingNumber: z.string().min(1).max(80),
+});
+export type BulkShipEntry = z.infer<typeof BulkShipEntrySchema>;
+
+export const BulkShipConfirmSchema = z.object({
+  entries: z.array(BulkShipEntrySchema).min(1).max(1000),
+  notifyCustomer: z.boolean().default(true),
+});
+export type BulkShipConfirmInput = z.infer<typeof BulkShipConfirmSchema>;
+
 // ---- Admin orders list ----
 export const AdminListOrdersQuerySchema = z.object({
   status: z
