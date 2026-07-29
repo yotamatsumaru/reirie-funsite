@@ -63,6 +63,24 @@ export const ContactSubmitSchema = z.object({
 });
 export type ContactSubmitInput = z.infer<typeof ContactSubmitSchema>;
 
+export const CONTACT_REPLY_MAX = 4000;
+export const CONTACT_REPLY_MIN = 1;
+
+/** 管理画面: お問い合わせへの返信送信スキーマ */
+export const ContactReplySchema = z.object({
+  body: z
+    .string({ error: '返信内容を入力してください' })
+    .trim()
+    .min(CONTACT_REPLY_MIN, '返信内容を入力してください')
+    .max(CONTACT_REPLY_MAX, `返信内容は${CONTACT_REPLY_MAX}文字以内で入力してください`),
+  /**
+   * 返信後に対応状況を「対応済み(RESOLVED)」へ自動更新するか。
+   * 既定 true (返信＝対応完了とみなす)。false にすれば状況は変更しない。
+   */
+  markResolved: z.boolean().default(true),
+});
+export type ContactReplyInput = z.infer<typeof ContactReplySchema>;
+
 /** 管理画面: 対応状況・管理メモ更新スキーマ */
 export const ContactUpdateSchema = z.object({
   status: z.enum(CONTACT_STATUSES).optional(),

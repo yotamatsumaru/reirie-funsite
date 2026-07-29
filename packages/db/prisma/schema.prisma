@@ -425,6 +425,8 @@ model User {
 
   // お問い合わせ (ログイン中に送信した場合に紐づく。ゲスト送信は null)
   contactMessages ContactMessage[]
+  // お問い合わせへの返信のうち、この管理者が返信したもの (発行者としての履歴)
+  contactRepliesSent ContactReply[] @relation("ContactReplyRepliedBy")
 
   // 運営からの警告通知 (このユーザーが受け取った警告)
   warningsReceived UserWarning[] @relation("UserWarningTarget")
@@ -1856,12 +1858,39 @@ model ContactMessage {
   userId    String?         @map("user_id") @db.Uuid
   user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  // 運営からの返信 (1 問い合わせに複数返信可能。履歴として保持)
+  replies   ContactReply[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
   @@index([email])
   @@map("contact_messages")
+}
+
+/// お問い合わせへの運営 (SUPER_ADMIN) からの返信。
+/// 送信時に問い合わせ者へメール通知し、送信者がログイン会員 (ContactMessage.userId
+/// が非 null) の場合はマイページの「運営からのお知らせ」にも表示する。
+/// 1 つの問い合わせに複数返信でき、履歴として全件保持する。
+model ContactReply {
+  id               String   @id @default(uuid()) @db.Uuid
+  contactMessageId String   @map("contact_message_id") @db.Uuid
+  contactMessage   ContactMessage @relation(fields: [contactMessageId], references: [id], onDelete: Cascade)
+  /// 返信本文 (メール本文・マイページ表示に使用)。
+  body             String   @db.Text
+  /// 返信した運営者。管理者ユーザーが削除された場合も記録は残す。
+  repliedById      String?  @map("replied_by_id") @db.Uuid
+  repliedBy        User?    @relation("ContactReplyRepliedBy", fields: [repliedById], references: [id], onDelete: SetNull)
+  /// メール送信できたか (SES 成功時 true)。false は記録のみ (エラー内容は emailError)。
+  emailSent        Boolean  @default(false) @map("email_sent")
+  emailError       String?  @map("email_error")
+  /// 会員がマイページで初めて閲覧した日時 (未読判定用。ゲスト送信では常に null)。
+  readAt           DateTime? @map("read_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([contactMessageId, createdAt])
+  @@map("contact_replies")
 }
 
 // =====================================================================

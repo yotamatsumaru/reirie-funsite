@@ -29,6 +29,15 @@ const STATUS_TONE: Record<ContactStatusLiteral, 'info' | 'warning' | 'success' |
   CLOSED: 'gray',
 };
 
+type ContactReplyRow = {
+  id: string;
+  body: string;
+  emailSent: boolean;
+  emailError: string | null;
+  createdAt: Date;
+  repliedBy: { displayName: string | null; email: string } | null;
+};
+
 type ContactRow = {
   id: string;
   name: string;
@@ -40,6 +49,7 @@ type ContactRow = {
   adminNote: string | null;
   createdAt: Date;
   user: { id: string; memberNumber: string | null } | null;
+  replies: ContactReplyRow[];
 };
 
 function formatDateTime(d: Date): string {
@@ -65,7 +75,20 @@ export default async function SuperAdminContactPage({
   const [messages, newCount, totalCount] = await Promise.all([
     prisma.contactMessage.findMany({
       where: statusFilter ? { status: statusFilter } : {},
-      include: { user: { select: { id: true, memberNumber: true } } },
+      include: {
+        user: { select: { id: true, memberNumber: true } },
+        replies: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            body: true,
+            emailSent: true,
+            emailError: true,
+            createdAt: true,
+            repliedBy: { select: { displayName: true, email: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 500,
     }) as unknown as Promise<ContactRow[]>,
@@ -171,6 +194,15 @@ export default async function SuperAdminContactPage({
                   contactId={m.id}
                   status={m.status}
                   adminNote={m.adminNote}
+                  isMember={Boolean(m.user)}
+                  replies={m.replies.map((r) => ({
+                    id: r.id,
+                    body: r.body,
+                    emailSent: r.emailSent,
+                    emailError: r.emailError,
+                    createdAt: formatDateTime(r.createdAt),
+                    repliedByLabel: r.repliedBy?.displayName || r.repliedBy?.email || '運営',
+                  }))}
                 />
               </CardBody>
             </Card>
