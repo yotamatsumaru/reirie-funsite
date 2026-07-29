@@ -35,6 +35,9 @@ export default async function BirthdayMailPage() {
           年ごとにお祝いメールを設定し、今日が誕生日の会員へ送信できます。
           未送信の会員も一覧で確認できます。
         </p>
+        <p className="mt-1 text-xs text-amber-600">
+          ※ 誕生日メールは有料会員（スタンダード / プレミアム）限定の特典です。無料会員は対象一覧に表示されません。
+        </p>
       </header>
 
       <BirthdayMailClient

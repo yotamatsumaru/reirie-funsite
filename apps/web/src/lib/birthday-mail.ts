@@ -165,6 +165,9 @@ export function resolveRecipientName(u: {
  *  - month/day を省略すると JST の「今日」を対象にする。
  *  - 退会・BAN 済み (deletedAt / bannedAt) は除外。メール未確認でも対象に含める
  *    (誕生日メールは重要度が低く、確認必須にはしない)。
+ *  - 【有料会員限定】誕生日メールは有料プラン (STANDARD / PREMIUM) の特典のため、
+ *    アクティブな有料サブスク (status: ACTIVE / TRIALING / PAST_DUE) を持つ会員のみを
+ *    対象にする。無料会員 (FREE) は対象外。
  */
 export async function listBirthdayRecipients(params: {
   year: number;
@@ -183,6 +186,13 @@ export async function listBirthdayRecipients(params: {
       birthDate: { not: null },
       deletedAt: null,
       bannedAt: null,
+      // 有料会員 (STANDARD / PREMIUM) のみ。誕生日メールは有料プランの特典。
+      subscriptions: {
+        some: {
+          planType: { in: ['STANDARD', 'PREMIUM'] },
+          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+        },
+      },
     },
     select: {
       id: true,
