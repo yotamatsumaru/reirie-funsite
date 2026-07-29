@@ -83,7 +83,7 @@ export async function setPuiRates(rates: PuiRateSettings): Promise<PuiRateSettin
 }
 
 /**
- * SNS シェアのテンプレート文 (X / Instagram) を取得する。
+ * SNS シェアのテンプレート文 (X のみ) を取得する。
  * 未設定 / 破損時は既定値を返す (安全側)。欠損フィールドは既定値で補完する。
  */
 export async function getShareTemplates(): Promise<ShareTemplateSettings> {

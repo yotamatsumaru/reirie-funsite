@@ -3,8 +3,8 @@
  * PATCH /api/super-admin/share-templates — SNS シェアテンプレート文を更新 (永続化)
  *
  * SUPER_ADMIN 限定。値は AppSetting (share.templates) に JSON で永続化される。
- * X / Instagram で別々の本文を保持する。URL はシェア時に自動付与されるため、
- * 本文に URL を含める必要はない。
+ * シェア対象は X のみ (Instagram は 2026-07 に廃止)。URL はシェア時に自動付与
+ * されるため、本文に URL を含める必要はない。
  */
 import { NextResponse } from 'next/server';
 import { ShareTemplateSettingsSchema } from '@idol/shared';

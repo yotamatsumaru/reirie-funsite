@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * SNS シェアのテンプレート文 (X / Instagram) 編集フォーム (SUPER_ADMIN)。
+ * SNS シェアのテンプレート文 (X のみ) 編集フォーム (SUPER_ADMIN)。
  * PATCH /api/super-admin/share-templates で永続化する。
  * URL はシェア時に自動付与されるため、本文に URL を含める必要はない。
  */
@@ -10,18 +10,13 @@ import { useRouter } from 'next/navigation';
 import { SHARE_TEMPLATE_MAX_LENGTH } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
 
-type Templates = { x: string; instagram: string };
+type Templates = { x: string };
 
 const FIELDS: { key: keyof Templates; label: string; help: string }[] = [
   {
     key: 'x',
     label: 'X (旧Twitter) 用のシェア文',
     help: '投稿本文に入る文章です。サイト URL は投稿時に自動で付きます。',
-  },
-  {
-    key: 'instagram',
-    label: 'Instagram 用のシェア文',
-    help: '共有 / コピーされる文章です。サイト URL は末尾に自動で付きます。',
   },
 ];
 
@@ -103,9 +98,7 @@ export function ShareTemplateForm({ initial }: { initial: Templates }) {
           onClick={save}
           disabled={
             !templates.x.trim() ||
-            !templates.instagram.trim() ||
-            templates.x.trim().length > SHARE_TEMPLATE_MAX_LENGTH ||
-            templates.instagram.trim().length > SHARE_TEMPLATE_MAX_LENGTH
+            templates.x.trim().length > SHARE_TEMPLATE_MAX_LENGTH
           }
         >
           保存する

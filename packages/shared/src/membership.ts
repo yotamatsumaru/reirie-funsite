@@ -50,12 +50,14 @@ export function previousJstDateKey(dateKey: string): string {
 // SNS プラットフォーム
 // ---------------------------------------------------------------------
 
-export const SOCIAL_PLATFORMS = ['X', 'INSTAGRAM'] as const;
+// シェア対象は X のみ (Instagram は 2026-07 に廃止)。
+// なお Prisma の SocialPlatform enum には後方互換のため INSTAGRAM 値が残るが、
+// 新規のシェア導線・付与では使用しない (過去の付与記録は保持する)。
+export const SOCIAL_PLATFORMS = ['X'] as const;
 export type SocialPlatformLiteral = (typeof SOCIAL_PLATFORMS)[number];
 
 export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatformLiteral, string> = {
   X: 'X (旧Twitter)',
-  INSTAGRAM: 'Instagram',
 };
 
 /**
@@ -107,18 +109,13 @@ export const SHARE_TEMPLATE_SETTING_KEY = 'share.templates';
 export const SHARE_TEMPLATE_MAX_LENGTH = 200;
 
 /**
- * SNS シェアのテンプレート文 (プラットフォーム別)。
+ * SNS シェアのテンプレート文。
  *  - x: X (旧Twitter) 共有時の本文。URL は intent の url パラメータで自動付与される。
- *  - instagram: Instagram 共有 (Web 共有 API / クリップボード) 時の本文。URL は自動連結される。
- * いずれも本文に URL を含める必要はない (サイト URL は自動で付与される)。
+ * 本文に URL を含める必要はない (サイト URL は自動で付与される)。
+ * (Instagram は 2026-07 に廃止したため X のみ。)
  */
 export const ShareTemplateSettingsSchema = z.object({
   x: z.string().trim().min(1, 'X 用のシェア文を入力してください').max(SHARE_TEMPLATE_MAX_LENGTH),
-  instagram: z
-    .string()
-    .trim()
-    .min(1, 'Instagram 用のシェア文を入力してください')
-    .max(SHARE_TEMPLATE_MAX_LENGTH),
 });
 
 export type ShareTemplateSettings = z.infer<typeof ShareTemplateSettingsSchema>;
@@ -126,7 +123,6 @@ export type ShareTemplateSettings = z.infer<typeof ShareTemplateSettingsSchema>;
 /** シェアテンプレート文の既定値 (従来ハードコードされていた文面を踏襲) */
 export const DEFAULT_SHARE_TEMPLATES: ShareTemplateSettings = {
   x: '推しを応援しよう！Reirie ファンサイトはこちら',
-  instagram: '推しを応援しよう！Reirie ファンサイトはこちら',
 };
 
 /**

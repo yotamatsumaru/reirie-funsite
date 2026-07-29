@@ -1,8 +1,11 @@
 /**
- * POST /api/me/social-share — SNS シェアによるポイント付与 (X / Instagram)
+ * POST /api/me/social-share — SNS シェアによるポイント付与 (X のみ)
  * GET  /api/me/social-share — 今日の各プラットフォームの受給状況
  *
- * 注意: X / Instagram のシェア完了をサーバーで自動検証する公式手段は
+ * (Instagram シェアは 2026-07 に廃止。SOCIAL_PLATFORMS は X のみを含み、
+ *  SocialShareInputSchema も INSTAGRAM を拒否する。過去の付与記録は保持する。)
+ *
+ * 注意: X のシェア完了をサーバーで自動検証する公式手段は
  *       (無料では) 無いため、「シェアボタンを開いた記録 (intent) → 一定時間後に
  *       受取 (claim)」の 2 段階方式とする。intent が無い / 待機不足のときは
  *       受取を拒否し、「シェアせずに受取だけ押す」不正をサーバー側で防ぐ。
