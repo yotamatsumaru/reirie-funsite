@@ -223,6 +223,51 @@ CDK を使わない場合は、以下の信頼ポリシーを持つロールを�
 | `region` | `ap-northeast-1` |
 | `account` | `700918785224` |
 
+### ⚠️ 最重要: 環境変数に頼らないコマンドを使う
+
+`$env:APP` などの環境変数は **ターミナルを閉じると消えます**。
+空のまま実行すると文字列連結が壊れ、次のような分かりにくい失敗をします。
+
+| 書いたコマンド | 変数が空だと | 症状 |
+| --- | --- | --- |
+| `"$($env:APP)-$($env:ENV)-ec2"` | `--ec2` | `Since this app includes more than a single stack...` |
+| `"/$($env:APP)/$($env:ENV)/mediaconvert/role-arn"` | `///mediaconvert/role-arn` | `can't be prefixed with "ssm"` |
+| `--target $instanceId` | `--target` (値なし) | `expected one argument` |
+
+**そのため本ドキュメントでは、以下の「変数を使わない版」を推奨します。**
+値をベタ書きするので、ターミナルを開き直しても必ず動きます。
+
+```powershell
+# deploy — リポジトリに用意済みの npm script を使う (ワイルドカード指定)
+cd $HOME\dev\reirie-funsite\infra
+pnpm run deploy:storage      # = cdk deploy '*-storage' --require-approval never
+pnpm run deploy:ec2          # = cdk deploy '*-ec2'     --require-approval never
+
+# SSM 確認 — パスをベタ書き
+aws ssm get-parameter --name "/idol-fansite/dev/mediaconvert/role-arn" `
+  --query "Parameter.Value" --output text
+
+aws ssm get-parameters-by-path --path "/idol-fansite/dev" --recursive `
+  --query "Parameters[].Name" --output table
+
+# EC2 接続 — ID を目で確認してから貼る
+aws ec2 describe-instances `
+  --filters "Name=tag:Application,Values=idol-fansite" `
+            "Name=instance-state-name,Values=running" `
+  --query "Reservations[].Instances[].[InstanceId,Tags[?Key=='Name'].Value|[0]]" `
+  --output table
+
+aws ssm start-session --target i-xxxxxxxxxxxxxxxxx   # ← 上で表示された ID に置換
+```
+
+変数を使いたい場合は、**空でないことを必ず検証**してください。
+
+```powershell
+$env:APP = "idol-fansite"; $env:ENV = "dev"
+if (-not $env:APP -or -not $env:ENV) { throw "APP/ENV が未設定です" }
+"stack = $($env:APP)-$($env:ENV)-ec2"   # 目視確認してから実行する
+```
+
 ### C-0. 事前準備（シェル別）
 
 以降のコマンドは **bash（macOS / Linux / EC2 上）** と
@@ -744,15 +789,16 @@ shred -u ~/cf-keys/cf-private.pem 2>/dev/null || rm -f ~/cf-keys/cf-private.pem
 ## 付録: Windows / PowerShell 版コマンド一覧
 
 本文の bash コマンドを PowerShell 用に書き換えたものです。
-上から順にコピペで実行できます。
+**値はすべてベタ書き**にしてあるので、ターミナルを開き直しても、
+上から順にコピペするだけで動きます。
+
+> 環境変数を使わないのは意図的です。`$env:APP` が空のまま
+> `"$($env:APP)-$($env:ENV)-ec2"` を評価すると `--ec2` という
+> 文字列になり、`cdk` がスタック名ではなくオプションと誤認します。
 
 ### 0. 準備
 
 ```powershell
-$env:APP = "idol-fansite"
-$env:ENV = "dev"
-$env:AWS_REGION = "ap-northeast-1"
-
 # リポジトリを取得 (初回のみ)
 mkdir $HOME\dev -Force | Out-Null
 cd $HOME\dev
@@ -764,77 +810,107 @@ pnpm install
 pnpm db:generate
 pnpm --filter @idol/stripe-webhook build:full
 dir functions\stripe-webhook\dist    # index.js があることを確認
-
-cd infra
 ```
 
 ### 1. deploy（手順 C-2）
 
+リポジトリに用意済みの npm script を使います。
+ワイルドカード (`'*-ec2'`) がスクリプト内に書かれているため、
+**環境変数もスタック名の入力も不要**です。
+
 ```powershell
-# スタック名を変数にしておくと安全
-$storage = "$($env:APP)-$($env:ENV)-storage"
-$ec2     = "$($env:APP)-$($env:ENV)-ec2"
+cd $HOME\dev\reirie-funsite\infra
 
-pnpm cdk diff $storage
-pnpm cdk diff $ec2
+# 差分確認
+pnpm cdk diff "idol-fansite-dev-storage"
+pnpm cdk diff "idol-fansite-dev-ec2"
 
-pnpm cdk deploy $storage --require-approval never
-pnpm cdk deploy $ec2
+# deploy
+pnpm run deploy:storage     # = cdk deploy '*-storage' --require-approval never
+pnpm run deploy:ec2         # = cdk deploy '*-ec2'     --require-approval never
+```
+
+スタック名を直接指定したい場合はベタ書きします。
+
+```powershell
+pnpm cdk deploy "idol-fansite-dev-storage" --require-approval never
+pnpm cdk deploy "idol-fansite-dev-ec2"
 ```
 
 ### 2. SSM 確認（手順 C-3）
 
 ```powershell
 aws ssm get-parameters-by-path `
-  --path "/$($env:APP)/$($env:ENV)" --recursive `
+  --path "/idol-fansite/dev" --recursive `
   --query "Parameters[].Name" --output table
 
 aws ssm get-parameter `
-  --name "/$($env:APP)/$($env:ENV)/mediaconvert/role-arn" `
+  --name "/idol-fansite/dev/mediaconvert/role-arn" `
   --query "Parameter.Value" --output text
 ```
 
 > PowerShell の行継続はバックスラッシュ `\` ではなく
 > **バッククォート `` ` ``** です。
+>
+> `can't be prefixed with "ssm"` というエラーが出たら、
+> パスが `///mediaconvert/role-arn` のように壊れています
+> （= 環境変数が空）。上のようにベタ書きしてください。
 
 ### 3. EC2 へ接続して反映（手順 C-5）
 
 > ⚠️ PowerShell では `<` `>` が**リダイレクト演算子として予約**されています。
 > `--target <instance-id>` と書くと
 > `演算子 '<' は、今後の使用のために予約されています` エラーになります。
-> プレースホルダは必ず実際の値、または変数に置き換えてください。
+
+まずインスタンス ID を**一覧表示して目で確認**します。
+変数に入れて直接渡すと、取得失敗時に `--target` が値なしになり
+`expected one argument` で分かりにくく失敗します。
 
 ```powershell
-# インスタンス ID を自動取得する (Name タグで絞り込み)
-$instanceId = aws ec2 describe-instances `
-  --filters "Name=tag:Application,Values=$($env:APP)" `
-            "Name=tag:Environment,Values=$($env:ENV)" `
+aws ec2 describe-instances `
+  --filters "Name=tag:Application,Values=idol-fansite" `
             "Name=instance-state-name,Values=running" `
-  --query "Reservations[].Instances[].InstanceId" --output text
+  --query "Reservations[].Instances[].[InstanceId,InstanceType,PrivateIpAddress]" `
+  --output table
+```
 
-echo $instanceId   # i-0123456789abcdef0
+```
+------------------------------------------------------
+|                 DescribeInstances                  |
++----------------------+------------+----------------+
+|  i-05e35460834d4ef18 |  t3.small  |  10.0.1.23     |
++----------------------+------------+----------------+
+```
 
-aws ssm start-session --target $instanceId
+表示された ID をそのまま貼り付けます。
 
-# ↓ ここから先は EC2 上の bash なので本文どおり
-#   bash /home/ec2-user/app/deploy/regenerate-env.sh
-#   bash /home/ec2-user/app/deploy/deploy.sh
+```powershell
+aws ssm start-session --target i-05e35460834d4ef18
+```
+
+接続後は EC2 上の bash なので本文どおりです。
+
+```bash
+bash /home/ec2-user/app/deploy/regenerate-env.sh
+bash /home/ec2-user/app/deploy/deploy.sh
 ```
 
 ### 4. ジョブ確認（手順 C-7）
 
 ```powershell
-aws mediaconvert list-jobs --region $env:AWS_REGION `
+aws mediaconvert list-jobs --region ap-northeast-1 `
   --max-results 5 --order DESCENDING `
   --query "Jobs[].{Id:Id,Status:Status,Video:UserMetadata.videoId,Err:ErrorMessage}" `
   --output table
 
-$out = aws ssm get-parameter `
-  --name "/$($env:APP)/$($env:ENV)/s3/media-output-bucket" `
+# 出力バケット名を確認
+aws ssm get-parameter `
+  --name "/idol-fansite/dev/s3/media-output-bucket" `
   --query "Parameter.Value" --output text
+# → idol-fansite-dev-media-output-700918785224
 
-$videoId = "<管理画面に表示された videoId>"
-aws s3 ls "s3://$out/hls/$videoId/"
+# videoId は管理画面で確認した値に置き換える
+aws s3 ls "s3://idol-fansite-dev-media-output-700918785224/hls/<ここにvideoId>/"
 ```
 
 ### 5. CloudFront 署名鍵（手順 D）
@@ -849,22 +925,24 @@ openssl rsa -pubout -in cf-private.pem -out cf-public.pem
 # D-2. 公開鍵を context で渡して deploy
 cd $HOME\dev\reirie-funsite\infra
 $pubPem = Get-Content $HOME\cf-keys\cf-public.pem -Raw
-pnpm cdk deploy "$($env:APP)-$($env:ENV)-storage" `
+if (-not $pubPem) { throw "公開鍵の読み込みに失敗しました" }
+
+pnpm cdk deploy "idol-fansite-dev-storage" `
   --require-approval never `
   --context "cloudfrontPublicKeyPem=$pubPem"
 
 # D-3. Key Pair ID を確認
 aws ssm get-parameter `
-  --name "/$($env:APP)/$($env:ENV)/cloudfront/key-pair-id" `
+  --name "/idol-fansite/dev/cloudfront/key-pair-id" `
   --query "Parameter.Value" --output text
 
 # D-4. 秘密鍵を SSM SecureString へ登録
 #      改行込みの値なのでファイル参照 (file://) を使うのが確実
 aws ssm put-parameter `
-  --name "/$($env:APP)/$($env:ENV)/cloudfront/private-key" `
+  --name "/idol-fansite/dev/cloudfront/private-key" `
   --type SecureString `
   --value "file://$HOME\cf-keys\cf-private.pem" `
-  --overwrite --region $env:AWS_REGION
+  --overwrite --region ap-northeast-1
 ```
 
 > `--value "$(cat ...)"` は PowerShell では動きません。
@@ -875,8 +953,9 @@ aws ssm put-parameter `
 ```powershell
 # D-6. 署名なしアクセスが 403 になることを確認
 $domain = aws ssm get-parameter `
-  --name "/$($env:APP)/$($env:ENV)/cloudfront/video-domain" `
+  --name "/idol-fansite/dev/cloudfront/video-domain" `
   --query "Parameter.Value" --output text
+$videoId = "<ここにvideoId>"
 
 try {
   Invoke-WebRequest "https://$domain/hls/$videoId/index.m3u8" `
@@ -907,6 +986,17 @@ Remove-Item $HOME\cf-keys\cf-private.pem -Force
 | ディレクトリ作成 | `mkdir -p d` | `mkdir d -Force` |
 | ホームディレクトリ | `~` | `$HOME` |
 
+> ⚠️ **変数が空でも PowerShell はエラーを出しません。**
+> 空文字として連結されるため、
+> `"$($env:APP)-$($env:ENV)-ec2"` → `"--ec2"` のように
+> 意図と違う文字列が静かに生成されます。
+> 環境変数はターミナルを閉じると消えるので、
+> 重要なコマンドでは**ベタ書き**か**事前検証**を推奨します。
+>
+> ```powershell
+> if (-not $env:APP) { throw "APP が未設定です" }
+> ```
+
 ## トラブルシューティング
 
 | 症状 | 原因と対処 |
@@ -922,7 +1012,73 @@ Remove-Item $HOME\cf-keys\cf-private.pem -Force
 | PowerShell で `演算子 '<' は…予約されています` | `<instance-id>` 等のプレースホルダをそのまま入力している。実値/変数に置換する |
 | PowerShell で `export : 用語 'export' は…認識されません` | `export` は bash 専用。`$env:APP = "…"` を使う（付録参照） |
 | `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND` | リポジトリ外で `pnpm` を実行している。`cd` でリポジトリ内に移動する |
+| `cdk "deploy" "--ec2"` / `Since this app includes more than a single stack` | 環境変数が空でスタック名が `--ec2` に化けている。`pnpm run deploy:ec2` を使うかスタック名をベタ書きする |
+| SSM で `can't be prefixed with "ssm"` | 同上。パスが `///mediaconvert/role-arn` に化けている。`"/idol-fansite/dev/..."` とベタ書きする |
+| `argument --target: expected one argument` | インスタンス ID の取得に失敗し空文字が渡っている。`describe-instances` で一覧表示してから ID を貼る |
 | `User data is limited to 16384 bytes` | UserData が上限超過。gzip 自己解凍方式で解消済み（下記参照） |
+| `Value at 'description' failed to satisfy constraint` (`AWS::IAM::Role`) | IAM の description に日本語が入っている。ASCII に直す（下記参照。修正済み） |
+
+### IAM の description に日本語は使えない
+
+以下のエラーは **IAM API の文字種制約**によるものです。
+
+```
+CREATE_FAILED | AWS::IAM::Role | MediaConvertRole
+Resource handler returned message: "1 validation error detected:
+ Value at 'description' failed to satisfy constraint:
+ Member must satisfy regular expression pattern:
+ [\u0009\u000A\u000D\u0020-\u007E\u00A1-\u00FF]*
+ (Service: Iam, Status Code: 400)"
+```
+
+許可されるのは以下だけで、**日本語 (U+3000 以降) は不可**です。
+
+| 範囲 | 内容 |
+| --- | --- |
+| `\u0009` `\u000A` `\u000D` | タブ / LF / CR |
+| `\u0020`–`\u007E` | ASCII 印字可能文字 |
+| `\u00A1`–`\u00FF` | Latin-1 補助（`é` `ü` 等） |
+
+**この罠が分かりにくい理由**:
+
+| リソース | description に日本語 |
+| --- | --- |
+| `AWS::IAM::Role` / `AWS::IAM::ManagedPolicy` | ❌ HTTP 400 で失敗 |
+| `AWS::SSM::Parameter` | ✅ 使える |
+| `CfnOutput` | ✅ 使える |
+| セキュリティグループ | ✅ 使える |
+
+同じスタック内で「日本語 description が通る場所」と「落ちる場所」が
+混在するため、SSM パラメータ 4 件が `CREATE_COMPLETE` した直後に
+IAM ロールだけが落ち、**成功済みリソースまでロールバックで削除される**
+という挙動になります。
+
+**対処（実施済み）**: `infra/lib/storage-stack.ts` の description を ASCII 化。
+
+```ts
+this.mediaConvertRole = new iam.Role(this, 'MediaConvertRole', {
+  roleName: prefix(config, 'mediaconvert-role'),
+  assumedBy: new iam.ServicePrincipal('mediaconvert.amazonaws.com'),
+  // ASCII only (IAM constraint)
+  description:
+    'Service role assumed by AWS Elemental MediaConvert to read source videos from S3 and write HLS output',
+});
+```
+
+**再発防止（実施済み）**: `infra/lib/iam-description-aspect.ts` に
+CDK Aspect を追加し、`bin/app.ts` で全スタックに適用しています。
+IAM 系リソースの description に非 ASCII が含まれると
+**`cdk synth` の時点でエラー**になり、デプロイまで到達しません。
+
+```
+[Error at /idol-fansite-dev-storage/MediaConvertRole/Resource]
+AWS::IAM::Role の description に IAM が許可しない文字が含まれています:
+ 'が' (U+304C), 'エ' (U+30A8), ...
+```
+
+今後 IAM ロール／マネージドポリシーを追加する際は、
+description は英語（ASCII）で書き、日本語の説明はコード上のコメントに
+残してください。
 
 ### UserData の 16KB 制限について
 

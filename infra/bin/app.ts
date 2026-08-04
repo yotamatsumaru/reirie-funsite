@@ -30,9 +30,14 @@ import { Ec2Stack } from '../lib/ec2-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
 import { DnsStack } from '../lib/dns-stack';
 import { SiteCdnStack } from '../lib/site-cdn-stack';
+import { IamDescriptionAsciiAspect } from '../lib/iam-description-aspect';
 
 const app = new cdk.App();
 const config = loadConfig(app);
+
+// IAM の description は ASCII しか許可されない (日本語を入れるとデプロイ時に
+// HTTP 400 でスタックがロールバックする)。synth 時点で検出して弾く。
+cdk.Aspects.of(app).add(new IamDescriptionAsciiAspect());
 
 const env: cdk.Environment = {
   account: config.account ?? process.env.CDK_DEFAULT_ACCOUNT,
