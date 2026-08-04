@@ -10,7 +10,7 @@ import { prisma } from '@idol/db';
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import { createHlsJob, isMediaConvertConfigured } from '@/lib/mediaconvert';
+import { createHlsJob, mediaConvertDiagnostics } from '@/lib/mediaconvert';
 
 export const runtime = 'nodejs';
 
@@ -27,9 +27,11 @@ export const POST = handle(
     if (video.status === 'PROCESSING') {
       throw errors.badRequest('すでにエンコード中です');
     }
-    if (!isMediaConvertConfigured()) {
+
+    const diag = mediaConvertDiagnostics();
+    if (!diag.ready) {
       throw errors.badRequest(
-        'MediaConvert が未設定です (S3_VIDEO_BUCKET / MEDIACONVERT_ROLE_ARN)。環境変数をご確認ください。',
+        `MediaConvert が未設定です (${diag.missingRequired.join(' / ')})。環境変数をご確認ください。`,
       );
     }
 
@@ -49,9 +51,33 @@ export const POST = handle(
       userId: session.user.id,
       action: 'admin.video.encode_started',
       resource: `video:${id}`,
-      metadata: { jobId, s3SourceKey: video.s3SourceKey },
+      metadata: {
+        jobId,
+        s3SourceKey: video.s3SourceKey,
+        outputBucket: diag.resolved.outputBucket,
+        qualities: diag.resolved.qualities.join(','),
+      },
     });
 
-    return NextResponse.json({ ok: true, jobId, status: updated.status });
+    return NextResponse.json({
+      ok: true,
+      jobId,
+      status: updated.status,
+      outputBucket: diag.resolved.outputBucket,
+      qualities: diag.resolved.qualities,
+      // 再生設定 (CloudFront 署名) が未完了ならクライアントに警告を返す
+      warnings: [
+        ...(diag.missingPlayback.length > 0
+          ? [
+              `再生に必要な設定が未完了です: ${diag.missingPlayback.join(' / ')}`,
+            ]
+          : []),
+        ...(diag.missingAutomation.length > 0
+          ? [
+              `エンコード完了の自動反映に必要な設定が未完了です: ${diag.missingAutomation.join(' / ')}（完了後に「手動で公開」を押してください）`,
+            ]
+          : []),
+      ],
+    });
   },
 );

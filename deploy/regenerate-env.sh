@@ -1,11 +1,18 @@
 #!/bin/bash
 # =====================================================================
-# .env.production の Stripe 設定を SSM Parameter Store から再生成する
+# .env.production の Stripe / 動画エンコード設定を
+# SSM Parameter Store から再生成する
 #
 #   目的:
 #     SSM の Stripe パラメータ (secret-key / publishable-key /
-#     webhook-secret / price/*) を更新したあと、EC2 上の
-#     .env.production に確実に反映するためのスクリプト。
+#     webhook-secret / price/*) および動画エンコード関連
+#     (mediaconvert/role-arn, cloudfront/*, cron/secret) を更新したあと、
+#     EC2 上の .env.production に確実に反映するためのスクリプト。
+#
+#     動画エンコードは MEDIACONVERT_ROLE_ARN が空だと管理画面が
+#     「MediaConvert が未設定です」のままになる。CDK でロールを
+#     作成しても既存インスタンスの .env.production は自動更新されない
+#     ため、本スクリプトで反映する。
 #
 #     従来 .env.production を SSM から生成するのは user-data.sh
 #     (インスタンス初回起動時) だけで、SSM を後から更新しても
@@ -117,9 +124,62 @@ set_env_var STRIPE_PRICE_STANDARD_YEARLY "$STRIPE_PRICE_STANDARD_YEARLY"
 set_env_var STRIPE_PRICE_PREMIUM_MONTHLY "$STRIPE_PRICE_PREMIUM_MONTHLY"
 set_env_var STRIPE_PRICE_PREMIUM_YEARLY "$STRIPE_PRICE_PREMIUM_YEARLY"
 
+# =====================================================================
+# 動画エンコード / 配信 (MediaConvert + CloudFront) 設定
+# ---------------------------------------------------------------------
+#   MEDIACONVERT_ROLE_ARN     : CDK StorageStack が作成したロール ARN
+#   S3_MEDIA_OUTPUT_BUCKET    : HLS 出力先 (CloudFront 動画オリジン)
+#   MEDIACONVERT_OUTPUT_PREFIX: HLS 出力プレフィックス (既定 hls)
+#   CLOUDFRONT_VIDEO_DOMAIN   : 署名付き URL のドメイン
+#   CLOUDFRONT_KEY_PAIR_ID / CLOUDFRONT_PRIVATE_KEY : 署名鍵
+#   CRON_SECRET               : 完了通知 Lambda との共有シークレット
+# =====================================================================
+echo "[regenerate-env] fetching video encoding settings from SSM..."
+
+MEDIACONVERT_ROLE_ARN=$(ssm_get "${SSM_BASE}/mediaconvert/role-arn")
+MEDIACONVERT_OUTPUT_PREFIX=$(ssm_get "${SSM_BASE}/mediaconvert/output-prefix")
+MEDIACONVERT_QUEUE_ARN=$(ssm_get "${SSM_BASE}/mediaconvert/queue-arn")
+S3_MEDIA_OUTPUT_BUCKET=$(ssm_get "${SSM_BASE}/s3/media-output-bucket")
+CLOUDFRONT_VIDEO_DOMAIN=$(ssm_get "${SSM_BASE}/cloudfront/video-domain")
+CLOUDFRONT_ASSET_DOMAIN=$(ssm_get "${SSM_BASE}/cloudfront/asset-domain")
+CLOUDFRONT_KEY_PAIR_ID=$(ssm_get "${SSM_BASE}/cloudfront/key-pair-id")
+CLOUDFRONT_PRIVATE_KEY=$(ssm_get "${SSM_BASE}/cloudfront/private-key")
+CRON_SECRET=$(ssm_get "${SSM_BASE}/cron/secret")
+
+set_env_var MEDIACONVERT_ROLE_ARN "$MEDIACONVERT_ROLE_ARN"
+set_env_var MEDIACONVERT_OUTPUT_PREFIX "$MEDIACONVERT_OUTPUT_PREFIX"
+set_env_var MEDIACONVERT_QUEUE_ARN "$MEDIACONVERT_QUEUE_ARN"
+set_env_var S3_MEDIA_OUTPUT_BUCKET "$S3_MEDIA_OUTPUT_BUCKET"
+set_env_var CLOUDFRONT_VIDEO_DOMAIN "$CLOUDFRONT_VIDEO_DOMAIN"
+set_env_var CLOUDFRONT_ASSET_DOMAIN "$CLOUDFRONT_ASSET_DOMAIN"
+set_env_var CLOUDFRONT_KEY_PAIR_ID "$CLOUDFRONT_KEY_PAIR_ID"
+# 秘密鍵は改行を含むため、値をダブルクォートで囲んだ形で書き込む必要がある。
+# set_env_var は 1 行前提なので、ここだけ専用処理にする。
+if [ -n "$CLOUDFRONT_PRIVATE_KEY" ]; then
+  tmp="$(mktemp)"
+  grep -v -E '^CLOUDFRONT_PRIVATE_KEY=' "$ENV_FILE" > "$tmp" || true
+  printf 'CLOUDFRONT_PRIVATE_KEY="%s"\n' "$CLOUDFRONT_PRIVATE_KEY" >> "$tmp"
+  cat "$tmp" > "$ENV_FILE"
+  rm -f "$tmp"
+  echo "[regenerate-env]   set CLOUDFRONT_PRIVATE_KEY = (masked, len=${#CLOUDFRONT_PRIVATE_KEY})"
+else
+  echo "[regenerate-env]   skip CLOUDFRONT_PRIVATE_KEY (SSM 値が空のため据え置き)"
+fi
+set_env_var CRON_SECRET "$CRON_SECRET"
+
+# 動画エンコードに必須の値が揃っているかを最後に確認して警告する
+if [ -z "$MEDIACONVERT_ROLE_ARN" ]; then
+  echo "[regenerate-env][WARN] MEDIACONVERT_ROLE_ARN が SSM に未登録です。" >&2
+  echo "[regenerate-env][WARN]   → infra を deploy し ${SSM_BASE}/mediaconvert/role-arn を作成してください。" >&2
+  echo "[regenerate-env][WARN]   → 未設定のままだと管理画面で「MediaConvert が未設定です」と表示されます。" >&2
+fi
+if [ -z "$CLOUDFRONT_KEY_PAIR_ID" ] || [ -z "$CLOUDFRONT_PRIVATE_KEY" ]; then
+  echo "[regenerate-env][WARN] CloudFront 署名鍵が未登録です。エンコードは可能ですが再生できません。" >&2
+fi
+
 # パーミッションを 600 に維持 (秘密鍵を含むため)
 chmod 600 "$ENV_FILE" 2>/dev/null || true
 
-echo "[regenerate-env] done. Stripe 設定を .env.production に反映しました。"
+echo "[regenerate-env] done. Stripe / 動画エンコード設定を .env.production に反映しました。"
 echo "[regenerate-env] 反映を有効化するには PM2 の再起動が必要です:"
 echo "[regenerate-env]   bash /home/ec2-user/app/deploy/deploy.sh"

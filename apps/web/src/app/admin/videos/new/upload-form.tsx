@@ -42,7 +42,7 @@ function putWithProgress(
   });
 }
 
-export function UploadVideoForm() {
+export function UploadVideoForm({ encodeReady = true }: { encodeReady?: boolean }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -108,18 +108,32 @@ export function UploadVideoForm() {
       const created = (await createRes.json()) as { id: string };
 
       // 4) エンコード開始 (失敗しても詳細ページで再実行可能)
-      setPhase('encoding');
-      const encodeRes = await fetch(`/api/admin/videos/${created.id}/encode`, {
-        method: 'POST',
-      });
-      if (!encodeRes.ok) {
-        const j = (await encodeRes.json().catch(() => ({}))) as { error?: { message?: string } };
+      //    MediaConvert 未設定時は 400 が確定しているので呼び出さず、案内だけ出す。
+      if (!encodeReady) {
         toast.warning(
-          j.error?.message ?? 'エンコードを開始できませんでした。詳細ページから再実行してください。',
+          'MediaConvert が未設定のためエンコードは開始していません。環境変数を設定後、詳細ページから実行してください。',
           'アップロードは完了しました',
         );
       } else {
-        toast.success('アップロードとエンコード開始が完了しました', '動画');
+        setPhase('encoding');
+        const encodeRes = await fetch(`/api/admin/videos/${created.id}/encode`, {
+          method: 'POST',
+        });
+        const encodeJson = (await encodeRes.json().catch(() => ({}))) as {
+          error?: { message?: string };
+          warnings?: string[];
+        };
+        if (!encodeRes.ok) {
+          toast.warning(
+            encodeJson.error?.message ??
+              'エンコードを開始できませんでした。詳細ページから再実行してください。',
+            'アップロードは完了しました',
+          );
+        } else if (encodeJson.warnings && encodeJson.warnings.length > 0) {
+          toast.warning(encodeJson.warnings.join('\n'), 'エンコードを開始しました');
+        } else {
+          toast.success('アップロードとエンコード開始が完了しました', '動画');
+        }
       }
 
       router.push(`/admin/videos/${created.id}`);

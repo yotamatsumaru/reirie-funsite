@@ -3,6 +3,7 @@ import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
+import { resolveThumbnailUrl } from '@/lib/cdn-signer';
 
 export const runtime = 'nodejs';
 
@@ -31,5 +32,8 @@ export const GET = handle(async (req: Request) => {
       publishedAt: true,
     },
   });
-  return NextResponse.json({ items });
+  // サムネイルは非公開バケット上の S3 キーなので CloudFront 署名付き URL に変換
+  return NextResponse.json({
+    items: items.map((v) => ({ ...v, thumbnailUrl: resolveThumbnailUrl(v.thumbnailUrl) })),
+  });
 });

@@ -36,6 +36,9 @@ DB_SECRET_ARN="__DB_SECRET_ARN__"
 VIDEO_BUCKET="__VIDEO_BUCKET__"
 ASSET_BUCKET="__ASSET_BUCKET__"
 MEDIA_OUTPUT_BUCKET="__MEDIA_OUTPUT_BUCKET__"
+# MediaConvert (動画 HLS エンコード)。CDK StorageStack が作成したロール ARN。
+MEDIACONVERT_ROLE_ARN="__MEDIACONVERT_ROLE_ARN__"
+MEDIACONVERT_OUTPUT_PREFIX="__MEDIACONVERT_OUTPUT_PREFIX__"
 APP_REPO_URL="__APP_REPO_URL__"
 APP_BRANCH="__APP_BRANCH__"
 
@@ -139,6 +142,38 @@ CLOUDFRONT_VIDEO_DOMAIN=$(ssm_get "${SSM_BASE}/cloudfront/video-domain")
 CLOUDFRONT_ASSET_DOMAIN=$(ssm_get "${SSM_BASE}/cloudfront/asset-domain")
 CLOUDFRONT_KEY_PAIR_ID=$(ssm_get "${SSM_BASE}/cloudfront/key-pair-id")
 CLOUDFRONT_PRIVATE_KEY=$(ssm_get "${SSM_BASE}/cloudfront/private-key")
+
+# MediaConvert: 基本は CDK が置換したプレースホルダ値を使い、
+# SSM に値があればそちらを優先する (ロール再作成時に SSM 更新だけで追従できる)。
+MEDIACONVERT_ROLE_ARN_SSM=$(ssm_get "${SSM_BASE}/mediaconvert/role-arn")
+if [ -n "$MEDIACONVERT_ROLE_ARN_SSM" ]; then
+  MEDIACONVERT_ROLE_ARN="$MEDIACONVERT_ROLE_ARN_SSM"
+fi
+MEDIACONVERT_OUTPUT_PREFIX_SSM=$(ssm_get "${SSM_BASE}/mediaconvert/output-prefix")
+if [ -n "$MEDIACONVERT_OUTPUT_PREFIX_SSM" ]; then
+  MEDIACONVERT_OUTPUT_PREFIX="$MEDIACONVERT_OUTPUT_PREFIX_SSM"
+fi
+# (任意) 専用キューを使う場合のみ設定
+MEDIACONVERT_QUEUE_ARN=$(ssm_get "${SSM_BASE}/mediaconvert/queue-arn")
+# HLS 出力先バケットも SSM 優先 (CDK 置換値がフォールバック)
+MEDIA_OUTPUT_BUCKET_SSM=$(ssm_get "${SSM_BASE}/s3/media-output-bucket")
+if [ -n "$MEDIA_OUTPUT_BUCKET_SSM" ]; then
+  MEDIA_OUTPUT_BUCKET="$MEDIA_OUTPUT_BUCKET_SSM"
+fi
+
+# エンコード完了通知 Lambda (video-job-complete) と共有する認証シークレット。
+# 未登録なら自動生成して SSM に保存する (Lambda 側で同じ値を参照させる)。
+CRON_SECRET=$(ssm_get "${SSM_BASE}/cron/secret")
+if [ -z "$CRON_SECRET" ]; then
+  CRON_SECRET=$(openssl rand -hex 32)
+  echo "[user-data] cron secret not found in SSM - generating and storing a new one."
+  aws ssm put-parameter \
+    --name "${SSM_BASE}/cron/secret" \
+    --type SecureString \
+    --value "$CRON_SECRET" \
+    --region "$AWS_REGION" \
+    --overwrite >/dev/null 2>&1 || echo "[user-data] WARN: failed to store cron secret in SSM"
+fi
 IVS_CHANNEL_ARN=$(ssm_get "${SSM_BASE}/ivs/channel-arn")
 IVS_PLAYBACK_KEY_PAIR_ID=$(ssm_get "${SSM_BASE}/ivs/playback-key-pair-id")
 IVS_PLAYBACK_PRIVATE_KEY=$(ssm_get "${SSM_BASE}/ivs/playback-private-key")
@@ -208,10 +243,19 @@ S3_VIDEO_BUCKET=${VIDEO_BUCKET}
 S3_ASSET_BUCKET=${ASSET_BUCKET}
 S3_MEDIA_OUTPUT_BUCKET=${MEDIA_OUTPUT_BUCKET}
 
+# MediaConvert (動画 HLS エンコード)
+# MEDIACONVERT_ROLE_ARN が空だと管理画面が「MediaConvert が未設定です」になる。
+MEDIACONVERT_ROLE_ARN=${MEDIACONVERT_ROLE_ARN}
+MEDIACONVERT_OUTPUT_PREFIX=${MEDIACONVERT_OUTPUT_PREFIX:-hls}
+MEDIACONVERT_QUEUE_ARN=${MEDIACONVERT_QUEUE_ARN}
+
 CLOUDFRONT_VIDEO_DOMAIN=${CLOUDFRONT_VIDEO_DOMAIN}
 CLOUDFRONT_ASSET_DOMAIN=${CLOUDFRONT_ASSET_DOMAIN}
 CLOUDFRONT_KEY_PAIR_ID=${CLOUDFRONT_KEY_PAIR_ID}
 CLOUDFRONT_PRIVATE_KEY="${CLOUDFRONT_PRIVATE_KEY}"
+
+# エンコード完了通知 (video-job-complete Lambda) の認証シークレット
+CRON_SECRET=${CRON_SECRET}
 
 IVS_CHANNEL_ARN=${IVS_CHANNEL_ARN}
 IVS_PLAYBACK_KEY_PAIR_ID=${IVS_PLAYBACK_KEY_PAIR_ID}

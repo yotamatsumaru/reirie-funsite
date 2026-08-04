@@ -1,15 +1,16 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireCapabilityPage } from '@/auth';
-import { isMediaConvertConfigured } from '@/lib/mediaconvert';
+import { mediaConvertDiagnostics } from '@/lib/mediaconvert';
 import { UploadVideoForm } from './upload-form';
+import { EncodeConfigNotice } from './encode-config-notice';
 
 export const metadata: Metadata = { title: '動画アップロード' };
 export const dynamic = 'force-dynamic';
 
 export default async function NewVideoPage() {
   await requireCapabilityPage('CONTENT');
-  const mediaConvertReady = isMediaConvertConfigured();
+  const diag = mediaConvertDiagnostics();
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -24,15 +25,15 @@ export default async function NewVideoPage() {
         </p>
       </div>
 
-      {!mediaConvertReady && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          MediaConvert が未設定です（<code>S3_VIDEO_BUCKET</code> /{' '}
-          <code>MEDIACONVERT_ROLE_ARN</code>）。アップロードはできますが、エンコードは環境設定後に
-          実行してください。
-        </div>
-      )}
+      <EncodeConfigNotice
+        ready={diag.ready}
+        missingRequired={diag.missingRequired}
+        missingPlayback={diag.missingPlayback}
+        missingAutomation={diag.missingAutomation}
+        resolved={diag.resolved}
+      />
 
-      <UploadVideoForm />
+      <UploadVideoForm encodeReady={diag.ready} />
     </div>
   );
 }
