@@ -224,12 +224,21 @@ export class StorageStack extends Stack {
     // ロール名は ec2-stack.ts の iam:PassRole 許可
     //   arn:aws:iam::<account>:role/<app>-<env>-mediaconvert-*
     // に一致させる必要がある (末尾 -role で 'mediaconvert-*' にマッチ)。
+    //
+    // ⚠️ description は必ず ASCII のみ。
+    //    IAM API は description に
+    //      [\u0009\u000A\u000D\u0020-\u007E\u00A1-\u00FF]*
+    //    しか許可しないため、日本語を入れると CreateRole が
+    //    HTTP 400 "1 validation error detected: Value at 'description'
+    //    failed to satisfy constraint" で失敗しスタックがロールバックする。
+    //    (SSM Parameter の description には同じ制約が無いので日本語で良い)
     // =================================================================
     this.mediaConvertRole = new iam.Role(this, 'MediaConvertRole', {
       roleName: prefix(config, 'mediaconvert-role'),
       assumedBy: new iam.ServicePrincipal('mediaconvert.amazonaws.com'),
+      // ASCII only (IAM constraint). JP: MediaConvert が HLS エンコード時に S3 を読み書きするためのロール
       description:
-        'AWS Elemental MediaConvert が HLS エンコード時に S3 を読み書きするためのロール',
+        'Service role assumed by AWS Elemental MediaConvert to read source videos from S3 and write HLS output',
     });
 
     // 入力: ソース動画の読み取り (source/ 配下のみ)
