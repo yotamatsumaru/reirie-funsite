@@ -6,6 +6,7 @@ import { prisma } from '@idol/db';
 import { canAccess, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { resolveThumbnailUrl } from '@/lib/cdn-signer';
 
 export const metadata: Metadata = { title: '動画' };
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,8 @@ export default async function MemberVideosPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {videos.map((v) => {
             const locked = !canAccess(plan, v.accessLevel);
+            // サムネイルは非公開バケット上の S3 キーなので CloudFront 署名が必要
+            const thumbnailUrl = resolveThumbnailUrl(v.thumbnailUrl);
             return (
               <Link
                 key={v.id}
@@ -73,10 +76,10 @@ export default async function MemberVideosPage() {
                 className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
               >
                 <div className="relative aspect-video w-full bg-slate-100">
-                  {v.thumbnailUrl ? (
+                  {thumbnailUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={v.thumbnailUrl}
+                      src={thumbnailUrl}
                       alt=""
                       className="h-full w-full object-cover"
                     />

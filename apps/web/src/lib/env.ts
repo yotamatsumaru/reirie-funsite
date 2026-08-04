@@ -86,8 +86,18 @@ export const env = {
   },
 
   s3: {
+    /** 管理者がソース動画をアップロードするバケット (MediaConvert の入力元) */
     videoBucket: optional('S3_VIDEO_BUCKET') ?? '',
     assetBucket: optional('S3_ASSET_BUCKET') ?? '',
+    /**
+     * MediaConvert の HLS 出力先バケット。
+     * CloudFront の動画ディストリビューション (CLOUDFRONT_VIDEO_DOMAIN) の
+     * オリジンは **この出力バケット** であるため、HLS はここに書き出さないと
+     * 署名付き URL で再生できない (CloudFront が 403/404 を返す)。
+     * 未設定時は videoBucket にフォールバックする (単一バケット構成向け)。
+     */
+    mediaOutputBucket:
+      optional('S3_MEDIA_OUTPUT_BUCKET') ?? optional('S3_VIDEO_BUCKET') ?? '',
   },
 
   /**
@@ -96,14 +106,19 @@ export const env = {
    *       (`aws mediaconvert describe-endpoints` で取得)。空なら SDK が
    *        describeEndpoints で自動解決する。
    *   - roleArn  : MediaConvert が S3 を読み書きするための IAM ロール ARN
+   *       (CDK StorageStack が作成し SSM /<app>/<env>/mediaconvert/role-arn に保存)
    *   - queueArn : (任意) 使用するキュー ARN。空ならデフォルトキュー
-   *   - outputKeyPrefix : HLS 出力の S3 プレフィックス (videoBucket 内)
+   *   - outputKeyPrefix : HLS 出力の S3 プレフィックス (mediaOutputBucket 内)
+   *   - segmentSeconds  : HLS セグメント長 (秒)。既定 6
+   *   - qualities       : 出力するレンディション。既定 480p,720p,1080p
    */
   mediaConvert: {
     endpoint: optional('MEDIACONVERT_ENDPOINT') ?? '',
     roleArn: optional('MEDIACONVERT_ROLE_ARN') ?? '',
     queueArn: optional('MEDIACONVERT_QUEUE_ARN') ?? '',
     outputKeyPrefix: optional('MEDIACONVERT_OUTPUT_PREFIX') ?? 'hls',
+    segmentSeconds: Number(optional('MEDIACONVERT_SEGMENT_SECONDS') ?? '6'),
+    qualities: optional('MEDIACONVERT_QUALITIES') ?? '480p,720p,1080p',
   },
 
   cloudfront: {

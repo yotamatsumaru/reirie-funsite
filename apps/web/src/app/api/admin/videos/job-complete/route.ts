@@ -22,7 +22,7 @@ import { auth } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
 import { logAudit } from '@/lib/audit';
-import { hlsMasterKey } from '@/lib/mediaconvert';
+import { hlsMasterKey, thumbnailKey } from '@/lib/mediaconvert';
 
 export const runtime = 'nodejs';
 
@@ -67,11 +67,18 @@ export const POST = handle(async (req: Request) => {
 
   // COMPLETE: HLS マスタープレイリストのキーを確定して READY 化
   const s3HlsKey = hlsMasterKey(video.id);
+  // MediaConvert の FRAME_CAPTURE 出力 (サムネイル) の S3 キー。
+  // 非公開バケット上のキーをそのまま保存し、表示時に CloudFront 署名する
+  // (lib/cdn-signer.ts の resolveThumbnailUrl)。
+  // 既に管理者が手動でサムネイルを設定している場合は上書きしない。
+  const s3ThumbnailKey = thumbnailKey(video.id);
+
   const updated = await prisma.video.update({
     where: { id: video.id },
     data: {
       status: 'READY',
       s3HlsKey,
+      ...(video.thumbnailUrl ? {} : { thumbnailUrl: s3ThumbnailKey }),
       ...(body.durationSeconds !== undefined
         ? { durationSeconds: body.durationSeconds }
         : {}),
@@ -83,7 +90,7 @@ export const POST = handle(async (req: Request) => {
   await logAudit({
     action: 'admin.video.encode_completed',
     resource: `video:${video.id}`,
-    metadata: { jobId: body.jobId, s3HlsKey },
+    metadata: { jobId: body.jobId, s3HlsKey, thumbnailUrl: updated.thumbnailUrl },
   });
 
   return NextResponse.json({ ok: true, status: updated.status, s3HlsKey });

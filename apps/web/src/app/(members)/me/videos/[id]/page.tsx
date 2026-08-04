@@ -9,6 +9,7 @@ import {
   formatJstDate,
   type PlanTypeLiteral,
 } from '@idol/shared';
+import { resolveThumbnailUrl } from '@/lib/cdn-signer';
 import { VideoWatch } from './watch';
 
 export const metadata: Metadata = { title: '動画を見る' };
@@ -56,7 +57,11 @@ export default async function MemberVideoWatchPage({
       </div>
 
       {allowed ? (
-        <VideoWatch videoId={video.id} maxHeight={maxHeight} thumbnailUrl={video.thumbnailUrl} />
+        <VideoWatch
+          videoId={video.id}
+          maxHeight={maxHeight}
+          thumbnailUrl={resolveThumbnailUrl(video.thumbnailUrl)}
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex aspect-video items-center justify-center bg-slate-900 text-center text-white">

@@ -8,6 +8,7 @@
 |---|---|
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | **AWS EC2 への本番デプロイ手順書 (dev環境)** |
 | [`infra/README.md`](infra/README.md) | AWS CDK スタック設計 (8スタック構成) |
+| [`docs/VIDEO_ENCODING.md`](docs/VIDEO_ENCODING.md) | **動画エンコード (MediaConvert + HLS) セットアップ手順** |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | 運用 / 障害対応 Runbook |
 | [`docs/openapi.yaml`](docs/openapi.yaml) | REST API 仕様 |
 | [`.env.example`](.env.example) | 環境変数テンプレート |

@@ -148,6 +148,8 @@ const ec2Stack = new Ec2Stack(app, `${stackPrefix}-ec2`, {
   videoBucket: storage.videoBucket,
   assetBucket: storage.assetBucket,
   mediaOutputBucket: storage.mediaOutputBucket,
+  // MediaConvert 実行ロール (EC2 が CreateJob 時に PassRole する対象)
+  mediaConvertRole: storage.mediaConvertRole,
   sesSendingPolicy: email.sendingPolicy,
   description: 'EC2 instance running Next.js 16 + PM2',
 });

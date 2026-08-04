@@ -19,6 +19,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { type AppConfig, prefix, commonTags } from './config';
+import { HLS_OUTPUT_PREFIX } from './storage-stack';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -35,6 +36,13 @@ export interface Ec2StackProps extends StackProps {
   videoBucket: s3.IBucket;
   assetBucket: s3.IBucket;
   mediaOutputBucket: s3.IBucket;
+
+  /**
+   * MediaConvert 実行ロール (StorageStack が作成)。
+   * EC2 上のアプリが CreateJob 時にこのロールを渡すため、
+   * iam:PassRole をこのロール ARN に限定して許可する。
+   */
+  mediaConvertRole: iam.IRole;
 
   sesSendingPolicy: iam.IManagedPolicy;
 }
@@ -53,6 +61,7 @@ export class Ec2Stack extends Stack {
       videoBucket,
       assetBucket,
       mediaOutputBucket,
+      mediaConvertRole,
       sesSendingPolicy,
     } = props;
 
@@ -83,6 +92,19 @@ export class Ec2Stack extends Stack {
         actions: ['ssm:GetParameter', 'ssm:GetParameters', 'ssm:GetParametersByPath'],
         resources: [
           `arn:aws:ssm:${this.region}:${this.account}:parameter/${config.appName}/${config.envName}/*`,
+        ],
+      }),
+    );
+    // cron secret の自動生成 (user-data.sh)。
+    // エンコード完了通知 Lambda と共有するシークレットが未登録のとき、
+    // インスタンス側で生成して SSM に保存できるようにする。
+    // 誤って他のパラメータを書き換えないよう cron/* に限定する。
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'PutCronSecret',
+        actions: ['ssm:PutParameter'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/${config.appName}/${config.envName}/cron/*`,
         ],
       }),
     );
@@ -124,11 +146,16 @@ export class Ec2Stack extends Stack {
         resources: ['*'],
       }),
     );
-    // MediaConvert に渡す role を passRole 可能にする
+    // MediaConvert に渡す role を passRole 可能にする。
+    // ワイルドカードではなく StorageStack が実際に作成したロール ARN に限定する
+    // (存在しないロール名パターンを許可していても CreateJob は通らない)。
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ['iam:PassRole'],
-        resources: [`arn:aws:iam::${this.account}:role/${prefix(config, 'mediaconvert-*')}`],
+        resources: [mediaConvertRole.roleArn],
+        conditions: {
+          StringEquals: { 'iam:PassedToService': 'mediaconvert.amazonaws.com' },
+        },
       }),
     );
 
@@ -163,6 +190,11 @@ dnf -y install git tar gzip jq postgresql15
       .replace(/__VIDEO_BUCKET__/g, videoBucket.bucketName)
       .replace(/__ASSET_BUCKET__/g, assetBucket.bucketName)
       .replace(/__MEDIA_OUTPUT_BUCKET__/g, mediaOutputBucket.bucketName)
+      // MediaConvert: ロール ARN と HLS 出力プレフィックスを .env.production へ注入。
+      // これが無いと isMediaConvertConfigured() が false になり、
+      // 管理画面が「MediaConvert が未設定です」のままエンコードできない。
+      .replace(/__MEDIACONVERT_ROLE_ARN__/g, mediaConvertRole.roleArn)
+      .replace(/__MEDIACONVERT_OUTPUT_PREFIX__/g, HLS_OUTPUT_PREFIX)
       .replace(/__APP_REPO_URL__/g, config.appRepoUrl ?? '')
       .replace(/__APP_BRANCH__/g, config.appBranch);
 

@@ -27,7 +27,14 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
     throw errors.planRequired(video.accessLevel === 'PREMIUM' ? 'プレミアム' : 'スタンダード');
   }
 
-  const { url, expiresAt } = signVideoUrl(video.s3HlsKey);
+  const { url, expiresAt, signed } = signVideoUrl(video.s3HlsKey);
+  if (!signed) {
+    // CloudFront 署名設定 (ドメイン / キーペア / 秘密鍵) が未完了。
+    // このまま URL を返しても CloudFront が 403 を返すため、明確に原因を伝える。
+    throw errors.badRequest(
+      '動画配信 (CloudFront 署名付き URL) が未設定です。CLOUDFRONT_VIDEO_DOMAIN / CLOUDFRONT_KEY_PAIR_ID / CLOUDFRONT_PRIVATE_KEY を設定してください。',
+    );
+  }
   const maxQuality = MAX_VIDEO_QUALITY[plan];
   const allowedQualities = allowedVideoQualities(plan);
 
