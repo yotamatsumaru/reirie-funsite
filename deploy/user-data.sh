@@ -16,7 +16,11 @@
 #   - リポジトリ clone → pnpm install --prod=false → prisma migrate → build
 #   - PM2 でアプリ起動 + 自動起動登録
 #
-# CDK ec2-stack.ts によりプレースホルダ (__APP_NAME__ 等) は置換される
+# 設定値の受け渡し:
+#   CDK ec2-stack.ts が本スクリプトを gzip して UserData に埋め込み、
+#   APP_NAME / DB_SECRET_ARN / MEDIACONVERT_ROLE_ARN 等は
+#   圧縮しないラッパー側で export される (CFn トークンを解決するため)。
+#   本スクリプトはそれらを環境変数として受け取る。
 # =====================================================================
 
 # 何があっても /var/log/user-data.log にすべてミラーする (デバッグ最優先)
@@ -25,22 +29,24 @@ echo "[user-data] === start at $(date -Is) ==="
 
 set -euo pipefail
 
-# ---- 0. プレースホルダ (CDK が置換) ----
-APP_NAME="__APP_NAME__"
-ENV_NAME="__ENV_NAME__"
-AWS_REGION="__AWS_REGION__"
-DB_HOST="__DB_HOST__"
-DB_PORT="__DB_PORT__"
-DB_NAME="__DB_NAME__"
-DB_SECRET_ARN="__DB_SECRET_ARN__"
-VIDEO_BUCKET="__VIDEO_BUCKET__"
-ASSET_BUCKET="__ASSET_BUCKET__"
-MEDIA_OUTPUT_BUCKET="__MEDIA_OUTPUT_BUCKET__"
-# MediaConvert (動画 HLS エンコード)。CDK StorageStack が作成したロール ARN。
-MEDIACONVERT_ROLE_ARN="__MEDIACONVERT_ROLE_ARN__"
-MEDIACONVERT_OUTPUT_PREFIX="__MEDIACONVERT_OUTPUT_PREFIX__"
-APP_REPO_URL="__APP_REPO_URL__"
-APP_BRANCH="__APP_BRANCH__"
+# ---- 0. 設定値 (ラッパーが export 済み。未設定なら即エラーにする) ----
+# CFn トークンを含む値はラッパー側で export されるため、ここでは受け取るだけ。
+# 万一 export されていない場合に空文字で進むと、
+# .env.production が壊れた状態でアプリが起動してしまうので必ず落とす。
+require_var() {
+  local name="$1"
+  if [ -z "${!name:-}" ]; then
+    echo "[user-data][FATAL] 必須の環境変数 $name が未設定です (ec2-stack.ts の tokenVars を確認)" >&2
+    exit 1
+  fi
+}
+for v in APP_NAME ENV_NAME AWS_REGION DB_HOST DB_PORT DB_NAME DB_SECRET_ARN \
+         VIDEO_BUCKET ASSET_BUCKET MEDIA_OUTPUT_BUCKET \
+         MEDIACONVERT_ROLE_ARN MEDIACONVERT_OUTPUT_PREFIX APP_BRANCH; do
+  require_var "$v"
+done
+# APP_REPO_URL は未設定でも後続で分岐処理されるため必須にしない
+APP_REPO_URL="${APP_REPO_URL:-}"
 
 APP_USER="ec2-user"
 APP_DIR="/home/${APP_USER}/app"

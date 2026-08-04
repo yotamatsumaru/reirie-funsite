@@ -22,6 +22,7 @@ import { type AppConfig, prefix, commonTags } from './config';
 import { HLS_OUTPUT_PREFIX } from './storage-stack';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as zlib from 'zlib';
 
 export interface Ec2StackProps extends StackProps {
   config: AppConfig;
@@ -178,28 +179,104 @@ dnf -y install git tar gzip jq postgresql15
     userDataScript = userDataScript
       .replace(/\r\n/g, '\n')
       .replace(/^#!\s*\/[^\n]*\n/, '');
-    // 環境変数の埋め込み
-    userDataScript = userDataScript
-      .replace(/__APP_NAME__/g, config.appName)
-      .replace(/__ENV_NAME__/g, config.envName)
-      .replace(/__AWS_REGION__/g, config.region)
-      .replace(/__DB_HOST__/g, props.dbHost)
-      .replace(/__DB_PORT__/g, props.dbPort)
-      .replace(/__DB_NAME__/g, props.dbName)
-      .replace(/__DB_SECRET_ARN__/g, dbSecret.secretArn)
-      .replace(/__VIDEO_BUCKET__/g, videoBucket.bucketName)
-      .replace(/__ASSET_BUCKET__/g, assetBucket.bucketName)
-      .replace(/__MEDIA_OUTPUT_BUCKET__/g, mediaOutputBucket.bucketName)
+    // =================================================================
+    // プレースホルダの解決方針
+    // -----------------------------------------------------------------
+    // 値には 2 種類ある。
+    //   (a) synth 時に確定する定数 (appName / region / バケット名の一部 等)
+    //   (b) deploy 時に CloudFormation が解決する **トークン**
+    //       (dbSecret.secretArn, mediaConvertRole.roleArn = Fn::ImportValue 等)
+    //
+    // 後述の gzip 圧縮はスクリプト本文を synth 時にバイト列へ固めてしまうため、
+    // (b) を本文に直接埋め込むと "${Token[TOKEN.123]}" という文字列が
+    // そのまま焼き込まれ、実機で ARN が空になる (=エンコード不能に戻る)。
+    //
+    // そこで本文側のプレースホルダは **シェル変数参照** に置換し、
+    // 実際の値は圧縮しないラッパー側で export する。
+    // ラッパーは通常の UserData として CFn に渡るのでトークンが正しく解決される。
+    // =================================================================
+    const tokenVars: Record<string, string> = {
+      APP_NAME: config.appName,
+      ENV_NAME: config.envName,
+      AWS_REGION: config.region,
+      DB_HOST: props.dbHost,
+      DB_PORT: props.dbPort,
+      DB_NAME: props.dbName,
+      DB_SECRET_ARN: dbSecret.secretArn,
+      VIDEO_BUCKET: videoBucket.bucketName,
+      ASSET_BUCKET: assetBucket.bucketName,
+      MEDIA_OUTPUT_BUCKET: mediaOutputBucket.bucketName,
       // MediaConvert: ロール ARN と HLS 出力プレフィックスを .env.production へ注入。
       // これが無いと isMediaConvertConfigured() が false になり、
       // 管理画面が「MediaConvert が未設定です」のままエンコードできない。
-      .replace(/__MEDIACONVERT_ROLE_ARN__/g, mediaConvertRole.roleArn)
-      .replace(/__MEDIACONVERT_OUTPUT_PREFIX__/g, HLS_OUTPUT_PREFIX)
-      .replace(/__APP_REPO_URL__/g, config.appRepoUrl ?? '')
-      .replace(/__APP_BRANCH__/g, config.appBranch);
+      MEDIACONVERT_ROLE_ARN: mediaConvertRole.roleArn,
+      MEDIACONVERT_OUTPUT_PREFIX: HLS_OUTPUT_PREFIX,
+      APP_REPO_URL: config.appRepoUrl ?? '',
+      APP_BRANCH: config.appBranch,
+    };
+
+    // 本文: __FOO__ → ${FOO} (ラッパーが export した値を参照する)
+    for (const key of Object.keys(tokenVars)) {
+      userDataScript = userDataScript.replace(
+        new RegExp(`__${key}__`, 'g'),
+        `\${${key}}`,
+      );
+    }
+
+    // 置換漏れ (タイポや新規追加のプレースホルダ) を synth 時に検出する
+    const leftover = userDataScript.match(/__[A-Z0-9_]+__/g);
+    if (leftover) {
+      throw new Error(
+        `deploy/user-data.sh に未置換のプレースホルダがあります: ${[...new Set(leftover)].join(', ')}`,
+      );
+    }
+
+    // =================================================================
+    // UserData の 16KB 制限対策 (gzip + base64 の自己解凍ラッパー)
+    // -----------------------------------------------------------------
+    // EC2 の UserData は **base64 デコード後で 16384 バイト** が上限。
+    // user-data.sh は日本語コメントが多く (UTF-8 で 1 文字 3 バイト)、
+    // 素のまま渡すと 20KB を超えて
+    //   "User data is limited to 16384 bytes" で CREATE_FAILED になる。
+    //
+    // cloud-init は gzip されたペイロードを自動展開してくれるが、
+    // CDK の UserData.forLinux() は必ず先頭に shebang を付けて
+    // テキストとして流すため、その経路には乗せられない。
+    // そこで「小さなシェルスクリプトの中に本体を gzip+base64 で埋め込み、
+    // 実行時に自分で展開して bash に渡す」自己解凍方式を使う。
+    //
+    // 効果: 約 20.8KB → 約 9.5KB (制限の 6 割以下)。
+    // 展開後のスクリプトは /var/lib/cloud/instance/payload.sh に置き、
+    // ログを /var/log/user-data.log に集約する挙動は従来どおり。
+    // =================================================================
+    const payloadB64 = zlib
+      .gzipSync(Buffer.from(userDataScript, 'utf8'), { level: 9 })
+      .toString('base64');
 
     const userData = ec2.UserData.forLinux();
-    userData.addCommands(userDataScript);
+    userData.addCommands(
+      'set -euo pipefail',
+      // --- (b) トークンを含む値はここで export する ---
+      // この部分は圧縮せずそのまま CFn に渡るため、
+      // Fn::ImportValue / Fn::GetAtt が deploy 時に正しく解決される。
+      ...Object.entries(tokenVars).map(([k, v]) => `export ${k}='${v}'`),
+      // --- 本体を展開して実行 ---
+      'PAYLOAD=/var/lib/cloud/instance/payload.sh',
+      `echo '${payloadB64}' | base64 -d | gunzip > "$PAYLOAD"`,
+      'chmod 700 "$PAYLOAD"',
+      'exec bash "$PAYLOAD"',
+    );
+
+    // 16KB 制限に収まっているかを synth 時に検証する。
+    // ここで落としておかないと deploy 実行時まで気付けない。
+    const renderedBytes = Buffer.byteLength(userData.render(), 'utf8');
+    const USER_DATA_LIMIT = 16384;
+    if (renderedBytes > USER_DATA_LIMIT) {
+      throw new Error(
+        `UserData が ${renderedBytes} バイトで EC2 の上限 ${USER_DATA_LIMIT} バイトを超えています。` +
+          ' deploy/user-data.sh を削るか、S3 に置いて取得する方式へ切り替えてください。',
+      );
+    }
 
     // ---- インスタンスタイプ ----
     const [, size] = config.ec2InstanceType.split('.');
