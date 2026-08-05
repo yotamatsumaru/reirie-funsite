@@ -856,6 +856,66 @@ aws ssm get-parameter `
 > パスが `///mediaconvert/role-arn` のように壊れています
 > （= 環境変数が空）。上のようにベタ書きしてください。
 
+### 2.5. ⚠️ `deploy:ec2` は原則不要（インスタンスが作り直される）
+
+**storage スタックが成功したら、`pnpm run deploy:ec2` は実行しないでください。**
+
+`infra/lib/ec2-stack.ts` は `userDataCausesReplacement: true` を指定しています。
+UserData を gzip 方式に変更した（PR #186）ため CFn 上の UserData に差分があり、
+`deploy:ec2` を実行すると **EC2 インスタンスが置き換え（Replacement）** されます。
+
+| 影響 | 内容 |
+| --- | --- |
+| インスタンス | `i-05f6c5bf19d1cfab6` が terminate され新規作成 |
+| EBS | `deleteOnTermination: true` なので**ローカルのデータは消える** |
+| ダウンタイム | 起動 + `pnpm install` + `next build` で **10〜20 分** |
+| Elastic IP | CFn が付け替えるが、その間は疎通しない |
+| 手動で入れた設定 | インスタンス上で直接編集したファイルは**すべて失われる** |
+
+**エンコード設定の反映に EC2 の作り直しは必要ありません。**
+`MEDIACONVERT_ROLE_ARN` 等は SSM Parameter Store 経由で配るため、
+既存インスタンス上で `regenerate-env.sh` を流せば済みます。
+
+```
+storage スタックが SSM に書く
+   └─ /idol-fansite/dev/mediaconvert/role-arn
+   └─ /idol-fansite/dev/s3/media-output-bucket
+        ↓  regenerate-env.sh が読む（EC2 上で実行）
+   .env.production を更新
+        ↓  deploy.sh
+   PM2 再起動 → 反映完了
+```
+
+つまり **手順 3（次節）へ直行**してください。
+
+<details>
+<summary>どうしても EC2 を作り直す必要がある場合</summary>
+
+`user-data.sh` 自体の修正を実機に反映したいときだけ実行します。
+必ず先に差分を確認し、`Replacement: True` を目視してから進めてください。
+
+```powershell
+cd $HOME\dev\reirie-funsite\infra
+npx cdk diff idol-fansite-dev-ec2
+```
+
+`AppInstance` に `replace` マークが付いていることを確認し、
+ダウンタイムを取れるタイミングで実行します。
+
+```powershell
+pnpm run deploy:ec2
+```
+
+置き換え後は `.env.production` が user-data.sh により
+SSM から**再生成される**ため、`regenerate-env.sh` は不要です。
+代わりに起動ログを確認してください。
+
+```bash
+sudo tail -f /var/log/cloud-init-output.log
+```
+
+</details>
+
 ### 3. EC2 へ接続して反映（手順 C-5）
 
 > ⚠️ PowerShell では `<` `>` が**リダイレクト演算子として予約**されています。
@@ -1017,6 +1077,7 @@ Remove-Item $HOME\cf-keys\cf-private.pem -Force
 | `argument --target: expected one argument` | インスタンス ID の取得に失敗し空文字が渡っている。`describe-instances` で一覧表示してから ID を貼る |
 | `User data is limited to 16384 bytes` | UserData が上限超過。gzip 自己解凍方式で解消済み（下記参照） |
 | `Value at 'description' failed to satisfy constraint` (`AWS::IAM::Role`) | IAM の description に日本語が入っている。ASCII に直す（下記参照。修正済み） |
+| `deploy:ec2` でインスタンスが作り直された | `userDataCausesReplacement: true` の仕様。エンコード設定の反映に EC2 再作成は不要。付録 2.5 参照 |
 
 ### IAM の description に日本語は使えない
 
