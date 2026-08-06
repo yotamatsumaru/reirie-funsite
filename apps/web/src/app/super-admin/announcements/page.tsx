@@ -3,7 +3,10 @@
  *
  * - 一覧 (DRAFT / PUBLISHED, audience 別)
  * - 新規作成フォーム
- * - 編集 / 公開切替 / 削除 (行内アクション)
+ * - 行内アクション: プレビュー / 編集 (インライン展開) / 公開切替 / 削除
+ *
+ * STAFF は閲覧のみなので、書き込み系のボタンは canEdit で出し分ける
+ * (API 側も requireSuperAdmin で二重に防いでいる)。
  */
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -11,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { listAnnouncements } from '@/lib/announcements';
 import { requireSuperAdminView } from '@/auth';
 import { AnnouncementForm } from './announcement-form';
-import { AnnouncementRowActions } from './announcement-row-actions';
+import { AnnouncementListItem } from './announcement-list-item';
 
 export const metadata: Metadata = { title: 'お知らせ配信 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -64,7 +67,11 @@ function formatDateTime(d: Date | null): string {
 }
 
 export default async function SuperAdminAnnouncementsPage() {
-  await requireSuperAdminView();
+  const session = await requireSuperAdminView();
+
+  // STAFF は閲覧のみ (書き込み API は requireSuperAdmin で弾かれる)。
+  // 押しても 403 になるボタンを出さないよう、ここで出し分ける。
+  const canEdit = session.user.role === 'SUPER_ADMIN';
 
   const all = await listAnnouncements();
   const published = all.filter((a) => a.status === 'PUBLISHED');
@@ -144,8 +151,19 @@ export default async function SuperAdminAnnouncementsPage() {
             <ul className="divide-y divide-slate-200">
               {all.map((a) => (
                 <li key={a.id} className="px-4 py-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
+                  <AnnouncementListItem
+                    id={a.id}
+                    status={a.status}
+                    emailStatus={a.emailStatus}
+                    canEdit={canEdit}
+                    initial={{
+                      title: a.title,
+                      body: a.body,
+                      audience: a.audience,
+                      sendEmail: a.sendEmail,
+                    }}
+                  >
+                    <>
                       <div className="flex flex-wrap items-center gap-2">
                         {a.status === 'PUBLISHED' ? (
                           <Badge tone="success">公開中</Badge>
@@ -200,14 +218,8 @@ export default async function SuperAdminAnnouncementsPage() {
                           )}
                         </p>
                       )}
-                    </div>
-                    <div className="shrink-0">
-                      <AnnouncementRowActions
-                        id={a.id}
-                        status={a.status}
-                      />
-                    </div>
-                  </div>
+                    </>
+                  </AnnouncementListItem>
                 </li>
               ))}
             </ul>
