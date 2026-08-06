@@ -171,9 +171,13 @@ export function AnnouncementForm() {
         </p>
       )}
       {success && (
-        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          ✓ お知らせを作成しました
-        </p>
+        <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <p>✓ お知らせを作成しました</p>
+          <p className="mt-1 text-xs text-emerald-600">
+            下書きで保存した場合は、下の一覧の「プレビュー」ボタンから
+            公開後と同じ見た目で確認できます（他の方には表示されません）。
+          </p>
+        </div>
       )}
 
       <div className="flex justify-end gap-2">
