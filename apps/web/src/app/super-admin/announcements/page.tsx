@@ -4,17 +4,22 @@
  * - 一覧 (DRAFT / PUBLISHED, audience 別)
  * - 新規作成フォーム
  * - 行内アクション: プレビュー / 編集 (インライン展開) / 公開切替 / 削除
+ * - 各お知らせの公開 URL コピー (外部サイトへの掲載・アクセス元制限の登録用)
  *
  * STAFF は閲覧のみなので、書き込み系のボタンは canEdit で出し分ける
  * (API 側も requireSuperAdmin で二重に防いでいる)。
+ * URL のコピーは閲覧操作なので STAFF にも出す。
  */
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { listAnnouncements } from '@/lib/announcements';
 import { requireSuperAdminView } from '@/auth';
+import { env } from '@/lib/env';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementListItem } from './announcement-list-item';
+import { AnnouncementLinkCopy } from './announcement-link-copy';
+import { ExternalLinkGuide } from './external-link-guide';
 
 export const metadata: Metadata = { title: 'お知らせ配信 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -74,6 +79,8 @@ export default async function SuperAdminAnnouncementsPage() {
   const canEdit = session.user.role === 'SUPER_ADMIN';
 
   const all = await listAnnouncements();
+  // お知らせの公開 URL を組み立てるためのベース (末尾スラッシュは落とす)
+  const baseUrl = env.appBaseUrl.replace(/\/$/, '');
   const published = all.filter((a) => a.status === 'PUBLISHED');
   const drafts = all.filter((a) => a.status === 'DRAFT');
 
@@ -87,6 +94,9 @@ export default async function SuperAdminAnnouncementsPage() {
           </p>
         </div>
       </div>
+
+      {/* 外部チケットサイト (LivePocket 等) 向けの設定ガイド */}
+      <ExternalLinkGuide origin={baseUrl} />
 
       {/* KPI */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -197,6 +207,17 @@ export default async function SuperAdminAnnouncementsPage() {
                             公開: {formatDateTime(a.publishedAt)}
                           </span>
                         )}
+                      </div>
+                      {/* 公開 URL: 外部サイトへの掲載やアクセス元制限の登録に使う */}
+                      <div className="mt-3 max-w-xl">
+                        <AnnouncementLinkCopy
+                          url={`${baseUrl}/notices/${a.id}`}
+                          hint={
+                            a.status === 'PUBLISHED'
+                              ? undefined
+                              : '下書きのため、この URL は管理者以外には表示されません（公開後に閲覧できます）。'
+                          }
+                        />
                       </div>
                       {a.sendEmail && a.emailStatus !== 'NOT_REQUESTED' && (
                         <p className="mt-1 text-xs text-slate-500">

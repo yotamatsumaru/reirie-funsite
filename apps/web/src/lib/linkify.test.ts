@@ -1,4 +1,9 @@
-import { linkify, isInternalHref, linkifyEscapedHtml } from './linkify';
+import {
+  EXTERNAL_LINK_REFERRER_POLICY,
+  isInternalHref,
+  linkify,
+  linkifyEscapedHtml,
+} from './linkify';
 
 describe('linkify', () => {
   it('空文字は空配列', () => {
@@ -194,12 +199,56 @@ describe('linkifyEscapedHtml', () => {
     const html = linkifyEscapedHtml('詳細は https://example.com/a です');
     expect(html).toContain('<a href="https://example.com/a"');
     expect(html).toContain('target="_blank"');
-    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('rel="noopener"');
     expect(html).toContain('>https://example.com/a</a>');
   });
 
   it('URL が無ければそのまま返す', () => {
     expect(linkifyEscapedHtml('ただの本文')).toBe('ただの本文');
+  });
+
+  /**
+   * 回帰テスト: LivePocket の「アクセス元制限」対応。
+   *
+   * noreferrer を付けると Referer が送られず、
+   * 「https://reirie.com/ からのアクセスのみ許可」という設定に弾かれて
+   * 会員が先行抽選ページを開けなくなる。
+   * 良かれと思って noreferrer を足し戻されるのを防ぐためのテスト。
+   */
+  describe('回帰: アクセス元制限 (Referer) を壊さない', () => {
+    it('noreferrer を付けない', () => {
+      const html = linkifyEscapedHtml('https://livepocket.jp/e/c1a-7zi3rr');
+      expect(html).not.toContain('noreferrer');
+    });
+
+    it('タブナビゲーション対策の noopener は維持する', () => {
+      const html = linkifyEscapedHtml('https://livepocket.jp/e/c1a-7zi3rr');
+      expect(html).toContain('rel="noopener"');
+    });
+
+    it('referrerpolicy を明示する (オリジンのみ送信)', () => {
+      const html = linkifyEscapedHtml('https://livepocket.jp/e/c1a-7zi3rr');
+      expect(html).toContain(
+        `referrerpolicy="${EXTERNAL_LINK_REFERRER_POLICY}"`,
+      );
+    });
+
+    it('referrerpolicy はパスを送らない値である', () => {
+      // no-referrer / same-origin だと Referer 自体が消える or 送られないため、
+      // アクセス元制限のドメイン判定を通せなくなる。
+      expect(EXTERNAL_LINK_REFERRER_POLICY).toBe(
+        'strict-origin-when-cross-origin',
+      );
+      expect(EXTERNAL_LINK_REFERRER_POLICY).not.toBe('no-referrer');
+      expect(EXTERNAL_LINK_REFERRER_POLICY).not.toBe('same-origin');
+    });
+
+    it('mailto には target / referrerpolicy を付けない', () => {
+      const html = linkifyEscapedHtml('info@example.com');
+      expect(html).toContain('href="mailto:info@example.com"');
+      expect(html).not.toContain('target="_blank"');
+      expect(html).not.toContain('referrerpolicy');
+    });
   });
 
   it('javascript: はアンカーにしない', () => {

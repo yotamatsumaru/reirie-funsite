@@ -12,12 +12,22 @@
  *   許可スキームは http / https / mailto のみ (lib/linkify.ts 側で判定)。
  *
  * 遷移:
- *   - 外部リンク → `target="_blank"` + `rel="noopener noreferrer"`
+ *   - 外部リンク → `target="_blank"` + `rel="noopener"`
  *   - 自サイト内リンク → Next.js の <Link> でクライアント遷移
  *     (`selfOrigin` を渡した場合のみ判定される)
+ *
+ * ⚠️ `rel` に `noreferrer` を付けないこと。
+ *    LivePocket の「アクセス元制限」は Referer ヘッダーで遷移元を
+ *    判定するため、noreferrer を付けると会員が先行抽選ページに
+ *    アクセスできなくなる (詳細は lib/linkify.ts の
+ *    EXTERNAL_LINK_REFERRER_POLICY のコメント)。
  */
 import Link from 'next/link';
-import { linkify, isInternalHref } from '@/lib/linkify';
+import {
+  EXTERNAL_LINK_REFERRER_POLICY,
+  isInternalHref,
+  linkify,
+} from '@/lib/linkify';
 
 export function LinkifiedText({
   text,
@@ -59,7 +69,12 @@ export function LinkifiedText({
             href={t.href}
             {...(t.isEmail
               ? {}
-              : { target: '_blank', rel: 'noopener noreferrer' })}
+              : {
+                  target: '_blank',
+                  // noreferrer は付けない (アクセス元制限が通らなくなる)
+                  rel: 'noopener',
+                  referrerPolicy: EXTERNAL_LINK_REFERRER_POLICY,
+                })}
             className="break-all text-brand-600 underline decoration-brand-300 underline-offset-2 transition hover:text-brand-700 hover:decoration-brand-500"
           >
             {t.value}
