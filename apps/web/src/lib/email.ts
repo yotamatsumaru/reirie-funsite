@@ -3,6 +3,7 @@
  */
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { env, isPlaceholderSesFrom } from './env';
+import { linkifyEscapedHtml } from './linkify';
 
 let _ses: SESClient | null = null;
 function ses(): SESClient {
@@ -259,8 +260,15 @@ export async function sendAnnouncementEmail(params: {
   const safeName = escapeHtml(name);
   const safeTitle = escapeHtml(params.title);
   const safeSite = escapeHtml(siteName);
-  // 本文は改行を <br> に変換して表示 (HTML エスケープ後に変換することで XSS を防ぐ)
-  const safeBody = escapeHtml(params.body).replace(/\n/g, '<br>');
+  // 本文は改行を <br> に変換して表示 (HTML エスケープ後に変換することで XSS を防ぐ)。
+  // さらに URL / メールアドレスを <a> に変換してメールからも踏めるようにする。
+  // 順序が重要:
+  //   1. escapeHtml       … 本文中の HTML を無害化
+  //   2. linkifyEscapedHtml … エスケープ済み文字列に対して <a> を生成
+  //   3. 改行 → <br>       … リンク生成後に行う (URL 内に改行は含まれない)
+  // linkifyEscapedHtml は http/https/mailto 以外をリンク化しないため、
+  // javascript: 等が <a href> に入ることはない。
+  const safeBody = linkifyEscapedHtml(escapeHtml(params.body)).replace(/\n/g, '<br>');
 
   const html = `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>

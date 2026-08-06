@@ -8,6 +8,8 @@ import { auth } from '@/auth';
 import { getAnnouncement } from '@/lib/announcements';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
+import { env } from '@/lib/env';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,8 +130,13 @@ export default async function NoticeDetailPage({
 
         <Card className="mt-6">
           <CardBody>
+            {/*
+              本文はプレーンテキスト。URL / メールアドレスは
+              LinkifiedText が自動でリンク化する
+              (dangerouslySetInnerHTML は使わないので XSS の心配は無い)。
+            */}
             <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 sm:text-base">
-              {a.body}
+              <LinkifiedText text={a.body} selfOrigin={env.appBaseUrl} />
             </div>
           </CardBody>
         </Card>
