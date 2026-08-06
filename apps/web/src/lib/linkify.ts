@@ -183,6 +183,58 @@ export function linkify(text: string): LinkifyToken[] {
 }
 
 /**
+ * 外部リンクに付ける referrerpolicy の値。
+ *
+ * ■ なぜ `noreferrer` をやめて、この値を明示するのか
+ *
+ * LivePocket (チケット販売) の「専用販売ページ」には
+ * **アクセス元制限**という機能がある。これは遷移元ページを
+ * **Referer ヘッダーで判定**する仕組みで、
+ * 「https://reirie.com/ からのアクセスのみ許可」と設定できる。
+ *
+ * ここで問題になるのが `rel="noreferrer"`。
+ * これを付けると**ブラウザは Referer を一切送らない**ため、
+ * LivePocket 側は「アクセス元不明」と判断し、
+ *
+ *     お知らせの先行抽選リンクを押した会員全員がエラーページに飛ぶ
+ *
+ * という事故になる。実際にお知らせ本文へ LivePocket の URL を
+ * 貼る運用を始めたため、`noreferrer` は外さなければならない。
+ *
+ * ■ それでも安全な理由
+ *
+ * - タブナビゲーション攻撃 (window.opener の乗っ取り) を防ぐのは
+ *   `noopener` の役目であり、こちらは維持している。
+ *   モダンブラウザは target="_blank" に暗黙で noopener を適用するが、
+ *   明示しておく。
+ * - `strict-origin-when-cross-origin` は Referer として
+ *   **オリジンだけ** (例: `https://reirie.com/`) を送り、
+ *   パスやクエリ (会員 ID を含みうる) は送らない。
+ *   つまり「どのページから来たか」の詳細は漏らさずに、
+ *   アクセス元制限のドメイン判定だけを通せる。
+ * - HTTPS → HTTP のダウングレード時は Referer を送らない。
+ *
+ * これはサイト全体のデフォルト (next.config.ts の Referrer-Policy)
+ * と同じ値だが、`noreferrer` を再び足されると無意味になるため、
+ * 意図を明示する目的でここに定数として置いている。
+ *
+ * ■ LivePocket 側の設定に関する注意 (公式 FAQ より)
+ *
+ * - アクセス元は**ドメイン指定が推奨**
+ *   (`https://reirie.com/` のように末尾スラッシュまで)
+ * - `https://reirie.com/notices/` のような**ディレクトリ単位**にすると、
+ *   ブラウザ環境によって Referer のパスが送られず弾かれることがある。
+ *   その場合は遷移元ページに
+ *   `<meta name="referrer" content="no-referrer-when-downgrade">`
+ *   が必要になる (= パスまで送る設定)。
+ * - 遷移は必ず通常の `<a href>` (GET) で行うこと。
+ *   form の POST では正しく表示されない。
+ *   → LinkifiedText は `<a>` を生成しているのでこの条件を満たす。
+ */
+export const EXTERNAL_LINK_REFERRER_POLICY =
+  'strict-origin-when-cross-origin' as const;
+
+/**
  * `href` が自サイト内のリンクかどうかを判定する。
  * 内部リンクなら Next.js の <Link> でクライアント遷移させられる。
  *
@@ -232,7 +284,13 @@ export function linkifyEscapedHtml(escapedText: string): string {
     // href 内の " は既にエスケープ済み (&quot;) なので属性値として安全
     const trailing = rawMatch.slice(cleaned.length);
     // mailto: は新規タブではなくメーラーを開くので target は付けない
-    const attrs = isEmail ? '' : ' target="_blank" rel="noopener noreferrer"';
+    //
+    // ⚠️ rel に `noreferrer` を入れてはいけない (REFERRER_NOTE 参照)。
+    //    Referer が消え、LivePocket 等の「アクセス元制限」に弾かれる。
+    //    タブナビゲーション対策の `noopener` だけを付ける。
+    const attrs = isEmail
+      ? ''
+      : ` target="_blank" rel="noopener" referrerpolicy="${EXTERNAL_LINK_REFERRER_POLICY}"`;
     return (
       `<a href="${href}"${attrs}` +
       ` style="color:#7c5295;text-decoration:underline;">${cleaned}</a>${trailing}`
