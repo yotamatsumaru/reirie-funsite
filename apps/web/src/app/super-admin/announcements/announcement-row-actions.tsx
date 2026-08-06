@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { SquareArrowOutUpRight } from 'lucide-react';
 
 type Status = 'DRAFT' | 'PUBLISHED';
 
@@ -72,8 +73,9 @@ export function AnnouncementRowActions({
           href={previewHref(id, status)}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-md border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+          className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100"
         >
+          <SquareArrowOutUpRight className="h-3.5 w-3.5" aria-hidden />
           プレビュー
         </a>
         {status === 'DRAFT' ? (
