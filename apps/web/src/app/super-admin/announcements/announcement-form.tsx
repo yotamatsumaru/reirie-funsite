@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
+import { linkify } from '@/lib/linkify';
 
 type Audience = 'ALL' | 'MEMBERS' | 'PREMIUM';
 type Status = 'DRAFT' | 'PUBLISHED';
@@ -84,12 +86,30 @@ export function AnnouncementForm() {
           disabled={pending}
           rows={6}
           maxLength={4000}
-          placeholder="改行可。Markdown は使えません。"
+          placeholder={
+            '改行可。Markdown は使えません。\n' +
+            'URL をそのまま書くと自動でリンクになります。\n' +
+            '例: 詳細は https://example.com/campaign をご覧ください'
+          }
           className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
         />
-        <p className="mt-1 text-right text-[10px] text-slate-400">
-          {body.length} / 4000
-        </p>
+        <div className="mt-1 flex items-start justify-between gap-2">
+          <p className="text-[10px] leading-relaxed text-slate-500">
+            🔗 <span className="font-semibold">URL は自動でリンクになります</span>
+            （<code className="rounded bg-slate-100 px-1">https://…</code>、
+            <code className="rounded bg-slate-100 px-1">www.…</code>、
+            メールアドレス）。
+            <br />
+            リンクにしたい場合は URL をそのまま貼り付けてください。
+            HTML タグは使えません（そのまま文字として表示されます）。
+          </p>
+          <p className="shrink-0 text-[10px] text-slate-400">
+            {body.length} / 4000
+          </p>
+        </div>
+
+        {/* 本文プレビュー: 実際にどうリンク化されるかを投稿前に確認できる */}
+        {body.trim().length > 0 && <BodyLinkPreview body={body} />}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -170,5 +190,43 @@ export function AnnouncementForm() {
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * 本文プレビュー。
+ *
+ * 投稿前に「どの文字列がリンクになるか」を確認できるようにする。
+ * 実際の詳細ページ (/notices/[id]) と同じ <LinkifiedText> を使うので、
+ * ここで見えている結果がそのまま公開後の表示になる。
+ *
+ * - プレビュー内のリンクは踏めてしまうと編集の邪魔になるので、
+ *   ラッパー側で pointer-events を切って「見た目だけ」にしている。
+ * - 検出件数を出すことで「リンクになっていない」ことに気付きやすくする。
+ */
+function BodyLinkPreview({ body }: { body: string }) {
+  const linkCount = linkify(body).filter((t) => t.type === 'link').length;
+
+  return (
+    <details className="mt-2 rounded-md border border-slate-200 bg-slate-50">
+      <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold text-slate-600">
+        表示プレビュー
+        {linkCount > 0 ? (
+          <span className="ml-1 rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700">
+            リンク {linkCount} 件
+          </span>
+        ) : (
+          <span className="ml-1 text-[10px] font-normal text-slate-400">
+            (リンクは検出されていません)
+          </span>
+        )}
+      </summary>
+      <div className="border-t border-slate-200 px-3 py-3">
+        {/* プレビュー内のリンクは誤クリック防止のため無効化する */}
+        <div className="pointer-events-none whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-800">
+          <LinkifiedText text={body} />
+        </div>
+      </div>
+    </details>
   );
 }

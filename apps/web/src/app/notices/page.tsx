@@ -103,6 +103,12 @@ export default async function NoticesIndexPage() {
                 <h2 className="mt-2 text-base font-semibold text-slate-900 sm:text-lg">
                   {a.title}
                 </h2>
+                {/*
+                  ここは抜粋表示。カード全体が <Link> なので、
+                  本文中の URL をリンク化すると <a> の入れ子になり
+                  不正な HTML になる (クリック領域も競合する)。
+                  リンクとして踏めるのは詳細ページ側 (/notices/[id])。
+                */}
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600">
                   {a.body}
                 </p>

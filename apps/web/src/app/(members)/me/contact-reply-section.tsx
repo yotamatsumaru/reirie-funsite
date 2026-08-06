@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { Mail } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { formatJstDateTime } from '@idol/shared';
 
 export type ContactReplyItem = {
@@ -90,8 +91,14 @@ function ContactReplyCard({ reply }: { reply: ContactReplyItem }) {
 
       {open && (
         <div className="border-t border-brand-100 bg-white px-4 py-4">
+          {/*
+            返信本文はプレーンテキスト。運営が案内 URL を書くケースが多いので
+            LinkifiedText で自動リンク化する。
+            (dangerouslySetInnerHTML は使わないので XSS の心配は無い。
+             このブロックは <button> の兄弟要素なので <a> の入れ子にもならない)
+          */}
           <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
-            {reply.body}
+            <LinkifiedText text={reply.body} />
           </p>
           <p className="mt-4 text-right text-xs text-slate-400">— REIRIE 運営より</p>
         </div>
