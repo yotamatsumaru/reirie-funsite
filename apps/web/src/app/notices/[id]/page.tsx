@@ -10,6 +10,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { env } from '@/lib/env';
+import { resolveAnnouncementVisibility } from '@/lib/announcement-visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,33 +48,66 @@ export async function generateMetadata({
   const { id } = await params;
   const a = await getAnnouncement(id);
   if (!a) return { title: 'お知らせ' };
+
+  // ⚠️ 下書きのタイトル / 本文を meta に出さないこと。
+  //    generateMetadata は本文の描画とは別に実行されるため、
+  //    ここに status チェックが無いと「ページは 404 なのに
+  //    <title> と og:description に下書きの内容が出る」という
+  //    情報漏洩になる (SNS のリンクプレビューにも出てしまう)。
+  if (a.status !== 'PUBLISHED') {
+    return { title: 'お知らせ', robots: { index: false, follow: false } };
+  }
+
   return {
     title: a.title,
     description: a.body.slice(0, 120),
+    // 会員限定は検索エンジンにインデックスさせない
+    ...(a.audience === 'ALL'
+      ? {}
+      : { robots: { index: false, follow: false } }),
   };
 }
 
 export default async function NoticeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }) {
   const { id } = await params;
+  const { preview } = await searchParams;
   const a = await getAnnouncement(id);
 
-  if (!a || a.status !== 'PUBLISHED') {
+  if (!a) {
     notFound();
   }
 
   const session = await auth();
-  const userPlan = session?.user?.plan ?? 'FREE';
-  const isLoggedIn = !!session?.user?.id;
 
-  // 閲覧制限
-  if (a.audience === 'MEMBERS' && !isLoggedIn) {
+  // 閲覧可否は純粋関数に集約 (lib/announcement-visibility.ts)。
+  // 下書きは運営 (SUPER_ADMIN / STAFF) が ?preview=1 を付けたときのみ表示され、
+  // それ以外の全員には 404 になる。
+  const decision = resolveAnnouncementVisibility(
+    { status: a.status, audience: a.audience },
+    {
+      isLoggedIn: !!session?.user?.id,
+      role: session?.user?.role,
+      plan: session?.user?.plan,
+    },
+    preview === '1',
+  );
+
+  if (decision.kind === 'not-found') {
+    notFound();
+  }
+  if (decision.kind === 'signin-required') {
     redirect(`/signin?callbackUrl=/notices/${id}`);
   }
-  if (a.audience === 'PREMIUM' && userPlan !== 'PREMIUM') {
+
+  const isPreview = decision.kind === 'preview';
+
+  if (decision.kind === 'upgrade-required') {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
         <Link
@@ -105,21 +139,57 @@ export default async function NoticeDetailPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
+      {/*
+        下書きプレビュー時の警告バナー。
+        「今見ているものは公開されていない」ことを一目で分かるようにして、
+        公開済みと勘違いする事故を防ぐ。
+      */}
+      {isPreview && (
+        <div className="mb-4 rounded-lg border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-bold text-amber-900">
+            <span aria-hidden>👁️</span>
+            下書きプレビュー（まだ公開されていません）
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800">
+            この画面は運営 (SUPER_ADMIN / STAFF) だけに表示されています。
+            他の方がこの URL を開いても「ページが見つかりません」になります。
+            <br />
+            公開するには{' '}
+            <Link
+              href="/super-admin/announcements"
+              className="font-semibold underline hover:no-underline"
+            >
+              お知らせ配信画面
+            </Link>{' '}
+            の「公開」ボタンを押してください。
+          </p>
+        </div>
+      )}
+
       <Link
-        href="/notices"
+        href={isPreview ? '/super-admin/announcements' : '/notices'}
         className="inline-flex items-center gap-1 text-sm text-brand-600 hover:underline"
       >
-        ← お知らせ一覧に戻る
+        ← {isPreview ? 'お知らせ配信画面に戻る' : 'お知らせ一覧に戻る'}
       </Link>
 
       <article className="mt-4">
         <div className="flex flex-wrap items-center gap-2">
-          <time
-            dateTime={a.publishedAt?.toISOString()}
-            className="text-sm tabular-nums text-slate-500"
-          >
-            {formatDateTime(a.publishedAt)}
-          </time>
+          {/*
+            下書きは publishedAt が null なので、日付の代わりに
+            「未公開」であることを示す (空欄だと崩れて見える)。
+          */}
+          {a.publishedAt ? (
+            <time
+              dateTime={a.publishedAt.toISOString()}
+              className="text-sm tabular-nums text-slate-500"
+            >
+              {formatDateTime(a.publishedAt)}
+            </time>
+          ) : (
+            <span className="text-sm text-slate-400">日付未定（未公開）</span>
+          )}
+          {isPreview && <Badge tone="warning">下書き</Badge>}
           <Badge tone={AUDIENCE_TONES[a.audience]}>
             {AUDIENCE_LABELS[a.audience]}
           </Badge>

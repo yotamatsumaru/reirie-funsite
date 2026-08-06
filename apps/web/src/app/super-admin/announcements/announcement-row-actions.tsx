@@ -5,6 +5,17 @@ import { useRouter } from 'next/navigation';
 
 type Status = 'DRAFT' | 'PUBLISHED';
 
+/**
+ * プレビュー URL。
+ *
+ * 下書きは `?preview=1` を付けたときだけ運営に表示される
+ * (判定は sever 側の lib/announcement-visibility.ts)。
+ * 他の人がこの URL を開いても 404 になるので共有しても漏れない。
+ */
+function previewHref(id: string, status: Status): string {
+  return status === 'DRAFT' ? `/notices/${id}?preview=1` : `/notices/${id}`;
+}
+
 export function AnnouncementRowActions({
   id,
   status,
@@ -52,6 +63,19 @@ export function AnnouncementRowActions({
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
+        {/*
+          公開後と同じ見た目で確認するリンク。
+          下書きでも押せるようにして「公開しないと確認できない」を解消する。
+          別タブで開くのは、編集中の一覧の状態を失わないため。
+        */}
+        <a
+          href={previewHref(id, status)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-md border border-sky-300 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+        >
+          プレビュー
+        </a>
         {status === 'DRAFT' ? (
           <button
             type="button"
