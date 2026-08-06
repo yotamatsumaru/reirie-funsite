@@ -104,8 +104,11 @@ EC2 を作り直さずに `.env.production` を更新する場合:
 
 ```bash
 # SSM Session Manager で EC2 に接続してから
-bash /home/ec2-user/app/deploy/regenerate-env.sh
-bash /home/ec2-user/app/deploy/deploy.sh   # PM2 再起動で反映
+sudo -i -u ec2-user        # ⚠️ 必須: 接続直後は ssm-user のため Permission denied になる
+cd ~/app
+
+bash deploy/regenerate-env.sh
+bash deploy/deploy.sh      # PM2 再起動で反映
 ```
 
 `regenerate-env.sh` は SSM から MediaConvert / CloudFront / CRON_SECRET を読み直し、
@@ -258,6 +261,7 @@ aws ec2 describe-instances `
   --output table
 
 aws ssm start-session --target i-xxxxxxxxxxxxxxxxx   # ← 上で表示された ID に置換
+# 接続後は必ず: sudo -i -u ec2-user   (ssm-user では Permission denied)
 ```
 
 変数を使いたい場合は、**空でないことを必ず検証**してください。
@@ -445,42 +449,78 @@ aws ssm get-parameter --name "/${APP}/${ENV}/mediaconvert/role-arn" \
 # → arn:aws:iam::700918785224:role/idol-fansite-dev-mediaconvert-role
 ```
 
-### C-4. MediaConvert 側の疎通確認（EC2 上で実行）
+### C-4. EC2 に接続する（⚠️ `ssm-user` → `ec2-user` の切り替えが必須）
 
 ```bash
-# EC2 に接続
 aws ssm start-session --target <instance-id>
 ```
 
+接続すると `sh-5.2$` というプロンプトになりますが、
+このとき**ログインユーザーは `ec2-user` ではなく `ssm-user`** です。
+アプリは `/home/ec2-user/app` にあり、このディレクトリは
+パーミッション `700`（所有者のみアクセス可）なので、
+そのままスクリプトを叩くと必ず失敗します。
+
+```
+sh-5.2$ bash /home/ec2-user/app/deploy/regenerate-env.sh
+bash: /home/ec2-user/app/deploy/regenerate-env.sh: Permission denied
+```
+
+**接続直後に必ず `ec2-user` へ切り替えてください。**
+
+```bash
+sudo -i -u ec2-user
+```
+
+切り替わったことを確認します。
+
+```bash
+whoami   # → ec2-user
+pwd      # → /home/ec2-user
+```
+
+> `sudo -i` （ログインシェル）である点が重要です。
+> `sudo -u ec2-user bash` だと `$HOME` が `/home/ssm-user` のままになり、
+> `nvm` / `pnpm` / `pm2` が見つからず別のエラーになります。
+
+切り替え後、MediaConvert の疎通を確認します。
+
 ```bash
 # アカウント固有エンドポイントが取れるか (mediaconvert:DescribeEndpoints 権限の確認)
-aws mediaconvert describe-endpoints --region "$AWS_REGION"
+aws mediaconvert describe-endpoints --region ap-northeast-1
 
-# ロールを PassRole できるか (ARN が一致しているか)
+# ロールが存在し ARN が一致しているか
 aws iam get-role --role-name "idol-fansite-dev-mediaconvert-role" \
   --query 'Role.Arn' --output text
+# → arn:aws:iam::700918785224:role/idol-fansite-dev-mediaconvert-role
 ```
 
 ### C-5. `.env.production` へ反映
 
 CDK でロールを作っても既存インスタンスの `.env.production` は自動更新されません。
-EC2 上で以下を実行します。
+**`ec2-user` に切り替えた状態で**以下を実行します（C-4 参照）。
 
 ```bash
-bash /home/ec2-user/app/deploy/regenerate-env.sh
+sudo -i -u ec2-user          # ← まだ切り替えていない場合
+cd ~/app
+
+bash deploy/regenerate-env.sh
 # → [regenerate-env]   set MEDIACONVERT_ROLE_ARN = arn:aws:… (len=…)
 #    [regenerate-env]   set S3_MEDIA_OUTPUT_BUCKET = idol-fan… (len=…)
 #    [regenerate-env][WARN] CloudFront 署名鍵が未登録です。… ← 手順 D で解消
 
-bash /home/ec2-user/app/deploy/deploy.sh   # PM2 再起動で反映
+bash deploy/deploy.sh        # PM2 再起動で反映
 ```
 
 反映確認（値は出さずに変数名だけ）:
 
 ```bash
 grep -E '^(MEDIACONVERT_ROLE_ARN|S3_VIDEO_BUCKET|S3_MEDIA_OUTPUT_BUCKET|CRON_SECRET)=' \
-  /home/ec2-user/app/.env.production | cut -d= -f1
+  ~/app/.env.production | cut -d= -f1
 ```
+
+> `Permission denied` が出る場合は `ec2-user` に切り替わっていません。
+> `whoami` で確認してください。
 
 ### C-6. アプリ側の設定状況を確認
 
@@ -715,13 +755,16 @@ aws ssm put-parameter \
 ### D-5. EC2 の `.env.production` に反映
 
 ```bash
-# EC2 上で
-bash /home/ec2-user/app/deploy/regenerate-env.sh
+# EC2 上で (SSM 接続直後は ssm-user なので必ず切り替える)
+sudo -i -u ec2-user
+cd ~/app
+
+bash deploy/regenerate-env.sh
 # → set CLOUDFRONT_KEY_PAIR_ID = K2ABCDEF… (len=14)
 #    set CLOUDFRONT_PRIVATE_KEY = (masked, len=1704)
 #    ※ 「CloudFront 署名鍵が未登録です」の WARN が消えること
 
-bash /home/ec2-user/app/deploy/deploy.sh
+bash deploy/deploy.sh
 ```
 
 `regenerate-env.sh` は `CLOUDFRONT_PRIVATE_KEY` が複数行であることを考慮して
@@ -945,14 +988,22 @@ aws ec2 describe-instances `
 表示された ID をそのまま貼り付けます。
 
 ```powershell
-aws ssm start-session --target i-05e35460834d4ef18
+aws ssm start-session --target i-05f6c5bf19d1cfab6
 ```
 
-接続後は EC2 上の bash なので本文どおりです。
+> ⚠️ **接続直後は `ssm-user` です。必ず `ec2-user` に切り替えてください。**
+> `/home/ec2-user` はパーミッション `700` なので、`ssm-user` のままでは
+> `Permission denied` になります。
+
+接続後（EC2 上の bash）:
 
 ```bash
-bash /home/ec2-user/app/deploy/regenerate-env.sh
-bash /home/ec2-user/app/deploy/deploy.sh
+sudo -i -u ec2-user     # ← 必須。これを忘れると Permission denied
+whoami                  # → ec2-user であることを確認
+cd ~/app
+
+bash deploy/regenerate-env.sh
+bash deploy/deploy.sh
 ```
 
 ### 4. ジョブ確認（手順 C-7）
@@ -1078,6 +1129,54 @@ Remove-Item $HOME\cf-keys\cf-private.pem -Force
 | `User data is limited to 16384 bytes` | UserData が上限超過。gzip 自己解凍方式で解消済み（下記参照） |
 | `Value at 'description' failed to satisfy constraint` (`AWS::IAM::Role`) | IAM の description に日本語が入っている。ASCII に直す（下記参照。修正済み） |
 | `deploy:ec2` でインスタンスが作り直された | `userDataCausesReplacement: true` の仕様。エンコード設定の反映に EC2 再作成は不要。付録 2.5 参照 |
+| EC2 上で `bash …/deploy/regenerate-env.sh: Permission denied` | SSM 接続直後は `ssm-user`。`/home/ec2-user` は `700` のため読めない。`sudo -i -u ec2-user` で切り替える（下記参照） |
+| `nvm: command not found` / `pnpm: command not found` | `sudo -u ec2-user bash` で入っている。`$HOME` が違うため PATH が通らない。`sudo -i -u ec2-user`（`-i` 付き）を使う |
+
+### SSM Session Manager では `ssm-user` になる
+
+`aws ssm start-session` で接続すると、プロンプトは `sh-5.2$` になりますが
+**ログインユーザーは `ec2-user` ではなく `ssm-user`** です。
+
+```
+sh-5.2$ whoami
+ssm-user
+sh-5.2$ bash /home/ec2-user/app/deploy/regenerate-env.sh
+bash: /home/ec2-user/app/deploy/regenerate-env.sh: Permission denied
+```
+
+アプリは `/home/ec2-user/app` にあり、`/home/ec2-user` は
+パーミッション `700`（所有者のみアクセス可）なので、
+`ssm-user` からはディレクトリを辿れません。
+ファイルの実行権限の問題ではなく**親ディレクトリの権限**が原因です。
+
+```bash
+$ ls -ld /home/ec2-user
+drwx------ 12 ec2-user ec2-user 4096 ... /home/ec2-user
+   ^^^^^^ ← ec2-user 以外は x が無いので中に入れない
+```
+
+**対処: 接続直後に必ず切り替える。**
+
+```bash
+sudo -i -u ec2-user
+whoami    # → ec2-user
+cd ~/app
+```
+
+`-i`（ログインシェル）が重要です。
+
+| コマンド | `$HOME` | `nvm`/`pnpm`/`pm2` | 判定 |
+| --- | --- | --- | --- |
+| `sudo -i -u ec2-user` | `/home/ec2-user` | ✅ 読み込まれる | ⭕ これを使う |
+| `sudo -u ec2-user bash` | `/home/ssm-user` | ❌ PATH が通らない | ❌ 別のエラーになる |
+| `sudo su - ec2-user` | `/home/ec2-user` | ✅ 読み込まれる | ⭕ 代替として可 |
+
+`deploy.sh` は `. "$NVM_DIR/nvm.sh"`（`NVM_DIR="$HOME/.nvm"`）を実行するため、
+`$HOME` が `/home/ec2-user` になっていないと `nvm.sh` が見つからず失敗します。
+
+なお `sudo` 自体は `ssm-user` でも使えます（`root` 権限は付与済み）。
+`sudo tail -f /var/log/cloud-init-output.log` のようなログ確認は
+切り替えなしでも実行できます。
 
 ### IAM の description に日本語は使えない
 
