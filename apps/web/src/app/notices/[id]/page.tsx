@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
+import { PencilLine } from 'lucide-react';
 import { auth } from '@/auth';
 import { getAnnouncement } from '@/lib/announcements';
 import { Card, CardBody } from '@/components/ui/Card';
@@ -145,24 +146,42 @@ export default async function NoticeDetailPage({
         公開済みと勘違いする事故を防ぐ。
       */}
       {isPreview && (
-        <div className="mb-4 rounded-lg border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3">
-          <p className="flex items-center gap-2 text-sm font-bold text-amber-900">
-            <span aria-hidden>👁️</span>
-            下書きプレビュー（まだ公開されていません）
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-800">
-            この画面は運営 (SUPER_ADMIN / STAFF) だけに表示されています。
-            他の方がこの URL を開いても「ページが見つかりません」になります。
-            <br />
-            公開するには{' '}
-            <Link
-              href="/super-admin/announcements"
-              className="font-semibold underline hover:no-underline"
-            >
-              お知らせ配信画面
-            </Link>{' '}
-            の「公開」ボタンを押してください。
-          </p>
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          {/*
+            アイコンは絵文字 (👁️) ではなく lucide-react を使う。
+            絵文字は OS / ブラウザごとに字形も色も変わって浮くため、
+            管理画面 (super-admin/layout.tsx) と同じ lucide に統一する。
+
+            PencilLine を選んだ理由:
+              - FilePen は 18px だとペン先と書類の枠線が重なって潰れる
+                (実際に拡大して確認した)
+              - 「目」より「鉛筆」の方が "下書き / 書きかけ" の意味に合う
+            単色の線画なので amber 系の文字色をそのまま継承できる。
+          */}
+          <span
+            aria-hidden
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200/70 text-amber-800"
+          >
+            <PencilLine className="h-[18px] w-[18px]" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-amber-900">
+              下書きプレビュー（まだ公開されていません）
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-800">
+              この画面は運営 (SUPER_ADMIN / STAFF) だけに表示されています。
+              他の方がこの URL を開いても「ページが見つかりません」になります。
+              <br />
+              公開するには{' '}
+              <Link
+                href="/super-admin/announcements"
+                className="font-semibold underline hover:no-underline"
+              >
+                お知らせ配信画面
+              </Link>{' '}
+              の「公開」ボタンを押してください。
+            </p>
+          </div>
         </div>
       )}
 
