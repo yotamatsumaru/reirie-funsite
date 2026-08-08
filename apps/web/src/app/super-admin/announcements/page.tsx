@@ -18,26 +18,18 @@ import { requireSuperAdminView } from '@/auth';
 import { env } from '@/lib/env';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementListItem } from './announcement-list-item';
+import {
+  AUDIENCE_SHORT_LABELS,
+  AUDIENCE_TONES,
+} from '@/lib/announcement-audience';
 import { AnnouncementLinkCopy } from './announcement-link-copy';
 import { ExternalLinkGuide } from './external-link-guide';
 
 export const metadata: Metadata = { title: 'お知らせ配信 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
-const AUDIENCE_LABELS: Record<'ALL' | 'MEMBERS' | 'PREMIUM', string> = {
-  ALL: '全ユーザー',
-  MEMBERS: '会員のみ',
-  PREMIUM: 'PREMIUM のみ',
-};
-
-const AUDIENCE_TONES: Record<
-  'ALL' | 'MEMBERS' | 'PREMIUM',
-  'gray' | 'brand' | 'success' | 'warning' | 'danger' | 'info'
-> = {
-  ALL: 'info',
-  MEMBERS: 'brand',
-  PREMIUM: 'warning',
-};
+// 配信対象のラベル / 色は lib/announcement-audience.ts に集約してある。
+// (以前はこのファイル内で定義していたため、公開プージ側とラベルがずれていた)
 
 type EmailStatus = 'NOT_REQUESTED' | 'PENDING' | 'SENDING' | 'COMPLETED' | 'FAILED';
 
@@ -181,7 +173,7 @@ export default async function SuperAdminAnnouncementsPage() {
                           <Badge tone="gray">下書き</Badge>
                         )}
                         <Badge tone={AUDIENCE_TONES[a.audience]}>
-                          {AUDIENCE_LABELS[a.audience]}
+                          {AUDIENCE_SHORT_LABELS[a.audience]}
                         </Badge>
                         {a.sendEmail && (
                           <Badge tone={EMAIL_STATUS_TONES[a.emailStatus]}>

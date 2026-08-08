@@ -29,6 +29,11 @@ import {
   type AnnouncementEditableFields,
   type AnnouncementStatusLiteral,
 } from '@/lib/announcement-edit';
+import {
+  AUDIENCE_LABELS,
+  audienceRank,
+} from '@/lib/announcement-audience';
+import { AudienceSelect } from './audience-select';
 
 type EmailStatus =
   | 'NOT_REQUESTED'
@@ -75,6 +80,18 @@ export function AnnouncementEditForm({
   const emailRisk =
     mayTriggerEmailOnEdit({ status, sendEmail, emailStatus }) ||
     (status === 'PUBLISHED' && sendEmail && !initial.sendEmail);
+
+  /**
+   * 公開済みのお知らせで配信対象を「狭める」変更をした場合の警告。
+   *
+   * 例: 「だれでも」で公開したものを「プレミアム会員のみ」に変えると、
+   *     すでに読んでいた会員が急に見られなくなる (URL が 404 相当になる)。
+   *     メール本文のリンクを踏んだ人がエラーに当たるため、
+   *     気付かずにやってしまわないよう明示する。
+   */
+  const narrowedAudience =
+    status === 'PUBLISHED' &&
+    audienceRank(audience) > audienceRank(initial.audience);
 
   function save() {
     setError(null);
@@ -207,27 +224,13 @@ export function AnnouncementEditForm({
           )}
         </div>
 
-        <div>
-          <label
-            htmlFor={`audience-${id}`}
-            className="block text-xs font-semibold text-slate-700"
-          >
-            配信対象
-          </label>
-          <select
-            id={`audience-${id}`}
-            value={audience}
-            onChange={(e) =>
-              setAudience(e.target.value as AnnouncementAudienceLiteral)
-            }
-            disabled={pending}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:max-w-xs"
-          >
-            <option value="ALL">全ユーザー</option>
-            <option value="MEMBERS">会員のみ</option>
-            <option value="PREMIUM">PREMIUM 会員のみ</option>
-          </select>
-        </div>
+        <AudienceSelect
+          id={`audience-${id}`}
+          value={audience}
+          onChange={setAudience}
+          disabled={pending}
+          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:max-w-xs"
+        />
 
         {/*
           メール送信フラグ。
@@ -252,6 +255,22 @@ export function AnnouncementEditForm({
             </span>
           </span>
         </label>
+
+        {narrowedAudience && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+            <TriangleAlert
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-700"
+              aria-hidden
+            />
+            <p className="text-xs leading-relaxed text-amber-800">
+              配信対象を「{AUDIENCE_LABELS[initial.audience]}」から「
+              {AUDIENCE_LABELS[audience]}」に
+              <span className="font-bold">狭めようとしています</span>。
+              このお知らせはすでに公開中なので、今まで見られていた方が
+              閲覧できなくなります（送信済みメールのリンクも含みます）。
+            </p>
+          </div>
+        )}
 
         {emailRisk && (
           <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">

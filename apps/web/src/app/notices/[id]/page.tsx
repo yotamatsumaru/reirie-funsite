@@ -12,23 +12,15 @@ import { Badge } from '@/components/ui/Badge';
 import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { env } from '@/lib/env';
 import { resolveAnnouncementVisibility } from '@/lib/announcement-visibility';
+import {
+  AUDIENCE_SHORT_LABELS,
+  AUDIENCE_TONES,
+  upgradeHeadingForAudience,
+} from '@/lib/announcement-audience';
 
 export const dynamic = 'force-dynamic';
 
-const AUDIENCE_LABELS: Record<'ALL' | 'MEMBERS' | 'PREMIUM', string> = {
-  ALL: '全員',
-  MEMBERS: '会員',
-  PREMIUM: 'PREMIUM',
-};
-
-const AUDIENCE_TONES: Record<
-  'ALL' | 'MEMBERS' | 'PREMIUM',
-  'gray' | 'brand' | 'success' | 'warning' | 'danger' | 'info'
-> = {
-  ALL: 'info',
-  MEMBERS: 'brand',
-  PREMIUM: 'warning',
-};
+// 配信対象のラベル / 色 / 案内文は lib/announcement-audience.ts に集約。
 
 function formatDateTime(d: Date | null): string {
   if (!d) return '';
@@ -120,11 +112,14 @@ export default async function NoticeDetailPage({
         <Card className="mt-4 border-amber-200 bg-amber-50/50">
           <CardBody className="text-center">
             <p className="text-5xl">🔒</p>
+            {/* 必要なプランに合わせて案内を変える。
+                スタンダード限定なのに「プレミアム限定」と出ると
+                不必要な上位プランへ誘導してしまうため。 */}
             <h1 className="mt-3 text-xl font-bold text-slate-900">
-              このお知らせは PREMIUM 会員限定です
+              {upgradeHeadingForAudience(a.audience)}
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              PREMIUM プランにアップグレードすると、限定お知らせを閲覧できます。
+              プランをアップグレードすると、限定お知らせを閲覧できます。
             </p>
             <Link
               href="/plans"
@@ -210,7 +205,7 @@ export default async function NoticeDetailPage({
           )}
           {isPreview && <Badge tone="warning">下書き</Badge>}
           <Badge tone={AUDIENCE_TONES[a.audience]}>
-            {AUDIENCE_LABELS[a.audience]}
+            {AUDIENCE_SHORT_LABELS[a.audience]}
           </Badge>
         </div>
         <h1 className="mt-3 text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">

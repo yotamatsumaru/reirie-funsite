@@ -2,13 +2,18 @@
  * お知らせの一斉メール送信 (Announcement → 対象ユーザー全員へ配信)
  *
  * 設計:
- *  - 対象は audience (ALL / MEMBERS / PREMIUM) に応じて users テーブルから絞り込む。
+ *  - 対象は audience (ALL / MEMBERS / STANDARD / PREMIUM) に応じて
+ *    users テーブルから絞り込む。
+ *    「スタンダード会員以上」は上位のプレミアム会員も含む。
+ *    対象プランの展開は announcement-audience.ts の planTypesForAudience に
+ *    集約してあり、画面の閲覧判定と同じ定義を使う
+ *    (画面には出ているのにメールが届かない、を防ぐ)。
  *    - ALL は「公開ページで誰でも見られる」お知らせだが、メール送信対象は
  *      「メール配信に同意した会員 (marketingOptIn = true)」に限定する。
  *      (メールアドレスを持たない匿名の閲覧者には送れないため。
  *       また特定商取引法/迷惑メール防止法の観点でも、opt-in していない
  *       ユーザーへ広告目的のメールを送るべきではない)
- *    - MEMBERS / PREMIUM は「会員への重要なお知らせ」を想定し、
+ *    - MEMBERS / STANDARD / PREMIUM は「会員への重要なお知らせ」を想定し、
  *      marketingOptIn の有無を問わず全会員 (該当プラン) に送信する。
  *      (運営上必須の連絡は opt-out 対象にしない、という方針)
  *  - SES の送信レートには上限があるため、1件ずつ await しながら順次送信し、
@@ -23,6 +28,10 @@ import { prisma } from '@idol/db';
 import type { Announcement, AnnouncementAudience } from '@idol/db';
 import { sendAnnouncementEmail } from './email';
 import { logAudit } from './audit';
+import {
+  planTypesForAudience,
+  type AnnouncementAudienceLiteral,
+} from './announcement-audience';
 
 /** 1件送信ごとに空ける間隔 (ms)。SES 既定レート (最低 1件/秒) を安全に下回る値。 */
 const SEND_INTERVAL_MS = 150;
@@ -33,9 +42,10 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * audience に応じて配信対象ユーザー (email, displayName) を取得する。
- *  - ALL     : marketingOptIn = true の会員のみ (opt-in 必須)
- *  - MEMBERS : 全会員 (opt-in 不問)
- *  - PREMIUM : PREMIUM プランの有効なサブスクリプションを持つ会員 (opt-in 不問)
+ *  - ALL      : marketingOptIn = true の会員のみ (opt-in 必須)
+ *  - MEMBERS  : 全会員 (無料会員を含む / opt-in 不問)
+ *  - STANDARD : STANDARD または PREMIUM の有効なサブスクリプションを持つ会員
+ *  - PREMIUM  : PREMIUM の有効なサブスクリプションを持つ会員
  * 退会済み (deletedAt) / 未確認メール (emailVerified なし) は除外する。
  */
 async function resolveRecipients(
@@ -53,27 +63,29 @@ async function resolveRecipients(
     });
   }
 
-  if (audience === 'MEMBERS') {
+  // 対象プランを展開する (STANDARD なら [STANDARD, PREMIUM])。
+  // null ならプランでの絞り込みは不要 = 全会員 (MEMBERS)。
+  const planTypes = planTypesForAudience(audience as AnnouncementAudienceLiteral);
+
+  if (!planTypes) {
     return prisma.user.findMany({
       where: baseWhere,
       select: { id: true, email: true, displayName: true },
     });
   }
 
-  // PREMIUM: 有効なサブスクリプションが PREMIUM のユーザーのみ
-  const users = await prisma.user.findMany({
+  return prisma.user.findMany({
     where: {
       ...baseWhere,
       subscriptions: {
         some: {
-          planType: 'PREMIUM',
+          planType: { in: planTypes },
           status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
         },
       },
     },
     select: { id: true, email: true, displayName: true },
   });
-  return users;
 }
 
 /**

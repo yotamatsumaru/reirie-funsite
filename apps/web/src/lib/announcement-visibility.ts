@@ -16,11 +16,17 @@
  *    採用しない。URL は履歴・リファラ・共有で漏れるため。
  */
 import type { UserRoleLiteral, PlanTypeLiteral } from '@idol/shared';
+import {
+  planSatisfiesAudience,
+  requiresPaidPlan,
+  requiresSignIn,
+  type AnnouncementAudienceLiteral,
+} from './announcement-audience';
 
 /** 判定に必要なお知らせの属性だけを受け取る (DB モデルに依存させない) */
 export type AnnouncementVisibilityInput = {
   status: 'DRAFT' | 'PUBLISHED';
-  audience: 'ALL' | 'MEMBERS' | 'PREMIUM';
+  audience: AnnouncementAudienceLiteral;
 };
 
 /** 判定に必要な閲覧者の属性 */
@@ -95,12 +101,23 @@ export function resolveAnnouncementVisibility(
   }
 
   // --- 公開済み -------------------------------------------------------
-  if (announcement.audience === 'MEMBERS' && !viewer.isLoggedIn) {
-    return { kind: 'signin-required' };
+  if (requiresSignIn(announcement.audience) && !viewer.isLoggedIn) {
+    // 無料会員以上 (MEMBERS) なら「ログインさえすれば読める」ので
+    // サインイン画面へ送る (戻り先付きでそのまま読める)。
+    if (!requiresPaidPlan(announcement.audience)) {
+      return { kind: 'signin-required' };
+    }
+    // 有料プランが必要な場合は、ログインしても読めるとは限らない。
+    // いきなりログイン画面に飛ばすと「なぜ見られないのか」が分からないため、
+    // 限定公開である理由とプラン案内を見せる (従来からの挙動)。
+    return { kind: 'upgrade-required' };
   }
 
-  if (announcement.audience === 'PREMIUM' && viewer.plan !== 'PREMIUM') {
-    // 運営は公開済み PREMIUM 限定お知らせも確認できるようにする
+  // プラン条件 (上位プランは常に下位向けのお知らせも閲覧できる)。
+  // 判定は announcement-audience.ts に集約してあり、
+  // 配信対象が増えてもここの分岐を増やす必要はない。
+  if (!planSatisfiesAudience(announcement.audience, viewer.plan)) {
+    // 運営は公開済みの限定お知らせも確認できるようにする
     // (サポート対応で「会員に何が見えているか」を確認する必要がある)
     if (canPreview) return { kind: 'visible' };
     return { kind: 'upgrade-required' };

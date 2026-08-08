@@ -97,6 +97,11 @@ describe('resolveAnnouncementVisibility — 下書き (DRAFT)', () => {
     expect(resolveAnnouncementVisibility(membersDraft, superAdmin, true)).toEqual({
       kind: 'preview',
     });
+
+    const standardDraft = { status: 'DRAFT' as const, audience: 'STANDARD' as const };
+    expect(resolveAnnouncementVisibility(standardDraft, superAdmin, true)).toEqual({
+      kind: 'preview',
+    });
   });
 
   it('下書きは 403 ではなく 404 にする (ID の存在を漏らさない)', () => {
@@ -132,6 +137,43 @@ describe('resolveAnnouncementVisibility — 公開済み (PUBLISHED)', () => {
 
     it('FREE 会員でもログインしていれば見られる', () => {
       expect(resolveAnnouncementVisibility(a, freeMember)).toEqual({
+        kind: 'visible',
+      });
+    });
+  });
+
+  describe('audience=STANDARD はスタンダード以上が必要', () => {
+    const a = { status: 'PUBLISHED' as const, audience: 'STANDARD' as const };
+
+    /**
+     * 有料プランが必要な対象は、ログインしても読めるとは限らない。
+     * ログイン画面に飛ばすと「なぜ見られないのか」が分からないため、
+     * PREMIUM 限定と同じくプラン案内を見せる。
+     */
+    it('未ログインはアップグレード案内 (ログインしても読めるとは限らないため)', () => {
+      expect(resolveAnnouncementVisibility(a, guest)).toEqual({
+        kind: 'upgrade-required',
+      });
+    });
+
+    it('FREE 会員はアップグレード案内', () => {
+      expect(resolveAnnouncementVisibility(a, freeMember)).toEqual({
+        kind: 'upgrade-required',
+      });
+    });
+
+    it('STANDARD 会員は見られる', () => {
+      expect(resolveAnnouncementVisibility(a, standardMember)).toEqual({
+        kind: 'visible',
+      });
+    });
+
+    /**
+     * 一番ありがちな取り違えの回帰テスト。
+     * 「スタンダード会員以上」は上位のプレミアム会員にも届く。
+     */
+    it('PREMIUM 会員も見られる (上位プランは常に含む)', () => {
+      expect(resolveAnnouncementVisibility(a, premiumMember)).toEqual({
         kind: 'visible',
       });
     });
@@ -187,6 +229,30 @@ describe('resolveAnnouncementVisibility — 公開済み (PUBLISHED)', () => {
   });
 });
 
+/**
+ * 回帰テスト: 配信対象を 4 段階に増やしたときに
+ * 既存 3 段階 (ALL / MEMBERS / PREMIUM) の挙動を変えていないこと。
+ * 既に公開済みのお知らせの見え方が勝手に変わると事故になる。
+ */
+describe('回帰: 既存の配信対象の挙動は変わっていない', () => {
+  it.each([
+    ['ALL / 未ログイン', 'ALL', guest, 'visible'],
+    ['ALL / FREE', 'ALL', freeMember, 'visible'],
+    ['MEMBERS / 未ログイン', 'MEMBERS', guest, 'signin-required'],
+    ['MEMBERS / FREE', 'MEMBERS', freeMember, 'visible'],
+    ['MEMBERS / STANDARD', 'MEMBERS', standardMember, 'visible'],
+    ['MEMBERS / PREMIUM', 'MEMBERS', premiumMember, 'visible'],
+    ['PREMIUM / 未ログイン', 'PREMIUM', guest, 'upgrade-required'],
+    ['PREMIUM / FREE', 'PREMIUM', freeMember, 'upgrade-required'],
+    ['PREMIUM / STANDARD', 'PREMIUM', standardMember, 'upgrade-required'],
+    ['PREMIUM / PREMIUM', 'PREMIUM', premiumMember, 'visible'],
+  ] as const)('%s → %s', (_label, audience, viewer, expected) => {
+    expect(
+      resolveAnnouncementVisibility({ status: 'PUBLISHED', audience }, viewer).kind,
+    ).toBe(expected);
+  });
+});
+
 describe('網羅: 下書きが visible になる組み合わせは存在しない', () => {
   const viewers = [
     guest,
@@ -197,7 +263,7 @@ describe('網羅: 下書きが visible になる組み合わせは存在しな�
     staff,
     superAdmin,
   ];
-  const audiences = ['ALL', 'MEMBERS', 'PREMIUM'] as const;
+  const audiences = ['ALL', 'MEMBERS', 'STANDARD', 'PREMIUM'] as const;
 
   it('DRAFT の判定結果は preview か not-found のみ', () => {
     for (const viewer of viewers) {
