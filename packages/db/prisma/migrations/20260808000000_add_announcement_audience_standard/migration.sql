@@ -1,0 +1,14 @@
+-- お知らせの配信対象に「スタンダード会員以上」を追加
+--
+-- 背景:
+--   配信対象を「だれでも / 無料会員以上 / スタンダード会員以上 / プレミアム会員のみ」
+--   の 4 段階にしたい、という運営要望への対応。
+--   従来は ALL / MEMBERS / PREMIUM の 3 段階で、
+--   「スタンダード会員以上に配信する」ことができなかった。
+--
+-- 安全性:
+--   Postgres の enum への値追加のみで、既存レコードの値は変更しない。
+--   既存の ALL / MEMBERS / PREMIUM のお知らせは意味も挙動も変わらない。
+--   ランク順 (緩い → 厳しい) を保つため PREMIUM の前に配置する。
+--   IF NOT EXISTS 付きなので再実行しても安全 (冪等)。
+ALTER TYPE "AnnouncementAudience" ADD VALUE IF NOT EXISTS 'STANDARD' BEFORE 'PREMIUM';

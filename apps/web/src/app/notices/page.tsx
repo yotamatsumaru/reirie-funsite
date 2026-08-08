@@ -2,10 +2,14 @@
  * /notices — お知らせ一覧 (公開ページ)
  *
  * - PUBLISHED ステータスのお知らせのみ表示
- * - audience に応じて閲覧制限:
- *   - ALL      → 誰でも閲覧可
- *   - MEMBERS  → ログインユーザーのみ
- *   - PREMIUM  → PREMIUM プランのみ
+ * - audience に応じて閲覧制限 (上位プランは常に下位向けを含む):
+ *   - ALL      → だれでも
+ *   - MEMBERS  → 無料会員以上 (ログインしていれば OK)
+ *   - STANDARD → スタンダード会員以上
+ *   - PREMIUM  → プレミアム会員のみ
+ *
+ * 判定は lib/announcement-audience.ts に集約してある
+ * (詳細プージ / メール宛先と同じ定義を使う)。
  */
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -13,27 +17,18 @@ import { auth } from '@/auth';
 import { listAnnouncements } from '@/lib/announcements';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import {
+  AUDIENCE_SHORT_LABELS,
+  AUDIENCE_TONES,
+  planSatisfiesAudience,
+  requiresSignIn,
+} from '@/lib/announcement-audience';
 
 export const metadata: Metadata = {
   title: 'お知らせ一覧',
   description: '公式お知らせ・最新情報',
 };
 export const dynamic = 'force-dynamic';
-
-const AUDIENCE_LABELS: Record<'ALL' | 'MEMBERS' | 'PREMIUM', string> = {
-  ALL: '全員',
-  MEMBERS: '会員',
-  PREMIUM: 'PREMIUM',
-};
-
-const AUDIENCE_TONES: Record<
-  'ALL' | 'MEMBERS' | 'PREMIUM',
-  'gray' | 'brand' | 'success' | 'warning' | 'danger' | 'info'
-> = {
-  ALL: 'info',
-  MEMBERS: 'brand',
-  PREMIUM: 'warning',
-};
 
 function formatDate(d: Date | null): string {
   if (!d) return '';
@@ -52,12 +47,12 @@ export default async function NoticesIndexPage() {
   // PUBLISHED のみ、新しい順
   const all = (await listAnnouncements()).filter((a) => a.status === 'PUBLISHED');
 
-  // 閲覧可否のフィルタリング
+  // 閲覧可否のフィルタリング。
+  // 判定をヘルパーに寄せてあるので、配信対象が増えても
+  // ここを直す必要はない (= 新しい対象が一覧に出ない事故を防ぐ)。
   const visible = all.filter((a) => {
-    if (a.audience === 'ALL') return true;
-    if (a.audience === 'MEMBERS') return isLoggedIn;
-    if (a.audience === 'PREMIUM') return userPlan === 'PREMIUM';
-    return false;
+    if (requiresSignIn(a.audience) && !isLoggedIn) return false;
+    return planSatisfiesAudience(a.audience, userPlan);
   });
 
   const hidden = all.length - visible.length;
@@ -97,7 +92,7 @@ export default async function NoticesIndexPage() {
                     {formatDate(a.publishedAt)}
                   </time>
                   <Badge tone={AUDIENCE_TONES[a.audience]}>
-                    {AUDIENCE_LABELS[a.audience]}
+                    {AUDIENCE_SHORT_LABELS[a.audience]}
                   </Badge>
                 </div>
                 <h2 className="mt-2 text-base font-semibold text-slate-900 sm:text-lg">

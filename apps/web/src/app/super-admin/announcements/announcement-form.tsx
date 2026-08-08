@@ -4,8 +4,10 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { linkify } from '@/lib/linkify';
+import type { AnnouncementAudienceLiteral } from '@/lib/announcement-audience';
+import { AudienceSelect } from './audience-select';
 
-type Audience = 'ALL' | 'MEMBERS' | 'PREMIUM';
+type Audience = AnnouncementAudienceLiteral;
 type Status = 'DRAFT' | 'PUBLISHED';
 
 export function AnnouncementForm() {
@@ -113,21 +115,13 @@ export function AnnouncementForm() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-xs font-semibold text-slate-700">
-            配信対象
-          </label>
-          <select
-            value={audience}
-            onChange={(e) => setAudience(e.target.value as Audience)}
-            disabled={pending}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
-          >
-            <option value="ALL">全ユーザー</option>
-            <option value="MEMBERS">会員のみ</option>
-            <option value="PREMIUM">PREMIUM 会員のみ</option>
-          </select>
-        </div>
+        <AudienceSelect
+          id="new-announcement-audience"
+          value={audience}
+          onChange={setAudience}
+          disabled={pending}
+          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+        />
 
         <div>
           <label className="block text-xs font-semibold text-slate-700">

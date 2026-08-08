@@ -478,6 +478,27 @@ const announcement = [
     authorId: DEMO_ADMIN_ID,
   },
   {
+    // 配信対象「スタンダード会員以上」のサンプル。
+    // 上位のプレミアム会員にも表示されることをデモで確認できるようにする。
+    id: 'ann-004',
+    title: 'スタンダード会員以上: 先行チケット受付のご案内',
+    body: 'スタンダード会員・プレミアム会員の皆さまへ。\\nワンマンライブの先行受付を開始しました。\\n\\n東京公演: https://t.livepocket.jp/e/example-tokyo',
+    audience: 'STANDARD',
+    status: 'PUBLISHED',
+    sendEmail: false,
+    emailStatus: 'NOT_REQUESTED',
+    emailRecipientCount: null,
+    emailSentCount: null,
+    emailFailedCount: null,
+    emailStartedAt: null,
+    emailCompletedAt: null,
+    emailError: null,
+    publishedAt: daysAgo(1),
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(1),
+    authorId: DEMO_SUPER_ID,
+  },
+  {
     id: 'ann-003',
     title: '新グッズ予約受付開始(下書き)',
     body: '夏のスペシャルグッズが新登場。',

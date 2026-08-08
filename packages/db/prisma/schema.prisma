@@ -1777,10 +1777,15 @@ model CharacterImage {
 // Announcements (お知らせ配信 — サイト内表示 + 一斉メール送信)
 // =====================================================================
 
+/// お知らせの配信対象。
+/// 「その段階以上のプラン」に届く (上位プランは常に下位向けのお知らせも閲覧できる)。
+/// 判定 / ラベルは apps/web/src/lib/announcement-audience.ts に集約しているため、
+/// ここに値を追加した場合はそちらも必ず更新すること。
 enum AnnouncementAudience {
-  ALL // 全ユーザー (未登録含む、公開ページに表示)
-  MEMBERS // 会員のみ (ログインユーザー全体)
-  PREMIUM // PREMIUM プラン会員のみ
+  ALL // だれでも (未登録含む、公開ページに表示)
+  MEMBERS // 無料会員以上 (ログインユーザー全体)
+  STANDARD // スタンダード会員以上 (STANDARD + PREMIUM)
+  PREMIUM // プレミアム会員のみ
 }
 
 enum AnnouncementStatus {

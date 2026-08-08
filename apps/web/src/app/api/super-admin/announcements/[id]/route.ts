@@ -15,6 +15,7 @@ import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendAnnouncementEmails, shouldTriggerEmail } from '@/lib/bulk-email';
+import { ANNOUNCEMENT_AUDIENCES } from '@/lib/announcement-audience';
 
 export const runtime = 'nodejs';
 
@@ -22,7 +23,8 @@ const PatchSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
     body: z.string().min(1).max(4000).optional(),
-    audience: z.enum(['ALL', 'MEMBERS', 'PREMIUM']).optional(),
+    // 配信対象の一覧は announcement-audience.ts から取る (定義の二重管理を避ける)
+    audience: z.enum(ANNOUNCEMENT_AUDIENCES).optional(),
     status: z.enum(['DRAFT', 'PUBLISHED']).optional(),
     sendEmail: z.boolean().optional(),
   })

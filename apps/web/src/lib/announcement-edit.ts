@@ -9,7 +9,12 @@
  *     サーバーに行く前にユーザーへフィードバックしたい
  */
 
-export type AnnouncementAudienceLiteral = 'ALL' | 'MEMBERS' | 'PREMIUM';
+// 配信対象の定義は announcement-audience.ts が単一の真実の源。
+// ここで独自に union を書くと、対象を増やしたときに
+// 「フォームには出るのに差分計算で落ちる」といったズレが起きるため再エクスポートする。
+export type { AnnouncementAudienceLiteral } from './announcement-audience';
+import type { AnnouncementAudienceLiteral } from './announcement-audience';
+
 export type AnnouncementStatusLiteral = 'DRAFT' | 'PUBLISHED';
 
 /** 編集フォームで触れるフィールドだけを抜き出した型。 */
