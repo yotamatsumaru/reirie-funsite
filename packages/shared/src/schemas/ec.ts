@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PostalCodeSchema } from './common';
 
 export const ListProductsQuerySchema = z.object({
   category: z.string().optional(),
@@ -22,7 +23,7 @@ export type UpdateCartItemInput = z.infer<typeof UpdateCartItemSchema>;
 export const ShippingAddressSchema = z.object({
   name: z.string().min(1).max(100),
   phone: z.string().min(1).max(20),
-  postalCode: z.string().regex(/^\d{3}-?\d{4}$/),
+  postalCode: PostalCodeSchema,
   prefecture: z.string().min(1).max(20),
   addressLine1: z.string().min(1).max(200),
   addressLine2: z.string().max(200).optional(),
