@@ -19,9 +19,29 @@ import {
   DEFAULT_BIRTHDAY_MAIL_SUBJECT,
   DEFAULT_BIRTHDAY_MAIL_BODY,
   BIRTHDAY_MAIL_PLACEHOLDERS,
+  BIRTHDAY_MAIL_MINUTE_STEP,
+  DEFAULT_BIRTHDAY_MAIL_SCHEDULE,
+  formatBirthdayMailTime,
+  isBirthdayMailScheduleDue,
+  type BirthdayMailSchedule,
+  type BirthdayMailRunState,
 } from '@idol/shared';
+import { Clock, CheckCircle2, CircleSlash, AlertTriangle } from 'lucide-react';
 
 type Today = { year: number; month: number; day: number };
+
+/** 自動送信の最終実行 status を日本語に。API の AutoSendStatus と対応。 */
+const AUTO_SEND_STATUS_LABEL: Record<string, string> = {
+  sent: '送信しました',
+  'no-recipients': '対象者なし',
+  disabled: '自動送信が無効',
+  'not-due': '送信時刻前',
+  'already-ran': '本日ぶんは実行済み',
+  'no-template': 'テンプレート未設定',
+  'template-disabled': 'テンプレートが無効',
+  running: '実行中',
+  error: 'エラー',
+};
 
 type TemplateSummary = { year: number; enabled: boolean; hasImage: boolean };
 
@@ -89,6 +109,16 @@ export function BirthdayMailClient({
   const [loadingRec, setLoadingRec] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
+
+  // 自動送信スケジュール
+  const [schedule, setSchedule] = useState<BirthdayMailSchedule>({
+    ...DEFAULT_BIRTHDAY_MAIL_SCHEDULE,
+  });
+  const [runState, setRunState] = useState<BirthdayMailRunState | null>(null);
+  const [serverNow, setServerNow] = useState<{ hour: number; minute: number } | null>(null);
+  const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [runningNow, setRunningNow] = useState(false);
 
   // --- テンプレート読み込み ---------------------------------------------
   const loadTemplate = useCallback(async (y: number) => {
@@ -291,10 +321,252 @@ export function BirthdayMailClient({
     }
   }
 
+  // --- 自動送信スケジュール ---------------------------------------------
+  const loadSchedule = useCallback(async () => {
+    setLoadingSchedule(true);
+    try {
+      const res = await fetch('/api/super-admin/birthday/schedule', { cache: 'no-store' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setSchedule(data.schedule);
+      setRunState(data.runState ?? null);
+      setServerNow(data.now ?? null);
+    } catch {
+      toast.error('自動送信設定の読み込みに失敗しました');
+    } finally {
+      setLoadingSchedule(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSchedule();
+  }, [loadSchedule]);
+
+  /**
+   * スケジュールを部分更新する。
+   * トグルや時刻セレクタは「変更した瞬間に保存」する (保存ボタンの押し忘れで
+   * 設定したつもりが反映されていない、という事故を防ぐ)。
+   */
+  const patchSchedule = useCallback(
+    async (patch: Partial<BirthdayMailSchedule>) => {
+      // 楽観更新: 失敗したらサーバー値で戻す。
+      const prev = schedule;
+      setSchedule({ ...prev, ...patch });
+      setSavingSchedule(true);
+      try {
+        const res = await fetch('/api/super-admin/birthday/schedule', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error?.message ?? '保存に失敗しました');
+        setSchedule(data.schedule);
+        if (patch.enabled !== undefined) {
+          toast.success(patch.enabled ? '自動送信を有効にしました' : '自動送信を無効にしました');
+        } else {
+          toast.success(`送信時刻を ${formatBirthdayMailTime(data.schedule)} に設定しました`);
+        }
+      } catch (e) {
+        setSchedule(prev);
+        toast.error(e instanceof Error ? e.message : '保存に失敗しました');
+      } finally {
+        setSavingSchedule(false);
+      }
+    },
+    [schedule],
+  );
+
+  /** 時刻ゲートと「本日実行済み」判定を無視して、いま自動送信を走らせる。 */
+  async function runAutoSendNow() {
+    if (
+      !confirm(
+        '本日が誕生日で未送信の会員へ、いま自動送信と同じ処理を実行します。\n（送信済みの会員には送られません）よろしいですか？',
+      )
+    ) {
+      return;
+    }
+    setRunningNow(true);
+    try {
+      const res = await fetch('/api/cron/birthday-mail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message ?? '実行に失敗しました');
+      if (data.status === 'sent') {
+        toast.success(data.message ?? '自動送信を実行しました');
+      } else {
+        toast.info(data.message ?? '送信対象はありませんでした');
+      }
+      await Promise.all([loadSchedule(), loadRecipients(year, month, day)]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '実行に失敗しました');
+    } finally {
+      setRunningNow(false);
+    }
+  }
+
   const isToday = month === today.month && day === today.day;
+
+  // 「本日ぶんはもう走ったか」— runState.lastRunDate と JST 今日を比較。
+  const todayKey = `${today.year}-${String(today.month).padStart(2, '0')}-${String(today.day).padStart(2, '0')}`;
+  const ranToday = runState?.lastRunDate === todayKey;
+  // サーバーの JST 時刻で「送信時刻を過ぎたか」を判定 (端末時計に依存させない)。
+  const isDue = serverNow ? isBirthdayMailScheduleDue(schedule, serverNow) : false;
 
   return (
     <div className="space-y-6">
+      {/* 自動送信スケジュール */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-brand-600" aria-hidden />
+            <h2 className="text-lg font-semibold">自動送信</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          {loadingSchedule ? (
+            <p className="text-sm text-slate-500">読み込み中…</p>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">
+                毎日、設定した時刻に「本日が誕生日の会員」へ自動でメールを送ります。
+                その年のテンプレートが有効になっている必要があります。
+              </p>
+
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={schedule.enabled}
+                  disabled={savingSchedule}
+                  onChange={(e) => void patchSchedule({ enabled: e.target.checked })}
+                />
+                自動送信を有効にする
+              </label>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label
+                    htmlFor="birthday-schedule-hour"
+                    className="mb-1 block text-sm font-medium text-slate-700"
+                  >
+                    送信時刻 (日本時間)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      id="birthday-schedule-hour"
+                      value={schedule.hour}
+                      disabled={savingSchedule || !schedule.enabled}
+                      onChange={(e) => void patchSchedule({ hour: Number(e.target.value) })}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      {Array.from({ length: 24 }, (_, h) => h).map((h) => (
+                        <option key={h} value={h}>
+                          {String(h).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-slate-600">時</span>
+                    <select
+                      value={schedule.minute}
+                      disabled={savingSchedule || !schedule.enabled}
+                      onChange={(e) => void patchSchedule({ minute: Number(e.target.value) })}
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                      aria-label="送信時刻 (分)"
+                    >
+                      {Array.from(
+                        { length: Math.ceil(60 / BIRTHDAY_MAIL_MINUTE_STEP) },
+                        (_, i) => i * BIRTHDAY_MAIL_MINUTE_STEP,
+                      ).map((m) => (
+                        <option key={m} value={m}>
+                          {String(m).padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-slate-600">分</span>
+                  </div>
+                </div>
+                {schedule.enabled && (
+                  <Badge tone="success">
+                    毎日 {formatBirthdayMailTime(schedule)} に送信
+                  </Badge>
+                )}
+                {!schedule.enabled && <Badge tone="gray">自動送信は停止中</Badge>}
+              </div>
+
+              <p className="text-xs text-slate-500">
+                変更は選んだ時点で保存されます。時刻は数分ずれる場合があります
+                （システムが数分おきに確認し、設定時刻を過ぎた最初の確認で送信します）。
+              </p>
+
+              {/* 本日の状況 */}
+              <div className="rounded-md bg-slate-50 p-3 text-sm">
+                <p className="flex flex-wrap items-center gap-2 font-semibold text-slate-700">
+                  {ranToday ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
+                      本日ぶんは実行済みです
+                    </>
+                  ) : !schedule.enabled ? (
+                    <>
+                      <CircleSlash className="h-4 w-4 text-slate-400" aria-hidden />
+                      自動送信が無効のため、本日は実行されません
+                    </>
+                  ) : isDue ? (
+                    <>
+                      <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden />
+                      送信時刻を過ぎています（次の確認で送信されます）
+                    </>
+                  ) : (
+                    <>
+                      <Clock className="h-4 w-4 text-slate-400" aria-hidden />
+                      本日 {formatBirthdayMailTime(schedule)} に送信予定です
+                    </>
+                  )}
+                </p>
+                {serverNow && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    サーバー現在時刻 (日本時間): {formatBirthdayMailTime(serverNow)}
+                  </p>
+                )}
+                {runState?.lastRunAt && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    最終実行: {new Date(runState.lastRunAt).toLocaleString('ja-JP')}
+                    {runState.lastStatus && (
+                      <>
+                        {' / '}
+                        {AUTO_SEND_STATUS_LABEL[runState.lastStatus] ?? runState.lastStatus}
+                      </>
+                    )}
+                    {runState.lastSent !== null && <> / 送信 {runState.lastSent} 件</>}
+                    {runState.lastFailed ? <> / 失敗 {runState.lastFailed} 件</> : null}
+                  </p>
+                )}
+                {!runState?.lastRunAt && (
+                  <p className="mt-1 text-xs text-slate-500">まだ一度も自動送信は実行されていません。</p>
+                )}
+              </div>
+
+              <div>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  loading={runningNow}
+                  onClick={runAutoSendNow}
+                >
+                  いま自動送信を実行（動作確認）
+                </Button>
+                <p className="mt-1 text-xs text-slate-400">
+                  時刻設定や「本日実行済み」に関係なく、本日が誕生日の未送信会員へ送信します。
+                </p>
+              </div>
+            </>
+          )}
+        </CardBody>
+      </Card>
+
       {/* 年セレクタ */}
       <Card>
         <CardBody className="flex flex-wrap items-center gap-3">

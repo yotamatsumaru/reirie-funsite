@@ -39,6 +39,15 @@ import {
   DEFAULT_SHARE_TEMPLATES,
   ShareTemplateSettingsSchema,
   type ShareTemplateSettings,
+  BIRTHDAY_MAIL_SCHEDULE_KEY,
+  DEFAULT_BIRTHDAY_MAIL_SCHEDULE,
+  BirthdayMailScheduleSchema,
+  type BirthdayMailSchedule,
+  BIRTHDAY_MAIL_RUN_STATE_KEY,
+  DEFAULT_BIRTHDAY_MAIL_RUN_STATE,
+  BirthdayMailRunStateSchema,
+  type BirthdayMailRunState,
+  formatBirthdayMailDate,
 } from '@idol/shared';
 
 /**
@@ -432,4 +441,233 @@ export async function setSiteSectionVisibility(
     });
     return { before, after };
   });
+}
+
+// ===========================================================================
+// 誕生日メール: 自動送信スケジュール / 実行状況
+// ===========================================================================
+
+/**
+ * 誕生日メールの自動送信スケジュールを取得する。
+ * 未設定 / 破損時は既定値 (毎日 12:00 JST・有効) を返す。
+ */
+export async function getBirthdayMailSchedule(): Promise<BirthdayMailSchedule> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: BIRTHDAY_MAIL_SCHEDULE_KEY },
+    });
+    if (!row) return BirthdayMailScheduleSchema.parse(DEFAULT_BIRTHDAY_MAIL_SCHEDULE);
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    // 欠損フィールドは既定値で補完 (旧バージョンの部分保存対策)。
+    const parsed = BirthdayMailScheduleSchema.safeParse({
+      ...DEFAULT_BIRTHDAY_MAIL_SCHEDULE,
+      ...raw,
+    });
+    return parsed.success
+      ? parsed.data
+      : BirthdayMailScheduleSchema.parse(DEFAULT_BIRTHDAY_MAIL_SCHEDULE);
+  } catch {
+    // 破損データ / DB 未到達は既定値扱い (安全側 = 既定の 12:00 で動く)。
+    return BirthdayMailScheduleSchema.parse(DEFAULT_BIRTHDAY_MAIL_SCHEDULE);
+  }
+}
+
+/**
+ * 誕生日メールの自動送信スケジュールを「部分更新」する (SUPER_ADMIN 限定)。
+ *
+ * 【競合対策】setSiteSectionVisibility と同じく advisory lock を取った
+ * 1 トランザクション内で read → merge → write する。管理画面で
+ * 「時」と「分」を続けて変更した場合の取りこぼしを防ぐ。
+ */
+export async function setBirthdayMailSchedule(
+  patch: Partial<BirthdayMailSchedule>,
+): Promise<{ before: BirthdayMailSchedule; after: BirthdayMailSchedule }> {
+  return prisma.$transaction(async (tx) => {
+    await acquireAppSettingLock(tx, BIRTHDAY_MAIL_SCHEDULE_KEY);
+
+    const row = await tx.appSetting.findUnique({
+      where: { key: BIRTHDAY_MAIL_SCHEDULE_KEY },
+    });
+    let before: BirthdayMailSchedule = BirthdayMailScheduleSchema.parse(
+      DEFAULT_BIRTHDAY_MAIL_SCHEDULE,
+    );
+    if (row) {
+      try {
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = BirthdayMailScheduleSchema.safeParse({
+          ...DEFAULT_BIRTHDAY_MAIL_SCHEDULE,
+          ...raw,
+        });
+        if (parsed.success) before = parsed.data;
+      } catch {
+        // 破損データは既定値扱い
+      }
+    }
+
+    const after = BirthdayMailScheduleSchema.parse({ ...before, ...patch });
+    const value = JSON.stringify(after);
+    await tx.appSetting.upsert({
+      where: { key: BIRTHDAY_MAIL_SCHEDULE_KEY },
+      create: { key: BIRTHDAY_MAIL_SCHEDULE_KEY, value },
+      update: { value },
+    });
+    return { before, after };
+  });
+}
+
+/** 自動送信の実行状況を取得する (管理画面の「最終実行」表示用)。 */
+export async function getBirthdayMailRunState(): Promise<BirthdayMailRunState> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+    });
+    if (!row) return DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    const parsed = BirthdayMailRunStateSchema.safeParse({
+      ...DEFAULT_BIRTHDAY_MAIL_RUN_STATE,
+      ...raw,
+    });
+    return parsed.success ? parsed.data : DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+  } catch {
+    return DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+  }
+}
+
+/**
+ * 「その日ぶんの自動送信」を予約 (claim) する。
+ *
+ * 【これが二重送信を防ぐ本体】
+ *  本番は PM2 cluster + OS cron (5 分おき) 構成なので、同じ日に何度も
+ *  エンドポイントが叩かれる。advisory lock を取ったトランザクション内で
+ *  「保存済みの lastRunDate が今日と違う」ことを確認してから今日の日付を
+ *  書き込むため、同時に叩かれても claim できるのは 1 リクエストだけになる。
+ *
+ *  戻り値 true のリクエストだけが実際の送信処理へ進む。
+ *
+ * @param today JST の今日 (jstToday() の結果)
+ * @returns claim できた (= このリクエストが今日ぶんを実行すべき) なら true
+ */
+export async function claimBirthdayMailRun(today: {
+  year: number;
+  month: number;
+  day: number;
+}): Promise<boolean> {
+  const dateKey = formatBirthdayMailDate(today);
+  return prisma.$transaction(async (tx) => {
+    await acquireAppSettingLock(tx, BIRTHDAY_MAIL_RUN_STATE_KEY);
+
+    const row = await tx.appSetting.findUnique({
+      where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+    });
+    let state: BirthdayMailRunState = DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+    if (row) {
+      try {
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = BirthdayMailRunStateSchema.safeParse({
+          ...DEFAULT_BIRTHDAY_MAIL_RUN_STATE,
+          ...raw,
+        });
+        if (parsed.success) state = parsed.data;
+      } catch {
+        // 破損データは「未実行」扱い (送信されないより送信されるほうを選ぶ)。
+      }
+    }
+
+    if (state.lastRunDate === dateKey) return false; // 今日はすでに実行済み
+
+    const next: BirthdayMailRunState = {
+      ...state,
+      lastRunDate: dateKey,
+      lastRunAt: new Date().toISOString(),
+      lastStatus: 'running',
+    };
+    const value = JSON.stringify(next);
+    await tx.appSetting.upsert({
+      where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+      create: { key: BIRTHDAY_MAIL_RUN_STATE_KEY, value },
+      update: { value },
+    });
+    return true;
+  });
+}
+
+/** 自動送信の実行結果を実行状況へ書き戻す (claim 済みの日付は保持する)。 */
+export async function recordBirthdayMailRunResult(params: {
+  status: string;
+  sent: number;
+  failed: number;
+}): Promise<void> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await acquireAppSettingLock(tx, BIRTHDAY_MAIL_RUN_STATE_KEY);
+      const row = await tx.appSetting.findUnique({
+        where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+      });
+      let state: BirthdayMailRunState = DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+      if (row) {
+        try {
+          const raw = JSON.parse(row.value) as Record<string, unknown>;
+          const parsed = BirthdayMailRunStateSchema.safeParse({
+            ...DEFAULT_BIRTHDAY_MAIL_RUN_STATE,
+            ...raw,
+          });
+          if (parsed.success) state = parsed.data;
+        } catch {
+          // 破損は既定値から作り直す
+        }
+      }
+      const next: BirthdayMailRunState = {
+        ...state,
+        lastRunAt: new Date().toISOString(),
+        lastStatus: params.status,
+        lastSent: params.sent,
+        lastFailed: params.failed,
+      };
+      const value = JSON.stringify(next);
+      await tx.appSetting.upsert({
+        where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+        create: { key: BIRTHDAY_MAIL_RUN_STATE_KEY, value },
+        update: { value },
+      });
+    });
+  } catch {
+    // 実行状況の記録失敗は送信の成否に影響させない (表示用の情報)。
+  }
+}
+
+/**
+ * その日ぶんの claim を取り消す (送信処理が例外で落ちた場合のリトライ用)。
+ *
+ * claim したまま例外で落ちると「今日はもう実行済み」と記録され、
+ * 次の cron でリトライされなくなってしまう。送信前の準備段階
+ * (DB 読み取り等) で落ちた場合はここで巻き戻して次回に任せる。
+ */
+export async function releaseBirthdayMailRun(): Promise<void> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await acquireAppSettingLock(tx, BIRTHDAY_MAIL_RUN_STATE_KEY);
+      const row = await tx.appSetting.findUnique({
+        where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+      });
+      if (!row) return;
+      let state: BirthdayMailRunState = DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+      try {
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = BirthdayMailRunStateSchema.safeParse({
+          ...DEFAULT_BIRTHDAY_MAIL_RUN_STATE,
+          ...raw,
+        });
+        if (parsed.success) state = parsed.data;
+      } catch {
+        return;
+      }
+      const next: BirthdayMailRunState = { ...state, lastRunDate: null, lastStatus: 'error' };
+      await tx.appSetting.update({
+        where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+        data: { value: JSON.stringify(next) },
+      });
+    });
+  } catch {
+    // 巻き戻し失敗は握りつぶす (最悪その日は送信されないが、翌日以降は正常)。
+  }
 }
