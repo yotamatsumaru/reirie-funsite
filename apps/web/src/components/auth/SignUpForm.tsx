@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PREFECTURES } from '@idol/shared';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { lookupPostalCode, normalizePostalCode } from '@/lib/postal-lookup';
+import { formatPostalCode, lookupPostalCode, normalizePostalCode } from '@/lib/postal-lookup';
 
 const INITIAL = {
   displayName: '',
@@ -26,41 +26,66 @@ export function SignUpForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 郵便番号 → 住所 自動補完の状態表示用 (検索中 / 見つからなかった)
-  const [postalLookingUp, setPostalLookingUp] = useState(false);
-  const [postalNotFound, setPostalNotFound] = useState(false);
+  // 郵便番号 → 住所 自動補完の状態表示用
+  //  idle / searching / found / not-found (実在しない) / unavailable (検索できなかった)
+  const [postalState, setPostalState] = useState<
+    'idle' | 'searching' | 'found' | 'not-found' | 'unavailable'
+  >('idle');
+  // 直近の検索対象。非同期の遅延結果が新しい入力を上書きしないようにするため保持する。
+  const latestZipRef = useRef<string | null>(null);
 
   const update =
     (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [k]: e.target.value }));
 
-  // 郵便番号の変更ハンドラ。7桁揃ったら zipcloud で住所を自動補完する。
+  // 郵便番号の変更ハンドラ。7桁揃ったら住所を自動補完する。
   //  - 都道府県 (prefecture) を上書きする。
   //  - 市区町村・番地 (addressLine1) は「まだ空のときだけ」市区町村＋町域を差し込む
   //    (ユーザーが番地まで入力済みの場合に消してしまわないため)。
+  // 住所検索に失敗しても登録はブロックしない (手入力にフォールバックできる)。
   const onPostalChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setForm((prev) => ({ ...prev, postalCode: value }));
-    setPostalNotFound(false);
 
     const zip = normalizePostalCode(value);
-    if (!zip) return;
-
-    setPostalLookingUp(true);
-    const result = await lookupPostalCode(zip);
-    setPostalLookingUp(false);
-
-    if (!result) {
-      setPostalNotFound(true);
+    if (!zip) {
+      latestZipRef.current = null;
+      setPostalState('idle');
       return;
     }
+
+    latestZipRef.current = zip;
+    setPostalState('searching');
+    const result = await lookupPostalCode(zip);
+    // 入力が進んで別の郵便番号になっていたら、この結果は破棄する
+    if (latestZipRef.current !== zip) return;
+
+    if (result.status !== 'found') {
+      setPostalState(result.status);
+      return;
+    }
+    setPostalState('found');
     setForm((prev) => ({
       ...prev,
       prefecture: result.prefecture || prev.prefecture,
       addressLine1: prev.addressLine1.trim() === '' ? result.city : prev.addressLine1,
     }));
   };
+
+  // 郵便番号欄に出すヒント文。
+  // 「検索できなかった」ときに「存在しない」と言わないことが重要
+  // (外部サービス障害時に会員登録を諦めさせてしまうため)。
+  const postalHint =
+    postalState === 'searching'
+      ? '住所を検索中…'
+      : postalState === 'found'
+        ? '住所を自動入力しました。番地・建物名を続けてご入力ください'
+        : postalState === 'not-found'
+          ? 'この郵便番号の住所が見つかりませんでした。番号をご確認いただくか、住所を手入力してください'
+          : postalState === 'unavailable'
+            ? '住所の自動入力が一時的にご利用できません。都道府県・住所を手入力すればそのまま登録できます'
+            : '7桁を入力すると都道府県・市区町村を自動入力します（ハイフンあり・なし可）';
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +101,11 @@ export function SignUpForm() {
           email: form.email,
           phone: form.phone,
           birthDate: form.birthDate,
-          postalCode: form.postalCode,
+          // 全角数字 (「１５７００６６」) や 〒 記号付きで入力されても登録できるよう、
+          // サーバのバリデーション (^\d{3}-?\d{4}$) が通る形へ正規化して送る。
+          // 携帯の日本語キーボードでは全角数字になりやすく、正規化しないと
+          // 「郵便番号は7桁で入力してください」で登録できなくなる。
+          postalCode: formatPostalCode(form.postalCode),
           prefecture: form.prefecture,
           addressLine1: form.addressLine1,
           addressLine2: form.addressLine2 || undefined,
@@ -187,13 +216,7 @@ export function SignUpForm() {
           inputMode="numeric"
           required
           placeholder="例: 1234567"
-          hint={
-            postalLookingUp
-              ? '住所を検索中…'
-              : postalNotFound
-                ? '住所が見つかりませんでした。都道府県・住所をご確認ください'
-                : '7桁を入力すると都道府県・市区町村を自動入力します（ハイフンあり・なし可）'
-          }
+          hint={postalHint}
           value={form.postalCode}
           onChange={onPostalChange}
         />

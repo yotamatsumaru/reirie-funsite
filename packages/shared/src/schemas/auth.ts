@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PostalCodeSchema } from './common';
 
 export const SignUpSchema = z.object({
   email: z.email(),
@@ -27,9 +28,7 @@ export const SignUpSchema = z.object({
   // 生年月日 — 必須 (YYYY-MM-DD)
   birthDate: z.iso.date('生年月日を入力してください'),
   // 住所 — 必須 (郵便番号 / 都道府県 / 市区町村・番地)
-  postalCode: z
-    .string({ error: '郵便番号を入力してください' })
-    .regex(/^\d{3}-?\d{4}$/, '郵便番号は7桁で入力してください'),
+  postalCode: PostalCodeSchema,
   prefecture: z
     .string({ error: '都道府県を選択してください' })
     .min(1, '都道府県を選択してください')
@@ -88,10 +87,7 @@ export const UpdateProfileSchema = z.object({
     .regex(/^[0-9\-+()]+$/, '電話番号の形式が正しくありません')
     .optional(),
   birthDate: z.iso.date().optional(),
-  postalCode: z
-    .string()
-    .regex(/^\d{3}-?\d{4}$/, '郵便番号は7桁で入力してください')
-    .optional(),
+  postalCode: PostalCodeSchema.optional(),
   prefecture: z.string().max(20).optional(),
   addressLine1: z.string().max(200).optional(),
   addressLine2: z.string().max(200).optional(),

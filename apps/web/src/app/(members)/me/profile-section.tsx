@@ -8,13 +8,13 @@
  *  - バリデーションはサーバ側 (UpdateProfileSchema) を正とし、ここでは最低限の
  *    必須チェック + サーバのエラーメッセージ表示のみ行う。
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PREFECTURES } from '@idol/shared';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/stores/ui-store';
-import { lookupPostalCode, normalizePostalCode } from '@/lib/postal-lookup';
+import { formatPostalCode, lookupPostalCode, normalizePostalCode } from '@/lib/postal-lookup';
 
 export interface ProfileInfo {
   fullName: string | null;
@@ -64,40 +64,64 @@ export function ProfileSection({ initial }: { initial: ProfileInfo }) {
   });
 
   // 郵便番号 → 住所 自動補完の状態表示用
-  const [postalLookingUp, setPostalLookingUp] = useState(false);
-  const [postalNotFound, setPostalNotFound] = useState(false);
+  //  idle / searching / found / not-found (実在しない) / unavailable (検索できなかった)
+  const [postalState, setPostalState] = useState<
+    'idle' | 'searching' | 'found' | 'not-found' | 'unavailable'
+  >('idle');
+  // 直近の検索対象。非同期の遅延結果が新しい入力を上書きしないようにするため保持する。
+  const latestZipRef = useRef<string | null>(null);
 
   const update =
     (key: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
-  // 郵便番号が7桁揃ったら zipcloud で住所を自動補完する。
+  // 郵便番号が7桁揃ったら住所を自動補完する。
   //  - 都道府県を上書き。
   //  - 市区町村・番地はまだ空のときだけ市区町村＋町域を差し込む
   //    (番地まで入力済みの内容を消さないため)。
+  // 住所検索に失敗しても保存はブロックしない (手入力にフォールバックできる)。
   async function onPostalChange(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value;
     setForm((prev) => ({ ...prev, postalCode: value }));
-    setPostalNotFound(false);
 
     const zip = normalizePostalCode(value);
-    if (!zip) return;
-
-    setPostalLookingUp(true);
-    const result = await lookupPostalCode(zip);
-    setPostalLookingUp(false);
-
-    if (!result) {
-      setPostalNotFound(true);
+    if (!zip) {
+      latestZipRef.current = null;
+      setPostalState('idle');
       return;
     }
+
+    latestZipRef.current = zip;
+    setPostalState('searching');
+    const result = await lookupPostalCode(zip);
+    // 入力が進んで別の郵便番号になっていたら、この結果は破棄する
+    if (latestZipRef.current !== zip) return;
+
+    if (result.status !== 'found') {
+      setPostalState(result.status);
+      return;
+    }
+    setPostalState('found');
     setForm((prev) => ({
       ...prev,
       prefecture: result.prefecture || prev.prefecture,
       addressLine1: prev.addressLine1.trim() === '' ? result.city : prev.addressLine1,
     }));
   }
+
+  // 郵便番号欄のヒント文。
+  // 「検索できなかった」ときに「存在しない」と言わないことが重要。
+  const postalHint =
+    postalState === 'searching'
+      ? '住所を検索中…'
+      : postalState === 'found'
+        ? '住所を自動入力しました。番地・建物名を続けてご入力ください'
+        : postalState === 'not-found'
+          ? 'この郵便番号の住所が見つかりませんでした。番号をご確認いただくか、住所を手入力してください'
+          : postalState === 'unavailable'
+            ? '住所の自動入力が一時的にご利用できません。都道府県・住所を手入力すればそのまま保存できます'
+            : '7桁を入力すると都道府県・市区町村を自動入力します（ハイフンあり・なし可）';
 
   function startEdit() {
     // 表示中の値を編集フォームに反映してから開く
@@ -132,7 +156,9 @@ export function ProfileSection({ initial }: { initial: ProfileInfo }) {
           furigana: form.furigana.trim() || undefined,
           phone: form.phone.trim(),
           birthDate: form.birthDate || undefined,
-          postalCode: form.postalCode.trim(),
+          // 全角数字や 〒 記号付きで入力されてもサーバの検証 (^\d{3}-?\d{4}$) を
+          // 通るように正規化する (携帯の日本語入力では全角になりやすい)。
+          postalCode: formatPostalCode(form.postalCode.trim()),
           prefecture: form.prefecture,
           addressLine1: form.addressLine1.trim(),
           addressLine2: form.addressLine2.trim() || undefined,
@@ -150,7 +176,8 @@ export function ProfileSection({ initial }: { initial: ProfileInfo }) {
         furigana: form.furigana.trim() || null,
         phone: form.phone.trim() || null,
         birthDate: form.birthDate || null,
-        postalCode: form.postalCode.trim() || null,
+        // 送信した値と表示がずれないよう、保存したのと同じ正規化後の値を表示する
+        postalCode: formatPostalCode(form.postalCode.trim()) || null,
         prefecture: form.prefecture || null,
         addressLine1: form.addressLine1.trim() || null,
         addressLine2: form.addressLine2.trim() || null,
@@ -239,13 +266,7 @@ export function ProfileSection({ initial }: { initial: ProfileInfo }) {
         inputMode="numeric"
         required
         placeholder="例: 1234567"
-        hint={
-          postalLookingUp
-            ? '住所を検索中…'
-            : postalNotFound
-              ? '住所が見つかりませんでした。都道府県・住所をご確認ください'
-              : '7桁を入力すると都道府県・市区町村を自動入力します（ハイフンあり・なし可）'
-        }
+        hint={postalHint}
         value={form.postalCode}
         onChange={onPostalChange}
         disabled={submitting}
