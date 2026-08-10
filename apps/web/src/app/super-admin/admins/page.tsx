@@ -19,6 +19,7 @@ import { GrantAdminForm } from './grant-admin-form';
 import { InviteAdminForm } from './invite-admin-form';
 import { InvitationList, type InvitationItem } from './invitation-list';
 import { SetMemberNumberForm } from './set-member-number-form';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: '管理者管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -163,7 +164,9 @@ export default async function SuperAdminAdminsPage() {
               </p>
             </CardHeader>
             <CardBody>
-              <GrantAdminForm />
+              <SuperAdminWriteGate label="権限の付与はスーパー管理者のみ実行できます">
+                <GrantAdminForm />
+              </SuperAdminWriteGate>
             </CardBody>
           </Card>
 
@@ -177,7 +180,9 @@ export default async function SuperAdminAdminsPage() {
               </p>
             </CardHeader>
             <CardBody>
-              <InviteAdminForm />
+              <SuperAdminWriteGate label="管理者の招待はスーパー管理者のみ実行できます">
+                <InviteAdminForm />
+              </SuperAdminWriteGate>
             </CardBody>
           </Card>
         </>
@@ -206,7 +211,9 @@ export default async function SuperAdminAdminsPage() {
             </p>
           </CardHeader>
           <CardBody>
-            <SetMemberNumberForm />
+            <SuperAdminWriteGate label="会員番号の変更はスーパー管理者のみ実行できます">
+              <SetMemberNumberForm />
+            </SuperAdminWriteGate>
           </CardBody>
         </Card>
       )}
@@ -269,7 +276,9 @@ function AdminTable({ users, readOnly = false }: { users: UserRow[]; readOnly?: 
                       )}
                     </div>
                   ) : (
-                    <AdminCapabilityEditor userId={u.id} initialCapabilities={caps} />
+                    <SuperAdminWriteGate silent>
+                      <AdminCapabilityEditor userId={u.id} initialCapabilities={caps} />
+                    </SuperAdminWriteGate>
                   )}
                 </td>
                 <td className="px-4 py-3 align-top text-xs text-slate-600">
@@ -277,7 +286,9 @@ function AdminTable({ users, readOnly = false }: { users: UserRow[]; readOnly?: 
                 </td>
                 {!readOnly && (
                   <td className="px-4 py-3 text-right align-top">
-                    <AdminRowActions userId={u.id} currentRole={u.role} />
+                    <SuperAdminWriteGate silent>
+                      <AdminRowActions userId={u.id} currentRole={u.role} />
+                    </SuperAdminWriteGate>
                   </td>
                 )}
               </tr>

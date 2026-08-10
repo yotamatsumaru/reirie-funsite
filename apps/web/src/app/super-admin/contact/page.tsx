@@ -18,6 +18,7 @@ import {
   type ContactCategoryLiteral,
 } from '@idol/shared';
 import { ContactRowActions } from './contact-row-actions';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'お問い合わせ管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -190,20 +191,22 @@ export default async function SuperAdminContactPage({
                   {m.message}
                 </div>
 
-                <ContactRowActions
-                  contactId={m.id}
-                  status={m.status}
-                  adminNote={m.adminNote}
-                  isMember={Boolean(m.user)}
-                  replies={m.replies.map((r) => ({
-                    id: r.id,
-                    body: r.body,
-                    emailSent: r.emailSent,
-                    emailError: r.emailError,
-                    createdAt: formatDateTime(r.createdAt),
-                    repliedByLabel: r.repliedBy?.displayName || r.repliedBy?.email || '運営',
-                  }))}
-                />
+                <SuperAdminWriteGate silent>
+                  <ContactRowActions
+                    contactId={m.id}
+                    status={m.status}
+                    adminNote={m.adminNote}
+                    isMember={Boolean(m.user)}
+                    replies={m.replies.map((r) => ({
+                      id: r.id,
+                      body: r.body,
+                      emailSent: r.emailSent,
+                      emailError: r.emailError,
+                      createdAt: formatDateTime(r.createdAt),
+                      repliedByLabel: r.repliedBy?.displayName || r.repliedBy?.email || '運営',
+                    }))}
+                  />
+                </SuperAdminWriteGate>
               </CardBody>
             </Card>
           ))}

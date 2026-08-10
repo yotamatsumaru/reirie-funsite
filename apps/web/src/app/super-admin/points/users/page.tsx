@@ -12,6 +12,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { PointAdjustButton } from './adjust-button';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'Pui 状況 (全ユーザー) | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -158,12 +159,14 @@ export default async function PointsUsersPage({
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <PointAdjustButton
-                            userId={u.id}
-                            label={u.displayName || u.email || u.id}
-                            currentBalance={u.pui}
-                            inconsistent={!consistent}
-                          />
+                          <SuperAdminWriteGate silent>
+                            <PointAdjustButton
+                              userId={u.id}
+                              label={u.displayName || u.email || u.id}
+                              currentBalance={u.pui}
+                              inconsistent={!consistent}
+                            />
+                          </SuperAdminWriteGate>
                         </td>
                       </tr>
                     );

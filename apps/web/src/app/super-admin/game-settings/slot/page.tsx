@@ -13,6 +13,7 @@ import { gameThumbnailSlot, type SiteImageSlot } from '@idol/shared';
 import { getSlotSettings } from '@/lib/app-setting';
 import { listSiteImages } from '@/lib/site-image';
 import { SlotSettingsClient } from '../slot-settings-client';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 import {
   GameThumbnailClient,
   type GameThumbnailItem,
@@ -56,10 +57,14 @@ export default async function SlotGameSettingsPage() {
       </header>
 
       {/* ゲームサムネイル (ゲーム一覧カードの画像) */}
-      <GameThumbnailClient slot={THUMBNAIL_SLOT} initial={thumbnailItem} />
+      <SuperAdminWriteGate silent>
+        <GameThumbnailClient slot={THUMBNAIL_SLOT} initial={thumbnailItem} />
+      </SuperAdminWriteGate>
 
       {/* 出玉設定 (1〜6) */}
-      <SlotSettingsClient initial={slotSettings} />
+      <SuperAdminWriteGate label="ゲーム設定の変更はスーパー管理者のみ実行できます">
+        <SlotSettingsClient initial={slotSettings} />
+      </SuperAdminWriteGate>
     </main>
   );
 }

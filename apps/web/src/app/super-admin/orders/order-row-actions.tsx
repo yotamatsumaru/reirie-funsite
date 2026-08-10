@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSuperAdminReadOnly } from '@/components/admin/SuperAdminReadOnly';
 
 export function OrderRowActions({
   orderId,
@@ -11,6 +12,7 @@ export function OrderRowActions({
   status: string;
 }) {
   const router = useRouter();
+  const readOnly = useSuperAdminReadOnly();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +61,12 @@ export function OrderRowActions({
 
   if (status === 'REFUNDED' || status === 'CANCELED') {
     return <span className="text-xs text-slate-400">— 完了</span>;
+  }
+
+  // スタッフ管理者 (STAFF) は閲覧のみ。返金・発送・キャンセルは実行できない。
+  // (API 側も requireSuperAdmin() で 403 になるが、押せないボタンを見せない)
+  if (readOnly) {
+    return <span className="text-[11px] text-slate-400">閲覧のみ</span>;
   }
 
   return (
