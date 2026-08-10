@@ -3,6 +3,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import {
   ACCHI_MAX_PLAYS_PER_DAY,
@@ -11,8 +12,10 @@ import {
 } from '@idol/shared';
 import { auth } from '@/auth';
 import { getSiteImageUrlMap } from '@/lib/site-image';
+import { resolveGameVisibility } from '@/lib/game-visibility';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { GamePreviewBanner } from '@/components/game/GamePreviewBanner';
 
 export const metadata: Metadata = {
   title: 'ゲーム一覧',
@@ -45,6 +48,10 @@ const MINI_GAMES: {
 ];
 
 export default async function GameTopPage() {
+  // 非公開中は一般会員には 404。管理者だけはプレビューとして閲覧できる。
+  const { canView, isPreview } = await resolveGameVisibility();
+  if (!canView) notFound();
+
   const session = await auth();
   const isAuthenticated = !!session?.user?.id;
   const isPremium = session?.user?.plan === 'PREMIUM';
@@ -62,6 +69,7 @@ export default async function GameTopPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-3 py-6 sm:px-4 sm:py-10">
+      {isPreview && <GamePreviewBanner />}
       <header className="mb-8 text-center">
         <p className="text-xs font-semibold tracking-widest text-brand-600">GAMES</p>
         <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-4xl">

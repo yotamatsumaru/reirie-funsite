@@ -42,6 +42,7 @@ import {
 } from '@/lib/points';
 import { resolveAcchiPlay } from '@/lib/games/acchi';
 import { getAcchiWinSettings } from '@/lib/app-setting';
+import { requireGameSectionVisible } from '@/lib/game-visibility';
 
 /**
  * ユーザーの現在プランを DB の有効サブスクリプションから解決する。
@@ -70,6 +71,10 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
 }
 
 export async function handleAcchiGet(req: Request): Promise<Response> {
+  // ゲーム非公開中は API も 404 (管理者は動作確認のため引き続き利用可)。
+  // ページだけ隠しても API が生きていると直接叩いてプレイできてしまうため、
+  // ポイントが動く POST 系だけでなく GET も塞ぐ。
+  await requireGameSectionVisible(req);
   const principal = await requireApiPrincipal(req);
 
   const [playedToday, purchasedExtra, user, promoUntil] = await Promise.all([
@@ -114,6 +119,8 @@ export async function handleAcchiGet(req: Request): Promise<Response> {
  * 解決し、方向対決の勝敗を確定・記録する。
  */
 export async function handleAcchiPost(req: Request): Promise<Response> {
+  // 非公開中はプレイ不可 (= ポイントも動かない)。管理者のみ動作確認できる。
+  await requireGameSectionVisible(req);
   const principal: ApiPrincipal = await requireApiPrincipal(req);
 
   const body = (await req.json().catch(() => null)) as { direction?: unknown } | null;
@@ -181,6 +188,10 @@ export async function handleAcchiPost(req: Request): Promise<Response> {
  *  - Pui 残高不足時は 422 (PUI_INTEGRITY) を返す
  */
 export async function handleAcchiBuyExtraPlay(req: Request): Promise<Response> {
+  // 【重要】非公開中に Pui を消費させないための最優先ガード。
+  // 遊べないゲームの追加プレイ権を買わせてしまうと返金対応が発生するため、
+  // 課金処理より必ず前に 404 で止める。
+  await requireGameSectionVisible(req);
   const principal = await requireApiPrincipal(req);
   const result = await buyAcchiExtraPlay(principal.userId);
 

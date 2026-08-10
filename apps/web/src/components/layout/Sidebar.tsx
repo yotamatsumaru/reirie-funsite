@@ -81,11 +81,13 @@ export function Sidebar({
   contentsVisible = true,
   productsVisible = true,
   dmVisible = true,
+  gamesVisible = true,
 }: {
   /** /super-admin/settings のトグルで OFF の場合、対応するナビ項目を非表示にする */
   contentsVisible?: boolean;
   productsVisible?: boolean;
   dmVisible?: boolean;
+  gamesVisible?: boolean;
 } = {}) {
   const { data: session, status } = useSession();
   const cartCount = useCartItemCount();
@@ -99,6 +101,9 @@ export function Sidebar({
     items: group.items.filter((item) => {
       if (item.href === '/contents') return contentsVisible;
       if (item.href === '/products') return productsVisible;
+      // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
+      // 一般会員にはナビからもページからも完全に見えなくなる。
+      if (item.href === '/game') return gamesVisible || isAdmin;
       return true;
     }),
   })).filter((group) => group.items.length > 0);

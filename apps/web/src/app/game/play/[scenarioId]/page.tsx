@@ -7,6 +7,7 @@ import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { validateScenarioScript } from '@idol/shared';
+import { resolveGameVisibility } from '@/lib/game-visibility';
 import { GamePlayerClient } from './game-player-client';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +18,12 @@ export default async function GamePlayPage({
   params: Promise<{ scenarioId: string }>;
 }) {
   const { scenarioId } = await params;
+  // 非公開中は一般会員には 404。管理者だけはプレビューとしてプレイできる。
+  // （未ログインでもまずここで 404 にし、サインイン画面へ送って
+  //   「ログインすれば遊べるゲームがある」と推測させない）
+  const { canView } = await resolveGameVisibility();
+  if (!canView) notFound();
+
   const session = await auth();
   if (!session?.user?.id) {
     redirect(`/signin?callbackUrl=/game/play/${scenarioId}`);

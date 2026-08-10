@@ -34,7 +34,8 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { contentsVisible, productsVisible, dmVisible } = await getSiteSectionVisibility();
+  const { contentsVisible, productsVisible, dmVisible, gamesVisible } =
+    await getSiteSectionVisibility();
   return (
     <html lang="ja" className={zenKaku.variable}>
       <body className="min-h-screen">
@@ -43,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             contentsVisible={contentsVisible}
             productsVisible={productsVisible}
             dmVisible={dmVisible}
+            gamesVisible={gamesVisible}
           />
           {/* PC ではサイドバー幅 (w-64 = 16rem) 分だけ右にオフセット */}
           <div className="flex min-h-screen flex-col md:pl-64">

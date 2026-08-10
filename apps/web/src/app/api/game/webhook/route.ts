@@ -5,6 +5,13 @@
  *   - PlayerPurchase / RewardPointPurchase を SUCCEEDED に更新
  *
  * Stripe Dashboard で `checkout.session.completed` イベントを購読する
+ *
+ * 【重要 / ゲーム公開設定の対象外】
+ * ここには requireGameSectionVisible を入れてはならない。この webhook は
+ * 「すでに決済が完了した」通知であり、公開設定を理由に 404 を返すと
+ * 「課金されたのに商品が付与されない」状態になる。購入の入口 (/api/game/purchase)
+ * を塞げば新規購入は止まるため、決済確定処理は常に受け付ける。
+ * (公開中に購入 → 直後に非公開へ切替、という順序でも取りこぼさない)
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
