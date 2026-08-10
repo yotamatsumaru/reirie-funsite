@@ -62,6 +62,7 @@ echo "[user-data] start $(date -u +%FT%TZ)"
 dnf -y update
 dnf -y install \
   git tar gzip jq unzip \
+  cronie \
   nginx \
   postgresql15 \
   amazon-cloudwatch-agent \
@@ -495,6 +496,17 @@ EOF
   env PATH="$PATH:$(dirname "$PM2_PATH")" "$PM2_PATH" startup systemd \
     -u "$APP_USER" --hp "/home/${APP_USER}" || true
   systemctl enable "pm2-${APP_USER}" || true
+fi
+
+# ---- 8.5. 定期ジョブ (cron) の登録 ----
+# 誕生日メールの自動送信トリガーなど。/etc/cron.d に置くので冪等。
+# 送信時刻はアプリ側 (DB の AppSetting) で管理するため、時刻変更で
+# ここを書き換える必要はない (= 再デプロイ不要)。
+if [ -f "${APP_DIR}/deploy/install-cron.sh" ]; then
+  APP_USER="$APP_USER" APP_DIR="$APP_DIR" bash "${APP_DIR}/deploy/install-cron.sh" \
+    || echo "[user-data] WARN: failed to install cron jobs"
+else
+  echo "[user-data] WARN: deploy/install-cron.sh not found; skipping cron setup"
 fi
 
 # ---- 9. CloudWatch Agent (基本メトリクス + ログ収集) ----

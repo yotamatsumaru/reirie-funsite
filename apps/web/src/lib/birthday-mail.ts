@@ -16,10 +16,20 @@
 import crypto from 'node:crypto';
 import { prisma } from '@idol/db';
 import type { BirthdayMailTemplate, BirthdayMailDelivery } from '@idol/db';
-import { renderBirthdayMailText } from '@idol/shared';
+import {
+  renderBirthdayMailText,
+  isBirthdayMailScheduleDue,
+  formatBirthdayMailTime,
+} from '@idol/shared';
 import { isAssetStorageConfigured, putAsset } from './s3';
 import { sendEmail } from './email';
 import { env } from './env';
+import {
+  getBirthdayMailSchedule,
+  claimBirthdayMailRun,
+  recordBirthdayMailRunResult,
+  releaseBirthdayMailRun,
+} from './app-setting';
 
 // ---------------------------------------------------------------------------
 // JST 日付ユーティリティ
@@ -35,6 +45,29 @@ export function jstToday(): { year: number; month: number; day: number } {
   }).formatToParts(new Date());
   const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0');
   return { year: get('year'), month: get('month'), day: get('day') };
+}
+
+/**
+ * JST における現在の時刻を { hour, minute } で返す。
+ *
+ * 自動送信の「設定時刻を過ぎたか」判定に使う。サーバー (EC2) は UTC 稼働なので
+ * new Date().getHours() では 9 時間ずれる。jstToday() と同じ Intl 方式で
+ * Asia/Tokyo に固定して取り出す (夏時間の無いタイムゾーンなので固定オフセットで
+ * も同値だが、実装を揃えて意図を明示する)。
+ *
+ * hourCycle: 'h23' を指定しているのは、既定 ('h12' 相当) では 深夜 0 時が
+ * "24" と表記される環境があり、Number('24') = 24 になって時刻比較が壊れるため。
+ */
+export function jstNowTime(): { hour: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Tokyo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0');
+  const hour = get('hour');
+  return { hour: hour === 24 ? 0 : hour, minute: get('minute') };
 }
 
 /** birthDate (Date, DBは @db.Date でUTC 00:00 保存) から月日を取り出す。 */
@@ -348,6 +381,160 @@ export async function sendBirthdayMails(params: {
 
   void today; // (将来: 送信ログに日付を残す用途)
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// 自動送信 (cron から呼ばれる)
+// ---------------------------------------------------------------------------
+
+/**
+ * 自動送信 1 回の結果種別。
+ *  - sent            : 実際に送信した (1 通以上)。
+ *  - no-recipients   : claim はしたが、今日が誕生日の対象者がいなかった。
+ *  - disabled        : 自動送信設定が OFF。
+ *  - not-due         : 設定時刻 (既定 12:00) より前。
+ *  - already-ran     : その日ぶんは既に実行済み (重複起動)。
+ *  - no-template     : その年のテンプレートが未作成。
+ *  - template-disabled: その年のテンプレートが無効化されている。
+ */
+export type AutoSendStatus =
+  | 'sent'
+  | 'no-recipients'
+  | 'disabled'
+  | 'not-due'
+  | 'already-ran'
+  | 'no-template'
+  | 'template-disabled';
+
+export type AutoSendOutcome = {
+  status: AutoSendStatus;
+  /** 人間向けの説明 (管理画面 / cron ログ用)。 */
+  message: string;
+  /** JST の今日。 */
+  today: { year: number; month: number; day: number };
+  /** JST の現在時刻。 */
+  now: { hour: number; minute: number };
+  /** 設定されている送信時刻 + 有効フラグ。 */
+  schedule: { enabled: boolean; hour: number; minute: number };
+  /** 実際に送信した場合のみ結果が入る。 */
+  result: SendResult | null;
+};
+
+/**
+ * 誕生日メールの自動送信を「実行してよければ実行する」。
+ *
+ * cron から数分おきに叩かれる前提の冪等な関数。以下の順に門を通す:
+ *
+ *   1. 自動送信が有効か (schedule.enabled)         → disabled
+ *   2. 設定時刻 (既定 12:00 JST) を過ぎているか     → not-due
+ *   3. その日ぶんを claim できるか (1日1回)         → already-ran
+ *   4. その年のテンプレートがあり有効か             → no-template / template-disabled
+ *   5. 今日が誕生日の対象者がいるか                 → no-recipients
+ *   6. 送信                                          → sent
+ *
+ * 【重要】4/5 でも例外は投げない。sendBirthdayMails() はテンプレート未設定・無効時に
+ * throw するが、cron が毎回 500 を返すのは運用上ノイズなので、ここで事前に判定して
+ * 「何もしなかった理由」を戻り値で返す。cron 側は 200 で受け取り、管理画面には
+ * 最終実行の理由として表示される。
+ *
+ * 【二重送信の防御は 3 重】
+ *   a. claimBirthdayMailRun() … 同日・同時刻の重複起動を DB の advisory lock で排除
+ *   b. sendBirthdayMails() 内の r.sent && r.emailSent スキップ
+ *   c. BirthdayMailDelivery の userId+year ユニーク制約
+ */
+export async function runBirthdayMailAutoSend(options?: {
+  /** 時刻ゲートと claim を無視して強制実行する (管理画面の「今すぐ実行」用)。 */
+  force?: boolean;
+}): Promise<AutoSendOutcome> {
+  const force = options?.force === true;
+  const today = jstToday();
+  const now = jstNowTime();
+  const schedule = await getBirthdayMailSchedule();
+
+  const base = { today, now, schedule, result: null } as const;
+  const scheduledAt = formatBirthdayMailTime(schedule);
+
+  if (!force && !schedule.enabled) {
+    return { ...base, status: 'disabled', message: '自動送信は無効に設定されています。' };
+  }
+
+  if (!force && !isBirthdayMailScheduleDue(schedule, now)) {
+    return {
+      ...base,
+      status: 'not-due',
+      message: `送信時刻 (${scheduledAt} JST) より前のため、まだ送信しません。`,
+    };
+  }
+
+  // その日ぶんを予約する。false なら他プロセス / 前回の cron が既に実行済み。
+  if (!force) {
+    const claimed = await claimBirthdayMailRun(today);
+    if (!claimed) {
+      return {
+        ...base,
+        status: 'already-ran',
+        message: '本日ぶんの自動送信は既に実行済みです。',
+      };
+    }
+  }
+
+  // ここから先は claim 済み。途中で落ちたら claim を巻き戻して翌回にリトライさせる。
+  try {
+    const template = await getBirthdayTemplate(today.year);
+    if (!template) {
+      const outcome: AutoSendOutcome = {
+        ...base,
+        status: 'no-template',
+        message: `${today.year} 年の誕生日メールテンプレートが未設定のため送信しませんでした。`,
+      };
+      await recordBirthdayMailRunResult({ status: outcome.status, sent: 0, failed: 0 });
+      return outcome;
+    }
+    if (!template.enabled) {
+      const outcome: AutoSendOutcome = {
+        ...base,
+        status: 'template-disabled',
+        message: `${today.year} 年のテンプレートが無効化されているため送信しませんでした。`,
+      };
+      await recordBirthdayMailRunResult({ status: outcome.status, sent: 0, failed: 0 });
+      return outcome;
+    }
+
+    const recipients = await listBirthdayRecipients({ year: today.year });
+    const unsent = recipients.filter((r) => !(r.sent && r.emailSent));
+    if (unsent.length === 0) {
+      const outcome: AutoSendOutcome = {
+        ...base,
+        status: 'no-recipients',
+        message:
+          recipients.length === 0
+            ? '本日が誕生日の対象会員はいませんでした。'
+            : '本日が誕生日の対象会員は全員送信済みでした。',
+      };
+      await recordBirthdayMailRunResult({ status: outcome.status, sent: 0, failed: 0 });
+      return outcome;
+    }
+
+    const result = await sendBirthdayMails({ year: today.year });
+    const outcome: AutoSendOutcome = {
+      today,
+      now,
+      schedule,
+      status: 'sent',
+      message: `自動送信を実行しました (送信 ${result.sent} / スキップ ${result.skipped} / 失敗 ${result.failed})。`,
+      result,
+    };
+    await recordBirthdayMailRunResult({
+      status: outcome.status,
+      sent: result.sent,
+      failed: result.failed,
+    });
+    return outcome;
+  } catch (e) {
+    // 準備段階での失敗は claim を巻き戻し、次の cron でリトライできるようにする。
+    if (!force) await releaseBirthdayMailRun();
+    throw e;
+  }
 }
 
 /**

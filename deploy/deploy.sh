@@ -195,5 +195,26 @@ fi
 # 再起動後も自動復帰するよう保存
 pm2 save
 
+# ---------------------------------------------------------------------
+# 定期ジョブ (cron) の登録 / 更新
+#   誕生日メールの自動送信トリガーなど。/etc/cron.d に書くので冪等で、
+#   毎回のデプロイで実行しても重複登録されない。既存インスタンス
+#   (user-data を再実行しない) にも確実に行き渡らせるためここでも実行する。
+#
+#   root 権限が必要なため sudo で呼ぶ。sudo が使えない/失敗しても
+#   デプロイ全体は止めない (set -e 下なので || で受ける)。
+# ---------------------------------------------------------------------
+if [ -f "$APP_DIR/deploy/install-cron.sh" ]; then
+  echo "[deploy] installing cron jobs..."
+  if sudo -n APP_DIR="$APP_DIR" bash "$APP_DIR/deploy/install-cron.sh"; then
+    echo "[deploy] cron jobs installed"
+  else
+    echo "[deploy][WARN] failed to install cron jobs (sudo 権限を確認してください)" >&2
+    echo "[deploy][WARN]   手動実行: sudo bash $APP_DIR/deploy/install-cron.sh" >&2
+  fi
+else
+  echo "[deploy][WARN] deploy/install-cron.sh not found; skipping cron setup" >&2
+fi
+
 echo "[deploy] done."
 pm2 status
