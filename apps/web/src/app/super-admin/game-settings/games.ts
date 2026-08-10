@@ -24,4 +24,10 @@ export const GAME_SETTINGS_GAMES: GameSettingsEntry[] = [
     description:
       '勝率・特典ポイントボーナス・キャラボイス・キャラクター画像・サムネイルの設定。',
   },
+  {
+    slug: 'slot',
+    title: 'スロット',
+    emoji: '🎰',
+    description: '出玉設定 (当選確率 1〜6)・サムネイルの設定。',
+  },
 ];
