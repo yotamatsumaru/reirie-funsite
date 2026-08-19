@@ -189,6 +189,7 @@ enum RewardRedemptionStatus {
 // ミニゲームの種類
 enum MiniGameType {
   ACCHI_MUITE_HOI // あっち向いてホイ
+  SLOT // スロット (3 リール)
 }
 
 // ミニゲームの1プレイ結果

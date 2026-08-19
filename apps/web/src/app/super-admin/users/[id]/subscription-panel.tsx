@@ -11,6 +11,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { RefreshCw, Gift } from 'lucide-react';
+import { useSuperAdminReadOnly, ReadOnlyHint } from '@/components/admin/SuperAdminReadOnly';
 
 type Plan = 'STANDARD' | 'PREMIUM';
 type Interval = 'MONTH' | 'YEAR';
@@ -28,6 +29,7 @@ export function SubscriptionPanel({
   currentStatus: string | null;
 }) {
   const router = useRouter();
+  const readOnly = useSuperAdminReadOnly();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<null | 'sync' | 'grant'>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +107,17 @@ export function SubscriptionPanel({
   }
 
   const disabled = pending || busy !== null;
+
+  // スタッフ管理者 (STAFF) はサブスク変更を行えない。
+  // 呼び出し元 (users/[id]/page.tsx) でも !readOnly で囲っているが、
+  // 他の画面に組み込まれた場合でも安全なように二重で防ぐ。
+  if (readOnly) {
+    return (
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <ReadOnlyHint label="サブスクの変更はスーパー管理者のみ実行できます" />
+      </div>
+    );
+  }
 
   return (
     <div className="mt-3 border-t border-slate-100 pt-3">

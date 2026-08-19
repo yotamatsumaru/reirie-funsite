@@ -8,6 +8,7 @@ export * from './stripe-mode';
 export * from './site-section-visibility';
 export * from './maintenance';
 export * from './mini-game';
+export * from './slot-game';
 export * from './promo';
 export * from './game-audio';
 export * from './site-image';

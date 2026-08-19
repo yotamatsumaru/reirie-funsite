@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSuperAdminReadOnly } from '@/components/admin/SuperAdminReadOnly';
 
 type Props = {
   settingKey: string;
@@ -11,6 +12,7 @@ type Props = {
 
 export function SettingRow({ settingKey, value, valueType }: Props) {
   const router = useRouter();
+  const readOnly = useSuperAdminReadOnly();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | number | boolean>(value);
@@ -31,6 +33,17 @@ export function SettingRow({ settingKey, value, valueType }: Props) {
       return;
     }
     router.refresh();
+  }
+
+  // スタッフ管理者 (STAFF) は設定値を変更できない。現在値の表示のみ。
+  if (readOnly) {
+    const shown =
+      valueType === 'boolean' ? ((value as boolean) ? 'ON' : 'OFF') : String(value);
+    return (
+      <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+        {shown}
+      </span>
+    );
   }
 
   if (valueType === 'boolean') {

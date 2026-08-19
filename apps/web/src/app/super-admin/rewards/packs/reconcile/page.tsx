@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { requireSuperAdminView } from '@/auth';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ReconcileClient } from './reconcile-client';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'Pui 付与の再照合' };
 export const dynamic = 'force-dynamic';
@@ -48,7 +49,9 @@ export default async function ReconcilePage() {
 
       <Card>
         <CardBody>
-          <ReconcileClient />
+          <SuperAdminWriteGate label="再照合はスーパー管理者のみ実行できます">
+            <ReconcileClient />
+          </SuperAdminWriteGate>
         </CardBody>
       </Card>
     </div>

@@ -30,7 +30,8 @@ import { useCartItemCount } from '@/stores/cart-store';
 import { useMemberSummaryStore, useMemberSummary } from '@/stores/member-summary-store';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { Badge } from '@/components/ui/Badge';
-import { isAdmin as roleIsAdmin, isSuperAdmin, PLAN_LABELS } from '@idol/shared';
+import { isAdmin as roleIsAdmin, PLAN_LABELS } from '@idol/shared';
+import { resolveAdminNavVisibility, type AdminNavVisibility } from '@/lib/admin-nav';
 
 type NavItem = {
   href: string;
@@ -91,8 +92,11 @@ export function Sidebar({
 } = {}) {
   const { data: session, status } = useSession();
   const cartCount = useCartItemCount();
-  const isAdmin = roleIsAdmin(session?.user?.role);
-  const isSuper = isSuperAdmin(session?.user?.role);
+  const role = session?.user?.role;
+  // ロールごとの管理メニュー表示判定は lib/admin-nav.ts に集約 (単体テストあり)。
+  // 以前は isSuperAdmin() で判定していたため STAFF には
+  // スーパー管理画面へのリンクが一切表示されなかった。
+  const nav = resolveAdminNavVisibility(role);
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -103,7 +107,7 @@ export function Sidebar({
       if (item.href === '/products') return productsVisible;
       // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
       // 一般会員にはナビからもページからも完全に見えなくなる。
-      if (item.href === '/game') return gamesVisible || isAdmin;
+      if (item.href === '/game') return gamesVisible || roleIsAdmin(role);
       return true;
     }),
   })).filter((group) => group.items.length > 0);
@@ -175,8 +179,7 @@ export function Sidebar({
           cartCount={cartCount}
           status={status}
           session={session}
-          isAdmin={isAdmin}
-          isSuper={isSuper}
+          nav={nav}
           pathname={pathname}
         />
       </aside>
@@ -215,8 +218,7 @@ export function Sidebar({
             cartCount={cartCount}
             status={status}
             session={session}
-            isAdmin={isAdmin}
-            isSuper={isSuper}
+            nav={nav}
             pathname={pathname}
           />
         </aside>
@@ -232,8 +234,7 @@ function SidebarContent({
   cartCount,
   status,
   session,
-  isAdmin,
-  isSuper,
+  nav,
   pathname,
 }: {
   navGroups: NavGroup[];
@@ -241,8 +242,8 @@ function SidebarContent({
   cartCount: number;
   status: string;
   session: ReturnType<typeof useSession>['data'];
-  isAdmin: boolean;
-  isSuper: boolean;
+  /** ロールに応じた管理メニューの表示判定 */
+  nav: AdminNavVisibility;
   pathname: string;
 }) {
   const summary = useMemberSummary();
@@ -299,13 +300,13 @@ function SidebarContent({
         )}
 
         {/* 管理メニュー */}
-        {(isAdmin || isSuper) && (
+        {nav.showAdminSection && (
           <div>
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
               管理
             </p>
             <ul className="space-y-1">
-              {isAdmin && (
+              {nav.showAdminDashboard && (
                 <li>
                   <NavLink
                     item={{ href: '/admin', label: '管理ダッシュボード', icon: Shield }}
@@ -314,10 +315,15 @@ function SidebarContent({
                   />
                 </li>
               )}
-              {isSuper && (
+              {nav.showSuperAdmin && (
                 <li>
                   <NavLink
-                    item={{ href: '/super-admin', label: 'スーパー管理者', icon: Crown }}
+                    item={{
+                      href: '/super-admin',
+                      // STAFF は閲覧のみなのでラベルを変えて誤解を防ぐ
+                      label: nav.superAdminLabel,
+                      icon: Crown,
+                    }}
                     active={pathname.startsWith('/super-admin')}
                     cartCount={cartCount}
                     special

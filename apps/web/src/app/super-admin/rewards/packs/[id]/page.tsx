@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { prisma } from '@idol/db';
 import { PackForm } from '../pack-form';
 import { requireSuperAdminView } from '@/auth';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,17 +24,19 @@ export default async function EditRewardPointPackPage({
         </Link>
         <h1 className="mt-2 text-xl font-bold text-slate-800 sm:text-2xl">{pack.name}</h1>
       </div>
-      <PackForm
-        mode="edit"
-        id={pack.id}
-        initial={{
-          name: pack.name,
-          pui: pack.pui,
-          priceJpy: pack.priceJpy,
-          isActive: pack.isActive,
-          sortOrder: pack.sortOrder,
-        }}
-      />
+      <SuperAdminWriteGate label="パックの編集はスーパー管理者のみ実行できます">
+        <PackForm
+          mode="edit"
+          id={pack.id}
+          initial={{
+            name: pack.name,
+            pui: pack.pui,
+            priceJpy: pack.priceJpy,
+            isActive: pack.isActive,
+            sortOrder: pack.sortOrder,
+          }}
+        />
+      </SuperAdminWriteGate>
     </div>
   );
 }

@@ -13,6 +13,7 @@
 import type { Metadata } from 'next';
 import { listBirthdayTemplates, jstToday } from '@/lib/birthday-mail';
 import { BirthdayMailClient } from './birthday-client';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: '誕生日メール | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -40,16 +41,18 @@ export default async function BirthdayMailPage() {
         </p>
       </header>
 
-      <BirthdayMailClient
-        years={years}
-        defaultYear={today.year}
-        today={today}
-        templateSummaries={templates.map((t) => ({
-          year: t.year,
-          enabled: t.enabled,
-          hasImage: Boolean(t.imageUrl),
-        }))}
-      />
+      <SuperAdminWriteGate label="誕生日メールの送信はスーパー管理者のみ実行できます">
+        <BirthdayMailClient
+          years={years}
+          defaultYear={today.year}
+          today={today}
+          templateSummaries={templates.map((t) => ({
+            year: t.year,
+            enabled: t.enabled,
+            hasImage: Boolean(t.imageUrl),
+          }))}
+        />
+      </SuperAdminWriteGate>
     </div>
   );
 }

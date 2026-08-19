@@ -1,7 +1,11 @@
 /**
  * /super-admin レイアウト
  *
- * - SUPER_ADMIN 専用 (ADMIN は /admin に誘導)
+ * - SUPER_ADMIN は全操作可 / STAFF (スタッフ管理者) は閲覧のみ可
+ *   (ADMIN・一般会員はトップへリダイレクト)
+ * - STAFF の場合は SuperAdminReadOnlyProvider で配下の Client Component に
+ *   「閲覧のみ」を伝え、返金・サブスク変更などの書き込み UI を隠す。
+ *   ただし権限の実体は各 API の requireSuperAdmin() 側で担保している。
  * - サイドナビ + モバイル横スクロールタブ
  * - lucide-react アイコンに統一
  */
@@ -35,6 +39,7 @@ import {
 import { auth } from '@/auth';
 import { AdminThemeProvider } from '@/components/admin/AdminThemeProvider';
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
+import { SuperAdminReadOnlyProvider } from '@/components/admin/SuperAdminReadOnly';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +82,7 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
 
   return (
     <AdminThemeProvider>
+      <SuperAdminReadOnlyProvider readOnly={isStaffViewer}>
       <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
         {/* モードバナー (SUPER_ADMIN / STAFF) */}
         <div
@@ -95,6 +101,11 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
               <ShieldAlert className="h-4 w-4" aria-hidden />
               {isStaffViewer ? 'スタッフ管理者モード（閲覧のみ）' : 'SUPER ADMIN モード'}
             </p>
+            {isStaffViewer && (
+              <p className="hidden text-sky-600/80 md:block">
+                返金・サブスク変更などの操作はスーパー管理者のみ実行できます
+              </p>
+            )}
             <div className="flex items-center gap-3">
               <p
                 className={`hidden sm:block ${
@@ -154,19 +165,23 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
 
               <hr className="my-4 border-slate-200" />
 
-              <Link
-                href="/admin"
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              >
-                <ArrowLeftRight className="h-4 w-4" aria-hidden />
-                通常管理画面 へ
-              </Link>
+              {/* STAFF は /admin に入れない (admin/layout.tsx でリダイレクトされる) ため出さない */}
+              {!isStaffViewer && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <ArrowLeftRight className="h-4 w-4" aria-hidden />
+                  通常管理画面 へ
+                </Link>
+              )}
             </nav>
           </aside>
 
           <div className="min-w-0 flex-1">{children}</div>
         </div>
       </div>
+      </SuperAdminReadOnlyProvider>
     </AdminThemeProvider>
   );
 }

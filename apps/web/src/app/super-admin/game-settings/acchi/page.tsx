@@ -16,6 +16,7 @@ import { listCharacterImages } from '@/lib/character-image';
 import { listSiteImages } from '@/lib/site-image';
 import { AcchiSettingsClient } from '../acchi-settings-client';
 import { GameAudioClient, type GameAudioItem } from '../game-audio-client';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 import {
   CharacterImageClient,
   type CharacterImageItem,
@@ -84,16 +85,24 @@ export default async function AcchiGameSettingsPage() {
       </header>
 
       {/* ゲームサムネイル (ゲーム一覧カードの画像) */}
-      <GameThumbnailClient slot={THUMBNAIL_SLOT} initial={thumbnailItem} />
+      <SuperAdminWriteGate silent>
+        <GameThumbnailClient slot={THUMBNAIL_SLOT} initial={thumbnailItem} />
+      </SuperAdminWriteGate>
 
       {/* 勝率設定 */}
-      <AcchiSettingsClient initial={acchiSettings} />
+      <SuperAdminWriteGate label="ゲーム設定の変更はスーパー管理者のみ実行できます">
+        <AcchiSettingsClient initial={acchiSettings} />
+      </SuperAdminWriteGate>
 
       {/* キャラボイス アップロード */}
-      <GameAudioClient initial={gameAudioItems} />
+      <SuperAdminWriteGate silent>
+        <GameAudioClient initial={gameAudioItems} />
+      </SuperAdminWriteGate>
 
       {/* キャラクター画像 アップロード (1ポーズ最大3パターン) */}
-      <CharacterImageClient initial={characterImageItems} />
+      <SuperAdminWriteGate silent>
+        <CharacterImageClient initial={characterImageItems} />
+      </SuperAdminWriteGate>
     </main>
   );
 }

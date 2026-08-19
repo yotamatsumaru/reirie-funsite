@@ -25,6 +25,7 @@ import { TotpSetupClient } from './totp-setup-client';
 import { SiteVisibilityClient } from './site-visibility-client';
 import { MaintenanceClient } from './maintenance-client';
 import { MemberNumberClient } from './member-number-client';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -142,27 +143,41 @@ export default async function SuperAdminSettingsPage() {
         </Card>
       </div>
 
-      {/* メンテナンスモード (スーパー管理者以外の閲覧を一時停止する) */}
-      <MaintenanceClient initialSetting={maintenanceSetting} />
+      {/* 以下はいずれも書き込み操作なので、スタッフ管理者 (STAFF) には表示しない。
+          API 側も requireSuperAdmin() で 403 になるが、UI でも二重に防ぐ。 */}
+      <SuperAdminWriteGate label="メンテナンスモードの切替はスーパー管理者のみ実行できます">
+        {/* メンテナンスモード (スーパー管理者以外の閲覧を一時停止する) */}
+        <MaintenanceClient initialSetting={maintenanceSetting} />
+      </SuperAdminWriteGate>
 
-      {/* コンテンツ / グッズ の公開設定 (オープン日調整などで一時的に非公開にする) */}
-      <SiteVisibilityClient initialVisibility={siteSectionVisibility} />
+      <SuperAdminWriteGate label="公開設定の変更はスーパー管理者のみ実行できます">
+        {/* コンテンツ / グッズ の公開設定 (オープン日調整などで一時的に非公開にする) */}
+        <SiteVisibilityClient initialVisibility={siteSectionVisibility} />
+      </SuperAdminWriteGate>
 
-      {/* サイト画像 (トップページのヒーロー画像等) */}
-      <SiteImageClient initial={siteImageItems} />
+      <SuperAdminWriteGate silent>
+        {/* サイト画像 (トップページのヒーロー画像等) */}
+        <SiteImageClient initial={siteImageItems} />
+      </SuperAdminWriteGate>
 
-      {/* 会員番号の一括採番 (番号なし会員へまとめて付与) */}
-      <MemberNumberClient initial={memberNumberStats} />
+      <SuperAdminWriteGate silent>
+        {/* 会員番号の一括採番 (番号なし会員へまとめて付与) */}
+        <MemberNumberClient initial={memberNumberStats} />
+      </SuperAdminWriteGate>
 
-      {/* Stripe 本番/テストモード切り替え */}
-      <StripeModeClient
-        initialMode={stripeMode}
-        initialCredentials={stripeTestCredentials}
-        initialUsable={stripeTestCredentialsUsable}
-      />
+      <SuperAdminWriteGate label="Stripe モードの切替はスーパー管理者のみ実行できます">
+        {/* Stripe 本番/テストモード切り替え */}
+        <StripeModeClient
+          initialMode={stripeMode}
+          initialCredentials={stripeTestCredentials}
+          initialUsable={stripeTestCredentialsUsable}
+        />
+      </SuperAdminWriteGate>
 
-      {/* TOTP (Google Authenticator) 2段階認証 — SUPER_ADMIN 限定 */}
-      <TotpSetupClient initialStatus={totpStatus} />
+      <SuperAdminWriteGate silent>
+        {/* TOTP (Google Authenticator) 2段階認証 — SUPER_ADMIN 限定 */}
+        <TotpSetupClient initialStatus={totpStatus} />
+      </SuperAdminWriteGate>
 
       {/* カテゴリ別 */}
       {(['system', 'features', 'pricing'] as const).map((category) => {

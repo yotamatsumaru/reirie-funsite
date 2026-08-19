@@ -9,6 +9,7 @@ import { getPuiRates, getShareTemplates } from '@/lib/app-setting';
 import { findPuiAnomalies } from '@/lib/points';
 import { RatesForm } from './rates-form';
 import { ShareTemplateForm } from './share-template-form';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'Pui 設定 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -94,7 +95,9 @@ export default async function SuperAdminPointsPage() {
           <h2 className="text-base font-semibold text-slate-900">付与レート</h2>
         </CardHeader>
         <CardBody>
-          <RatesForm initial={rates} />
+          <SuperAdminWriteGate label="ポイント付与レートの変更はスーパー管理者のみ実行できます">
+            <RatesForm initial={rates} />
+          </SuperAdminWriteGate>
         </CardBody>
       </Card>
 
@@ -106,7 +109,9 @@ export default async function SuperAdminPointsPage() {
           </p>
         </CardHeader>
         <CardBody>
-          <ShareTemplateForm initial={shareTemplates} />
+          <SuperAdminWriteGate label="シェア文言の変更はスーパー管理者のみ実行できます">
+            <ShareTemplateForm initial={shareTemplates} />
+          </SuperAdminWriteGate>
         </CardBody>
       </Card>
     </div>

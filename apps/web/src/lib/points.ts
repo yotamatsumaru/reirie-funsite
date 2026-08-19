@@ -22,6 +22,8 @@ import {
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
   remainingPlays,
+  SLOT_MAX_PLAYS_PER_DAY,
+  slotRemainingPlays,
   applyPlanPuiMultiplier,
   MONTHLY_PUI_BONUS,
   EXTRA_PLAY_COST_PUI,
@@ -34,6 +36,7 @@ import {
   type PlanTypeLiteral,
   type SocialPlatformLiteral,
   type AcchiResult,
+  type SlotOutcome,
   type RewardCatalogItemKindLiteral,
   type RewardRedemptionStatusLiteral,
 } from '@idol/shared';
@@ -1117,6 +1120,248 @@ export async function buyAcchiExtraPlay(
       balance,
       purchasedToday,
       maxPerDay: ACCHI_MAX_PLAYS_PER_DAY + purchasedToday,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------
+// スロット (ミニゲーム)
+//
+// あっち向いてホイと同じテーブル (mini_game_plays /
+// mini_game_extra_play_purchases) を gameType='SLOT' で共用する。
+// 新テーブルを作らないことで、Pui 整合性チェック・プレイ履歴・追加プレイ購入など
+// 既存の仕組みがそのままスロットにも効く。
+//
+// 上限判定 → 記録 → Pui 付与 を同一トランザクション + advisory lock で直列化する
+// 点も同じ (PM2 cluster の並列リクエストによる超過付与を防ぐ)。
+// ---------------------------------------------------------------------
+
+/** advisory lock のスコープ。あっち向いてホイとは別ゲーム扱いで独立して排他する。 */
+const SLOT_LOCK_SCOPE = 'SLOT:play';
+
+export type SlotPlayPersistResult = {
+  /** 受理されたか (回数上限に達していれば false) */
+  accepted: boolean;
+  /** 受理時に作成された MiniGamePlay の id (拒否時は undefined)。監査用。 */
+  playId?: string;
+  /** プロモ/デモアカウントとしてプレイされたか (true なら回数無制限)。 */
+  promoActive: boolean;
+  /** 付与 Pui (プラン倍率適用後。はずれなら 0) */
+  reward: number;
+  /** プレイ後の残高 (Pui) */
+  balance: number;
+  /** プレイ後の本日プレイ回数 */
+  playedToday: number;
+  /** プレイ後の本日残り回数 (Pui 購入分の追加回数を含む) */
+  remaining: number;
+  /** 本日の上限回数 (標準上限 + Pui 購入分) */
+  maxPerDay: number;
+};
+
+/** 本日のスロットのプレイ回数を取得する (JST 基準)。 */
+export async function getSlotPlayCountToday(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const date = jstDateKey(now);
+  return prisma.miniGamePlay.count({
+    where: { userId, gameType: 'SLOT', date },
+  });
+}
+
+/** 本日、Pui で購入済みのスロット追加プレイ回数を取得する (JST 基準)。 */
+export async function getSlotExtraPlaysToday(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const date = jstDateKey(now);
+  const row = await prisma.miniGameExtraPlayPurchase.findUnique({
+    where: { userId_gameType_date: { userId, gameType: 'SLOT', date } },
+  });
+  return row?.purchasedCount ?? 0;
+}
+
+/** 本日のスロットの実効上限 (標準上限 + Pui 購入分) を取得する。 */
+export async function getSlotEffectiveMaxPerDay(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const extra = await getSlotExtraPlaysToday(userId, now);
+  return SLOT_MAX_PLAYS_PER_DAY + extra;
+}
+
+/**
+ * スロットの 1 プレイをサーバー側で確定・記録する。
+ *
+ * セキュリティ上の不変条件 (recordAcchiPlay と同じ):
+ *  - 役 (outcome) と配当は API ハンドラ側がサーバー生成の暗号論的乱数で確定したものを
+ *    受け取る。クライアントから結果や Pui を直接受け取らない (改ざん不可)。
+ *  - 「1 日 N 回まで」の上限チェック、プレイ記録の作成、Pui 付与を
+ *    すべて同一トランザクション + advisory lock 内で実行する。
+ *  - 上限到達時は accepted=false を返し、記録も付与も行わない (Pui も動かない)。
+ *
+ * 【重要】basePayout は「役ごとのベース配当」であり、プラン倍率はこの関数の中で
+ * 掛ける。呼び出し側で倍率を掛けて渡すと二重適用になるので注意。
+ *
+ * @param userId      プレイヤー
+ * @param outcome     サーバーが確定した役
+ * @param basePayout  役に対応するベース配当 (プラン倍率適用前)
+ * @param detail      監査用の詳細 (JSON 文字列)。停止絵柄などを入れる。
+ */
+export async function recordSlotPlay(
+  userId: string,
+  outcome: SlotOutcome,
+  basePayout: number,
+  detail?: string,
+  now: Date = new Date(),
+): Promise<SlotPlayPersistResult> {
+  const date = jstDateKey(now);
+
+  // 【重要】promo_until の読み取りはトランザクションの「外」で行う。
+  // トランザクション内で生 SQL が失敗すると PostgreSQL のトランザクションが
+  // aborted 状態になり、以降の全クエリが落ちてゲームが 500 になるため。
+  // (詳細は recordAcchiPlay のコメント参照)
+  const promoUntil = await safeGetPromoUntil(prisma, userId);
+  const promoActive = isPromoActive(promoUntil, now);
+
+  return prisma.$transaction(async (tx) => {
+    // 【競合対策】同一ユーザー・スロットの「上限チェック → 記録」を直列化する。
+    await acquireUserGameLock(tx, userId, SLOT_LOCK_SCOPE);
+
+    // プラン別の Pui 付与率を適用 (FREE ×1.0 / STANDARD ×1.2 / PREMIUM ×2.0)
+    const plan = await getUserPlanTx(tx, userId);
+    const reward = basePayout > 0 ? applyPlanPuiMultiplier(basePayout, plan) : 0;
+
+    const [playedBefore, extraRow] = await Promise.all([
+      tx.miniGamePlay.count({ where: { userId, gameType: 'SLOT', date } }),
+      tx.miniGameExtraPlayPurchase.findUnique({
+        where: { userId_gameType_date: { userId, gameType: 'SLOT', date } },
+      }),
+    ]);
+    const maxPerDay = SLOT_MAX_PLAYS_PER_DAY + (extraRow?.purchasedCount ?? 0);
+
+    // プロモ/デモアカウントは 1 日の回数上限を撤廃する。
+    if (!promoActive && playedBefore >= maxPerDay) {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { pui: true },
+      });
+      return {
+        accepted: false,
+        promoActive: false,
+        reward: 0,
+        balance: u?.pui ?? 0,
+        playedToday: playedBefore,
+        remaining: 0,
+        maxPerDay,
+      };
+    }
+
+    // MiniGameResult は WIN/LOSE/DRAW の 3 値しかないため、
+    // 「配当があれば WIN / なければ LOSE」に丸めて保存する。
+    // 役そのもの (SEVEN_TRIPLE など) は detail に JSON で残す。
+    const createdPlay = await tx.miniGamePlay.create({
+      data: {
+        userId,
+        gameType: 'SLOT',
+        date,
+        result: reward > 0 ? 'WIN' : 'LOSE',
+        rewardPui: reward,
+        detail: detail ?? null,
+      },
+      select: { id: true },
+    });
+
+    let balance: number;
+    if (reward > 0) {
+      balance = await applyPui(tx, {
+        userId,
+        amount: reward,
+        reason: 'GAME_REWARD',
+        note: `スロット ${outcome} 配当`,
+      });
+    } else {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { pui: true },
+      });
+      balance = u?.pui ?? 0;
+    }
+
+    const playedToday = playedBefore + 1;
+    return {
+      accepted: true,
+      playId: createdPlay.id,
+      promoActive,
+      reward,
+      balance,
+      playedToday,
+      remaining: promoActive
+        ? PROMO_UNLIMITED_REMAINING
+        : slotRemainingPlays(playedToday, maxPerDay),
+      maxPerDay,
+    };
+  });
+}
+
+/**
+ * スロットの追加プレイ回数を Pui で購入する。
+ *  - 1 日に購入できる追加回数には上限がある (MAX_EXTRA_PLAYS_PER_DAY)。
+ *  - Pui 残高不足時は applyPui が PuiIntegrityError を投げ、
+ *    トランザクション全体 (購入回数の加算を含む) がロールバックされる。
+ */
+export async function buySlotExtraPlay(
+  userId: string,
+  now: Date = new Date(),
+): Promise<BuyExtraPlayResult> {
+  const date = jstDateKey(now);
+
+  return prisma.$transaction(async (tx) => {
+    // プレイ記録と同じロックキーで、購入とプレイの相互競合もまとめて排他する。
+    await acquireUserGameLock(tx, userId, SLOT_LOCK_SCOPE);
+
+    const existing = await tx.miniGameExtraPlayPurchase.findUnique({
+      where: { userId_gameType_date: { userId, gameType: 'SLOT', date } },
+    });
+    const purchasedBefore = existing?.purchasedCount ?? 0;
+
+    if (purchasedBefore >= MAX_EXTRA_PLAYS_PER_DAY) {
+      return { ok: false, reason: 'LIMIT_REACHED' as const };
+    }
+
+    const balance = await applyPui(tx, {
+      userId,
+      amount: -EXTRA_PLAY_COST_PUI,
+      reason: 'EXTRA_PLAY_PURCHASE',
+      note: 'スロット 追加プレイ購入',
+    });
+
+    if (existing) {
+      await tx.miniGameExtraPlayPurchase.update({
+        where: { id: existing.id },
+        data: {
+          purchasedCount: { increment: 1 },
+          totalPuiSpent: { increment: EXTRA_PLAY_COST_PUI },
+        },
+      });
+    } else {
+      await tx.miniGameExtraPlayPurchase.create({
+        data: {
+          userId,
+          gameType: 'SLOT',
+          date,
+          purchasedCount: 1,
+          totalPuiSpent: EXTRA_PLAY_COST_PUI,
+        },
+      });
+    }
+
+    const purchasedToday = purchasedBefore + 1;
+    return {
+      ok: true as const,
+      balance,
+      purchasedToday,
+      maxPerDay: SLOT_MAX_PLAYS_PER_DAY + purchasedToday,
     };
   });
 }

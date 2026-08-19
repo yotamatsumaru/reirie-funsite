@@ -24,6 +24,7 @@ import {
 } from '@/lib/announcement-audience';
 import { AnnouncementLinkCopy } from './announcement-link-copy';
 import { ExternalLinkGuide } from './external-link-guide';
+import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'お知らせ配信 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -130,7 +131,9 @@ export default async function SuperAdminAnnouncementsPage() {
           </h2>
         </CardHeader>
         <CardBody>
-          <AnnouncementForm />
+          <SuperAdminWriteGate label="お知らせの作成はスーパー管理者のみ実行できます">
+            <AnnouncementForm />
+          </SuperAdminWriteGate>
         </CardBody>
       </Card>
 
