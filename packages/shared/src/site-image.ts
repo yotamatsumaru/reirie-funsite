@@ -14,6 +14,7 @@ export const SITE_IMAGE_SLOTS = [
   'home.hero',
   'home.hero.desktop',
   'game.acchi.thumbnail',
+  'game.slot.thumbnail',
   // 会員カードの背景画像 (プランごと・16:10)。未設定なら public/card/*.webp を使用。
   'card.bg.free',
   'card.bg.standard',
@@ -65,6 +66,13 @@ export const SITE_IMAGE_SLOT_META: Record<SiteImageSlot, SiteImageSlotMeta> = {
   'game.acchi.thumbnail': {
     slot: 'game.acchi.thumbnail',
     label: 'あっちむいてPUI サムネイル',
+    description:
+      'ゲーム一覧 (/game) のミニゲームカードに表示するサムネイル画像です。未設定の場合は絵文字が表示されます。',
+    recommendedAspect: '横長 16:9 推奨 (例: 1280×720px)',
+  },
+  'game.slot.thumbnail': {
+    slot: 'game.slot.thumbnail',
+    label: 'スロット サムネイル',
     description:
       'ゲーム一覧 (/game) のミニゲームカードに表示するサムネイル画像です。未設定の場合は絵文字が表示されます。',
     recommendedAspect: '横長 16:9 推奨 (例: 1280×720px)',

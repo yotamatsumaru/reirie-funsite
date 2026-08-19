@@ -359,6 +359,52 @@ button {
   }
 }
 
+/* ===== スロット (ミニゲーム) 演出 ===== */
+/*
+ * リールの回転。
+ * リールは「同じ絵柄列を 2 周分たてに並べたストリップ」を -50% までスクロールさせ、
+ * ループさせることで無限に回っているように見せている
+ * (2 周分あるので -50% で必ず元と同じ絵柄位置に戻り、継ぎ目が見えない)。
+ */
+@keyframes slot-spin {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+.animate-slot-spin { animation: slot-spin 0.32s linear infinite; }
+/* 高速回転 (回し始め)。停止直前に上の低速へ切り替えると「減速して止まる」感が出る */
+.animate-slot-spin-fast { animation: slot-spin 0.16s linear infinite; }
+
+/* リール停止時のバウンド (ガコンと止まる感じ) */
+@keyframes slot-stop {
+  0% { transform: translateY(-14%); }
+  55% { transform: translateY(5%); }
+  80% { transform: translateY(-2%); }
+  100% { transform: translateY(0); }
+}
+.animate-slot-stop { animation: slot-stop 0.28s cubic-bezier(0.22, 1.4, 0.6, 1); }
+
+/* 当たり演出: 枠が光る */
+@keyframes slot-win-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.9); }
+  50% { box-shadow: 0 0 22px 6px rgba(251, 191, 36, 0.85); }
+}
+.animate-slot-win-glow { animation: slot-win-glow 0.9s ease-in-out 3; }
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * 回転アニメーションを完全に止めるとリールが「止まった状態」で固定され、
+   * ストリップの途中が見えてしまうので、animation は無効化しつつ
+   * translateY(0) に固定して先頭 (= 停止絵柄) が見えるようにする。
+   */
+  .animate-slot-spin,
+  .animate-slot-spin-fast,
+  .animate-slot-stop,
+  .animate-slot-win-glow {
+    animation: none;
+    transform: translateY(0);
+  }
+}
+
 /* ===== リッチテキストエディタ (TipTap / ProseMirror) ===== */
 .ProseMirror {
   min-height: 320px;

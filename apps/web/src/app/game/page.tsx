@@ -8,6 +8,8 @@ import { prisma } from '@idol/db';
 import {
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
+  SLOT_MAX_PLAYS_PER_DAY,
+  SLOT_MAX_PAYOUT,
   gameThumbnailSlot,
 } from '@idol/shared';
 import { auth } from '@/auth';
@@ -43,6 +45,17 @@ const MINI_GAMES: {
       'REIRIE とあっちむいてPUIで勝負! 勝つとポイントがもらえます。',
     themeColor: '#ede9fe',
     badges: [`1日${ACCHI_MAX_PLAYS_PER_DAY}回まで`, `勝利で${ACCHI_WIN_REWARD}pt`, '無料'],
+    requiresAuth: true,
+  },
+  {
+    slug: 'slot',
+    title: 'スロット',
+    emoji: '🎰',
+    href: '/me/games/slot',
+    description:
+      '3つの絵柄を揃えてポイントゲット! 7が揃えば大量の Pui がもらえます。',
+    themeColor: '#fef3c7',
+    badges: [`1日${SLOT_MAX_PLAYS_PER_DAY}回まで`, `最高${SLOT_MAX_PAYOUT}pt`, '無料'],
     requiresAuth: true,
   },
 ];

@@ -14,6 +14,10 @@ import {
   DEFAULT_ACCHI_WIN_SETTINGS,
   AcchiWinSettingsByPlanSchema,
   type AcchiWinSettingsByPlan,
+  SLOT_SETTINGS_KEY,
+  DEFAULT_SLOT_SETTINGS,
+  SlotSettingsByPlanSchema,
+  type SlotSettingsByPlan,
   MEMBER_RANK_TIERS_KEY,
   DEFAULT_MEMBER_RANK_TIERS,
   MemberRankTiersSchema,
@@ -153,6 +157,46 @@ export async function setAcchiWinSettings(
   await prisma.appSetting.upsert({
     where: { key: ACCHI_WIN_SETTINGS_KEY },
     create: { key: ACCHI_WIN_SETTINGS_KEY, value },
+    update: { value },
+  });
+  return validated;
+}
+
+/**
+ * スロットのプラン別「設定」(1〜6) を取得する。
+ * 未設定 / 破損時は既定値を返す (安全側)。
+ *
+ * 【欠損フィールドの補完について】
+ * プランを後から追加した場合、保存済み JSON にそのプランのキーが無く
+ * safeParse が失敗して「全プランが既定値に戻る」ことになる。それを避けるため、
+ * 既定値をベースにマージしてからパースする。
+ */
+export async function getSlotSettings(): Promise<SlotSettingsByPlan> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: SLOT_SETTINGS_KEY },
+    });
+    if (!row) return DEFAULT_SLOT_SETTINGS;
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    const parsed = SlotSettingsByPlanSchema.safeParse({
+      ...DEFAULT_SLOT_SETTINGS,
+      ...raw,
+    });
+    return parsed.success ? parsed.data : DEFAULT_SLOT_SETTINGS;
+  } catch {
+    return DEFAULT_SLOT_SETTINGS;
+  }
+}
+
+/** スロットのプラン別「設定」を保存する (SUPER_ADMIN 限定で呼び出すこと) */
+export async function setSlotSettings(
+  settings: SlotSettingsByPlan,
+): Promise<SlotSettingsByPlan> {
+  const validated = SlotSettingsByPlanSchema.parse(settings);
+  const value = JSON.stringify(validated);
+  await prisma.appSetting.upsert({
+    where: { key: SLOT_SETTINGS_KEY },
+    create: { key: SLOT_SETTINGS_KEY, value },
     update: { value },
   });
   return validated;
