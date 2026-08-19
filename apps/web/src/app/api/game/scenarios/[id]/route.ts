@@ -8,12 +8,15 @@ import { prisma } from '@idol/db';
 import { resolveApiSession } from '@/lib/api-auth';
 import { validateScenarioScript } from '@idol/shared';
 import { errors, handle } from '@/lib/errors';
+import { requireGameSectionVisible } from '@/lib/game-visibility';
 
 export const runtime = 'nodejs';
 
 export const GET = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
     const { id } = await ctx.params;
+    // ゲーム非公開中は 404 (管理者のみ動作確認のため利用可)。
+    await requireGameSectionVisible(req);
     const session = await resolveApiSession(req);
     const userId = session?.user?.id ?? null;
     const isPremium = session?.user?.plan === 'PREMIUM';

@@ -9,6 +9,7 @@ import {
   type RewardRedemptionStatusLiteral,
 } from '@idol/shared';
 import { auth } from '@/auth';
+import { resolveGameVisibility } from '@/lib/game-visibility';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -55,6 +56,9 @@ export default async function PointsHistoryPage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me/points');
 
+  // ゲームが非公開なら「ゲームで使う」リンクを出さない (リンク切れ防止)。
+  const { canView: canViewGames } = await resolveGameVisibility();
+
   const [user, fanTransactions, redemptions] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
@@ -98,9 +102,13 @@ export default async function PointsHistoryPage() {
             ミニゲームの追加プレイ、景品カタログとの交換に使えます。
           </p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-            <Link href="/game" className="inline-block text-xs text-brand-600 hover:underline">
-              ゲームで使う →
-            </Link>
+            {/* ゲーム非公開中はリンクを出さない (押しても 404 になるため)。
+                管理者には引き続き表示する。 */}
+            {canViewGames && (
+              <Link href="/game" className="inline-block text-xs text-brand-600 hover:underline">
+                ゲームで使う →
+              </Link>
+            )}
             <Link href="/me/rewards/buy" className="inline-block text-xs text-brand-600 hover:underline">
               Pui を購入する →
             </Link>

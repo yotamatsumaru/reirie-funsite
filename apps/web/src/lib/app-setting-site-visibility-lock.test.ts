@@ -68,6 +68,23 @@ jest.mock('@idol/db', () => {
 
 // jest.mock の後に import する (ホイスティングされるので実際は先に評価される)
 import { setSiteSectionVisibility, getSiteSectionVisibility } from './app-setting';
+import { DEFAULT_SITE_SECTION_VISIBILITY } from '@idol/shared';
+
+/**
+ * 「すべて公開」の状態。
+ *
+ * 【重要】ここでフィールドをベタ書きしないこと。
+ * 公開セクションは今後も増える (例: 2026-08 にゲームを追加) ため、リテラルで
+ * 書くとセクションが増えるたびにこのテストが無関係に落ちる。既定値を基準にし、
+ * このテストの関心事 (= advisory lock と部分マージの正しさ) だけを検証する。
+ */
+const ALL_VISIBLE = { ...DEFAULT_SITE_SECTION_VISIBILITY };
+
+/** ALL_VISIBLE から一部だけ変更した期待値を作るヘルパ */
+const expectVisibility = (patch: Partial<typeof ALL_VISIBLE>) => ({
+  ...ALL_VISIBLE,
+  ...patch,
+});
 
 beforeEach(() => {
   calls.length = 0;
@@ -92,20 +109,20 @@ describe('setSiteSectionVisibility (advisory lock による競合対策)', () =>
     // 既定値 (すべて true) が保存されている状態からスタート
     appSettingRow = {
       key: 'site.sectionVisibility',
-      value: JSON.stringify({ contentsVisible: true, productsVisible: true, dmVisible: true }),
+      value: JSON.stringify(ALL_VISIBLE),
     };
 
     const { after } = await setSiteSectionVisibility({ contentsVisible: false });
-    expect(after).toEqual({ contentsVisible: false, productsVisible: true, dmVisible: true });
+    expect(after).toEqual(expectVisibility({ contentsVisible: false }));
 
     const persisted = await getSiteSectionVisibility();
-    expect(persisted).toEqual({ contentsVisible: false, productsVisible: true, dmVisible: true });
+    expect(persisted).toEqual(expectVisibility({ contentsVisible: false }));
   });
 
   it('逐次実行される 2 つの部分更新はどちらも失われずに反映される (lost update が起きない)', async () => {
     appSettingRow = {
       key: 'site.sectionVisibility',
-      value: JSON.stringify({ contentsVisible: true, productsVisible: true, dmVisible: true }),
+      value: JSON.stringify(ALL_VISIBLE),
     };
 
     // 「コンテンツを OFF」と「DM を OFF」がほぼ同時に発生したケースを模す。
@@ -117,25 +134,25 @@ describe('setSiteSectionVisibility (advisory lock による競合対策)', () =>
     await setSiteSectionVisibility({ contentsVisible: false });
     const { after } = await setSiteSectionVisibility({ dmVisible: false });
 
-    expect(after).toEqual({ contentsVisible: false, productsVisible: true, dmVisible: false });
+    expect(after).toEqual(expectVisibility({ contentsVisible: false, dmVisible: false }));
   });
 
   it('before には呼び出し前の値が、after には呼び出し後の値が入る', async () => {
     appSettingRow = {
       key: 'site.sectionVisibility',
-      value: JSON.stringify({ contentsVisible: true, productsVisible: true, dmVisible: true }),
+      value: JSON.stringify(ALL_VISIBLE),
     };
 
     const { before, after } = await setSiteSectionVisibility({ productsVisible: false });
-    expect(before).toEqual({ contentsVisible: true, productsVisible: true, dmVisible: true });
-    expect(after).toEqual({ contentsVisible: true, productsVisible: false, dmVisible: true });
+    expect(before).toEqual(ALL_VISIBLE);
+    expect(after).toEqual(expectVisibility({ productsVisible: false }));
   });
 
   it('未設定 (行が存在しない) 場合はデフォルト値をベースにマージする', async () => {
     appSettingRow = null;
 
     const { before, after } = await setSiteSectionVisibility({ dmVisible: false });
-    expect(before).toEqual({ contentsVisible: true, productsVisible: true, dmVisible: true });
-    expect(after).toEqual({ contentsVisible: true, productsVisible: true, dmVisible: false });
+    expect(before).toEqual(ALL_VISIBLE);
+    expect(after).toEqual(expectVisibility({ dmVisible: false }));
   });
 });

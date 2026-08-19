@@ -6,8 +6,10 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
+import { resolveGameVisibility } from '@/lib/game-visibility';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { GamePreviewBanner } from '@/components/game/GamePreviewBanner';
 import { ChapterPurchaseButton } from './chapter-purchase-button';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +20,17 @@ export async function generateMetadata({
   params: Promise<{ characterSlug: string }>;
 }): Promise<Metadata> {
   const { characterSlug } = await params;
+
+  // ⚠️ 非公開中はキャラ名 / キャッチコピーを meta に出さないこと。
+  //    generateMetadata は本文の描画とは別に実行されるため、ここでゲートしないと
+  //    「ページは 404 なのに <title> や og:description に未公開ゲームの内容が出る」
+  //    という情報漏洩になる (SNS のリンクプレビューにも出てしまう)。
+  //    お知らせの下書き (notices/[id]/page.tsx) と同じ考え方。
+  const { gamesVisible } = await resolveGameVisibility();
+  if (!gamesVisible) {
+    return { title: 'ゲーム', robots: { index: false, follow: false } };
+  }
+
   const c = await prisma.gameCharacter.findUnique({
     where: { slug: characterSlug },
     select: { name: true, catchcopy: true },
@@ -34,6 +47,10 @@ export default async function CharacterDetailPage({
   params: Promise<{ characterSlug: string }>;
 }) {
   const { characterSlug } = await params;
+  // 非公開中は一般会員には 404。管理者だけはプレビューとして閲覧できる。
+  const { canView, isPreview } = await resolveGameVisibility();
+  if (!canView) notFound();
+
   const session = await auth();
   const userId = session?.user?.id ?? null;
   const isPremium = session?.user?.plan === 'PREMIUM';
@@ -71,6 +88,7 @@ export default async function CharacterDetailPage({
 
   return (
     <main className="mx-auto max-w-4xl px-3 py-6 sm:px-4 sm:py-10">
+      {isPreview && <GamePreviewBanner />}
       <Link href="/game" className="text-xs text-slate-500 hover:underline">
         ← キャラクター一覧
       </Link>

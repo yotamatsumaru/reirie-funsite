@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * コンテンツ / グッズ セクションの公開設定 UI (SUPER_ADMIN)。
+ * コンテンツ / グッズ / DM / ゲーム セクションの公開設定 UI (SUPER_ADMIN)。
  *
- * - OFF にすると /contents, /products (一覧・詳細ページ、および公開API) が
+ * - OFF にすると /contents, /products, /me/dm, /game (一覧・詳細ページ、および公開API) が
  *   一般ユーザーには 404 相当で非表示になる。管理画面 (/admin/*) は対象外。
+ * - ゲームだけは例外で、OFF の間も管理者 (ADMIN 以上) はプレビューとして
+ *   プレイできる (開発中の動作確認のため)。
  * - GET/PATCH /api/super-admin/site-visibility で永続化 (AppSetting: site.sectionVisibility)。
  * - 切り替えは即時反映 (サーバ再起動不要)。
  */
@@ -33,7 +35,20 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
     label: 'REIRIE への DM',
     description: '会員向け DM 送信機能 (/me/dm) を利用可能にするか',
   },
+  {
+    key: 'gamesVisible',
+    label: 'ゲーム',
+    description:
+      'ミニゲーム・恋愛 ADV (/game, /me/games) を一般公開するか。OFF の間も管理者はプレイして動作確認できます（開発中の利用を想定）',
+  },
 ];
+
+/**
+ * 非公開でも管理者だけは引き続き利用できるセクション。
+ * 「非公開にしたら自分も見られなくなるのでは」という不安をなくすため、
+ * UI 上でも明示する。
+ */
+const ADMIN_PREVIEWABLE_KEYS: ReadonlySet<string> = new Set(['gamesVisible']);
 
 export function SiteVisibilityClient({ initialVisibility }: Props) {
   const [visibility, setVisibility] = useState<SiteSectionVisibility>(initialVisibility);
@@ -77,7 +92,7 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">
-              コンテンツ / グッズ / DM の公開設定
+              コンテンツ / グッズ / DM / ゲーム の公開設定
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               OFF にすると該当セクションのページ・APIが一般ユーザーから見えなくなります
@@ -106,6 +121,12 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
               <div>
                 <p className="text-sm font-semibold text-slate-800">{item.label}</p>
                 <p className="mt-0.5 text-xs text-slate-500">{item.description}</p>
+                {/* 非公開中でも管理者は見られることを、実際に非公開のときだけ明示する */}
+                {!isVisible && ADMIN_PREVIEWABLE_KEYS.has(item.key) && (
+                  <p className="mt-1 text-xs font-semibold text-amber-700">
+                    管理者にはプレビュー表示されています（一般会員には非表示）
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <span
