@@ -43,7 +43,7 @@ import {
 } from '@/lib/points';
 import { resolveSlotPlay } from '@/lib/games/slot';
 import { getSlotSettings } from '@/lib/app-setting';
-import { requireGameSectionVisible } from '@/lib/game-visibility';
+import { requireGameVisible } from '@/lib/game-visibility';
 
 /**
  * ユーザーの現在プランを DB の有効サブスクリプションから解決する。
@@ -73,7 +73,7 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
  * 将来配当を変更したときに UI が自動追従するようにするため。
  */
 export async function handleSlotGet(req: Request): Promise<Response> {
-  await requireGameSectionVisible(req);
+  await requireGameVisible(req, 'slot');
   const principal = await requireApiPrincipal(req);
 
   const [playedToday, purchasedExtra, user, promoUntil] = await Promise.all([
@@ -120,7 +120,7 @@ export async function handleSlotGet(req: Request): Promise<Response> {
  */
 export async function handleSlotPost(req: Request): Promise<Response> {
   // 非公開中はプレイ不可 (= Pui も動かない)。管理者のみ動作確認できる。
-  await requireGameSectionVisible(req);
+  await requireGameVisible(req, 'slot');
   const principal: ApiPrincipal = await requireApiPrincipal(req);
 
   // プラン → 設定 (1〜6) → 確率テーブル を解決し、サーバー側で役を確定する。
@@ -189,7 +189,7 @@ export async function handleSlotBuyExtraPlay(req: Request): Promise<Response> {
   // 【重要】非公開中に Pui を消費させないための最優先ガード。
   // 遊べないゲームの追加プレイ権を買わせると返金対応が発生するため、
   // 課金処理より必ず前に 404 で止める。
-  await requireGameSectionVisible(req);
+  await requireGameVisible(req, 'slot');
   const principal = await requireApiPrincipal(req);
   const result = await buySlotExtraPlay(principal.userId);
 

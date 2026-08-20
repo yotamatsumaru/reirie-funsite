@@ -35,6 +35,10 @@ import {
   DEFAULT_SITE_SECTION_VISIBILITY,
   SiteSectionVisibilitySchema,
   type SiteSectionVisibility,
+  GAME_VISIBILITY_KEY,
+  DEFAULT_GAME_VISIBILITY,
+  normalizeGameVisibility,
+  type GameVisibilityMap,
   MAINTENANCE_SETTING_KEY,
   DEFAULT_MAINTENANCE_SETTING,
   MaintenanceSettingSchema,
@@ -481,6 +485,73 @@ export async function setSiteSectionVisibility(
     await tx.appSetting.upsert({
       where: { key: SITE_SECTION_VISIBILITY_KEY },
       create: { key: SITE_SECTION_VISIBILITY_KEY, value },
+      update: { value },
+    });
+    return { before, after };
+  });
+}
+
+// ===========================================================================
+// ゲーム個別の公開 / 非公開設定 (game.visibility)
+// ===========================================================================
+
+/**
+ * ゲーム 1 本ごとの公開設定を取得する。
+ * 未設定 / 破損 / 未知のキーが混ざっていても、normalizeGameVisibility が
+ * 全ゲーム分そろった値に整えて返す (保存されていないゲームは公開扱い)。
+ *
+ * ※ この値だけでは公開判定にならない。site.sectionVisibility.gamesVisible
+ *   (マスタースイッチ) との AND で判定すること (lib/game-visibility.ts)。
+ */
+export async function getGameVisibility(): Promise<GameVisibilityMap> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: GAME_VISIBILITY_KEY },
+    });
+    if (!row) return DEFAULT_GAME_VISIBILITY;
+    return normalizeGameVisibility(JSON.parse(row.value));
+  } catch {
+    // 破損データ / DB 未到達は既定値 (すべて公開) 扱い。
+    // ここで非公開に倒すと、DB が一時的に読めないだけで全ゲームが消えてしまう。
+    return DEFAULT_GAME_VISIBILITY;
+  }
+}
+
+/**
+ * ゲーム個別の公開設定を「部分更新」する (SUPER_ADMIN 限定で呼び出すこと)。
+ *
+ * 【競合対策】setSiteSectionVisibility と同じく advisory lock を取った
+ * 1 トランザクション内で read → merge → write する。管理画面でトグルを
+ * 連続操作したときの更新取りこぼし (lost update) を防ぐ。
+ *
+ * @param patch 変更したいゲームのみを含む部分オブジェクト
+ * @returns 更新前 (before) と更新後 (after) の完全な設定値
+ */
+export async function setGameVisibility(
+  patch: Partial<GameVisibilityMap>,
+): Promise<{ before: GameVisibilityMap; after: GameVisibilityMap }> {
+  return prisma.$transaction(async (tx) => {
+    await acquireAppSettingLock(tx, GAME_VISIBILITY_KEY);
+
+    const row = await tx.appSetting.findUnique({
+      where: { key: GAME_VISIBILITY_KEY },
+    });
+    let before: GameVisibilityMap = DEFAULT_GAME_VISIBILITY;
+    if (row) {
+      try {
+        before = normalizeGameVisibility(JSON.parse(row.value));
+      } catch {
+        // 破損データは既定値扱い (安全側)
+      }
+    }
+
+    // patch には「変更されたゲームのみ」が含まれる。before に重ねることで
+    // 他のゲームは保存済みの値を維持する (1つ隠すと他が戻る不具合の防止)。
+    const after = normalizeGameVisibility({ ...before, ...patch });
+    const value = JSON.stringify(after);
+    await tx.appSetting.upsert({
+      where: { key: GAME_VISIBILITY_KEY },
+      create: { key: GAME_VISIBILITY_KEY, value },
       update: { value },
     });
     return { before, after };

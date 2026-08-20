@@ -4,8 +4,13 @@ import './globals.css';
 import { Providers } from '@/components/layout/Providers';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Footer } from '@/components/layout/Footer';
-import { getSiteSectionVisibility } from '@/lib/app-setting';
-import { SITE_NAME, SITE_TITLE_DEFAULT, SITE_DESCRIPTION } from '@idol/shared';
+import { getSiteSectionVisibility, getGameVisibility } from '@/lib/app-setting';
+import {
+  SITE_NAME,
+  SITE_TITLE_DEFAULT,
+  SITE_DESCRIPTION,
+  hasAnyPubliclyVisibleGame,
+} from '@idol/shared';
 
 // ===== City Editorial タイポグラフィ =====
 // 旧: Cormorant Garamond（英字セリフ）+ Zen Maru Gothic（丸ゴシック）+ Shrikhand（装飾）
@@ -34,8 +39,11 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { contentsVisible, productsVisible, dmVisible, gamesVisible } =
-    await getSiteSectionVisibility();
+  const [{ contentsVisible, productsVisible, dmVisible, gamesVisible }, gameMap] =
+    await Promise.all([getSiteSectionVisibility(), getGameVisibility()]);
+  // ナビの「ゲーム」は、公開中のゲームが 1 本も無ければ一般会員から隠す。
+  // (マスターが ON でも、全ゲームを個別に非公開にしたら /game は空になるため)
+  const anyGameVisible = hasAnyPubliclyVisibleGame(gamesVisible, gameMap);
   return (
     <html lang="ja" className={zenKaku.variable}>
       <body className="min-h-screen">
@@ -44,7 +52,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             contentsVisible={contentsVisible}
             productsVisible={productsVisible}
             dmVisible={dmVisible}
-            gamesVisible={gamesVisible}
+            gamesVisible={anyGameVisible}
           />
           {/* PC ではサイドバー幅 (w-64 = 16rem) 分だけ右にオフセット */}
           <div className="flex min-h-screen flex-col md:pl-64">

@@ -13,7 +13,7 @@ import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { getStripe } from '@/lib/stripe';
 import { purchaseScenarioWithPui, purchaseItemWithPui } from '@/lib/points';
-import { requireGameSectionVisible } from '@/lib/game-visibility';
+import { requireGameVisible } from '@/lib/game-visibility';
 
 export const runtime = 'nodejs';
 
@@ -28,7 +28,7 @@ export const POST = handle(async (req: Request) => {
   // 【重要】非公開中のゲームに課金させないための最優先ガード。
   // Stripe セッション作成や Pui 消費より必ず前に止める。
   // (遊べない章 / アイテムを購入させてしまうと返金対応が発生する)
-  await requireGameSectionVisible(req);
+  await requireGameVisible(req, 'story');
   const session = await requireApiSession(req);
   const userId = session.user.id;
   const body = GamePurchaseInputSchema.parse(await req.json());

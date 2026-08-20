@@ -37,7 +37,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function SlotGamePage() {
   // 非公開中は一般会員には 404。管理者だけはプレビューとしてプレイできる。
-  const { canView, isPreview } = await resolveGameVisibility();
+  const { canView, isPreview } = await resolveGameVisibility('slot');
   if (!canView) notFound();
 
   const session = await auth();

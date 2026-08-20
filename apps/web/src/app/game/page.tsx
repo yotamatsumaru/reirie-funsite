@@ -11,10 +11,11 @@ import {
   SLOT_MAX_PLAYS_PER_DAY,
   SLOT_MAX_PAYOUT,
   gameThumbnailSlot,
+  type GameKey,
 } from '@idol/shared';
 import { auth } from '@/auth';
 import { getSiteImageUrlMap } from '@/lib/site-image';
-import { resolveGameVisibility } from '@/lib/game-visibility';
+import { resolveAllGameVisibility } from '@/lib/game-visibility';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { GamePreviewBanner } from '@/components/game/GamePreviewBanner';
@@ -25,9 +26,14 @@ export const metadata: Metadata = {
 };
 export const dynamic = 'force-dynamic';
 
-/** ミニゲーム一覧 (将来追加しやすいよう配列で定義) */
+/**
+ * ミニゲーム一覧 (将来追加しやすいよう配列で定義)。
+ *
+ * slug は @idol/shared の GameKey と一致させること。公開 / 非公開の個別トグルは
+ * この slug をキーに判定される (一致していないと常に公開扱いになる)。
+ */
 const MINI_GAMES: {
-  slug: string;
+  slug: GameKey;
   title: string;
   emoji: string;
   href: string;
@@ -61,9 +67,18 @@ const MINI_GAMES: {
 ];
 
 export default async function GameTopPage() {
-  // 非公開中は一般会員には 404。管理者だけはプレビューとして閲覧できる。
-  const { canView, isPreview } = await resolveGameVisibility();
-  if (!canView) notFound();
+  // ゲームごとの公開状態をまとめて解決する。
+  //  - 一般会員 … 公開中のゲームだけが並ぶ (非公開のものは存在ごと見えない)
+  //  - 管理者   … 非公開のゲームも「非公開」バッジ付きで並び、動作確認できる
+  // 見られるゲームが 1 本も無ければページごと 404。
+  const { canView: canViewGameMap, publiclyVisible, canViewSection, isPreview } =
+    await resolveAllGameVisibility();
+  if (!canViewSection) notFound();
+
+  // この閲覧者に見せてよいミニゲームだけに絞り込む。
+  const visibleMiniGames = MINI_GAMES.filter((g) => canViewGameMap[g.slug]);
+  // 恋愛 ADV セクションごと非公開にできる (キャラ単位の公開は各キャラの status)。
+  const showStorySection = canViewGameMap.story;
 
   const session = await auth();
   const isAuthenticated = !!session?.user?.id;
@@ -72,13 +87,16 @@ export default async function GameTopPage() {
   // ミニゲームのサムネイル画像 (管理画面でアップロード)。未設定なら絵文字表示。
   const siteImageMap = await getSiteImageUrlMap();
 
-  const characters = await prisma.gameCharacter.findMany({
-    where: { status: 'PUBLISHED' },
-    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-    include: {
-      _count: { select: { scenarios: { where: { status: 'PUBLISHED' } } } },
-    },
-  });
+  // ADV が非公開なら DB を引かない (不要なクエリを避ける)。
+  const characters = showStorySection
+    ? await prisma.gameCharacter.findMany({
+        where: { status: 'PUBLISHED' },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        include: {
+          _count: { select: { scenarios: { where: { status: 'PUBLISHED' } } } },
+        },
+      })
+    : [];
 
   return (
     <main className="mx-auto max-w-6xl px-3 py-6 sm:px-4 sm:py-10">
@@ -94,6 +112,7 @@ export default async function GameTopPage() {
       </header>
 
       {/* ===== ミニゲーム ===== */}
+      {visibleMiniGames.length > 0 && (
       <section className="mb-12">
         <div className="mb-4 flex items-center gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-twilight-rose text-white shadow-[2px_2px_0_rgba(0,0,0,0.9)]">
@@ -103,7 +122,7 @@ export default async function GameTopPage() {
           <Badge tone="success">ポイントが貯まる</Badge>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {MINI_GAMES.map((g) => {
+          {visibleMiniGames.map((g) => {
             const href = g.requiresAuth && !isAuthenticated
               ? `/signin?next=${encodeURIComponent(g.href)}`
               : g.href;
@@ -133,7 +152,12 @@ export default async function GameTopPage() {
                     </div>
                   )}
                   <CardBody>
-                    <p className="text-base font-bold text-slate-900 sm:text-lg">{g.title}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-base font-bold text-slate-900 sm:text-lg">{g.title}</p>
+                      {/* 管理者だけに見えている非公開ゲームであることを明示する
+                          (公開したつもりで非公開のまま放置する事故の防止) */}
+                      {!publiclyVisible[g.slug] && <Badge tone="warning">非公開</Badge>}
+                    </div>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-600">{g.description}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {g.badges.map((b) => (
@@ -149,13 +173,17 @@ export default async function GameTopPage() {
           })}
         </div>
       </section>
+      )}
 
       {/* ===== 恋愛 ADV ストーリー ===== */}
+      {showStorySection && (
+      <>
       <div className="mb-4 flex items-center gap-2">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-twilight-amethyst text-white shadow-[2px_2px_0_rgba(0,0,0,0.9)]">
           <HeartIcon className="h-4 w-4" />
         </span>
         <h2 className="text-lg font-bold text-slate-900 sm:text-xl">恋愛 ADV ストーリー</h2>
+        {!publiclyVisible.story && <Badge tone="warning">非公開</Badge>}
       </div>
       <p className="mb-4 text-xs text-slate-500">
         ※ 課金はすべて確定報酬型 DLC です。ガチャ要素はありません。
@@ -224,6 +252,8 @@ export default async function GameTopPage() {
           );
         })}
       </section>
+      </>
+      )}
     </main>
   );
 }
