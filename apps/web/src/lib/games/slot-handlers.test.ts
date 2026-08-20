@@ -31,10 +31,16 @@ import {
 // スタブの状態 (beforeEach でリセット)
 // ---------------------------------------------------------------------------
 
-/** ゲームが公開中かどうか。false なら requireGameSectionVisible が 404 を投げる */
+/** ゲームが公開中かどうか。false なら requireGameVisible が 404 を投げる */
 let gameVisible = true;
-/** requireGameSectionVisible / requireApiPrincipal / buySlotExtraPlay などの呼び出し順 */
+/** requireGameVisible / requireApiPrincipal / buySlotExtraPlay などの呼び出し順 */
 let calls: string[] = [];
+/**
+ * 可視性ガードに渡されたゲームキー。
+ * ここが 'slot' 以外だと「スロットを非公開にしたのに遊べる / 別のゲームを
+ * 非公開にしたらスロットが消える」という取り違えになるため、必ず検証する。
+ */
+let guardedGames: string[] = [];
 
 /** DB 上の有効サブスクリプション (null = 無料会員) */
 let subscription: { planType: string } | null = null;
@@ -70,8 +76,9 @@ let auditLogs: Array<{
 // ---------------------------------------------------------------------------
 
 jest.mock('@/lib/game-visibility', () => ({
-  requireGameSectionVisible: jest.fn(async () => {
-    calls.push('requireGameSectionVisible');
+  requireGameVisible: jest.fn(async (_req: Request, game: string) => {
+    calls.push('requireGameVisible');
+    guardedGames.push(game);
     if (!gameVisible) {
       // 本物と同じく ApiError(404) を投げる
       const { errors } = jest.requireActual('@/lib/errors');
@@ -204,6 +211,7 @@ async function catchApiError(fn: () => Promise<unknown>): Promise<ApiError> {
 beforeEach(() => {
   gameVisible = true;
   calls = [];
+  guardedGames = [];
   subscription = null;
   promoUntil = null;
   userPui = 1000;
@@ -245,14 +253,14 @@ describe('ゲーム非公開中のガード', () => {
     // 公開中でも「順序」自体が正しいことを確認しておく。
     // 将来ガードが購入処理の後ろに移動したら、非公開時に Pui が減ってしまう。
     await handleSlotBuyExtraPlay(req());
-    expect(calls.indexOf('requireGameSectionVisible')).toBeLessThan(
+    expect(calls.indexOf('requireGameVisible')).toBeLessThan(
       calls.indexOf('buySlotExtraPlay'),
     );
   });
 
   it('可視性ガードは認証より前に実行される (未公開機能の存在を隠す)', async () => {
     await handleSlotGet(req());
-    expect(calls.indexOf('requireGameSectionVisible')).toBeLessThan(
+    expect(calls.indexOf('requireGameVisible')).toBeLessThan(
       calls.indexOf('requireApiPrincipal'),
     );
   });
@@ -262,6 +270,16 @@ describe('ゲーム非公開中のガード', () => {
     const err = await catchApiError(() => handleSlotPost(req()));
     expect(err.status).not.toBe(403);
     expect(err.status).toBe(404);
+  });
+
+  it("全ハンドラが 'slot' をキーにガードする (ゲームの取り違え防止)", async () => {
+    // ゲーム個別の公開設定はこのキーで引かれる。'acchi' 等を渡していると
+    // 「スロットを非公開にしたのに遊べる / 別ゲームを隠したらスロットが消える」
+    // という取り違えになるが、型だけでは防げないので実行時に検証する。
+    await handleSlotGet(req());
+    await handleSlotPost(req());
+    await handleSlotBuyExtraPlay(req());
+    expect(guardedGames).toEqual(['slot', 'slot', 'slot']);
   });
 });
 

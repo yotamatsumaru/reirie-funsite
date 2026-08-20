@@ -26,8 +26,10 @@ export async function generateMetadata({
   //    「ページは 404 なのに <title> や og:description に未公開ゲームの内容が出る」
   //    という情報漏洩になる (SNS のリンクプレビューにも出てしまう)。
   //    お知らせの下書き (notices/[id]/page.tsx) と同じ考え方。
-  const { gamesVisible } = await resolveGameVisibility();
-  if (!gamesVisible) {
+  //    マスタースイッチだけでなく「恋愛 ADV 個別の公開フラグ」も見る必要がある
+  //    (ADV だけ非公開にしている状態で meta にキャラ名が出ると同じ漏洩になる)。
+  const { publiclyVisible } = await resolveGameVisibility('story');
+  if (!publiclyVisible) {
     return { title: 'ゲーム', robots: { index: false, follow: false } };
   }
 
@@ -48,7 +50,7 @@ export default async function CharacterDetailPage({
 }) {
   const { characterSlug } = await params;
   // 非公開中は一般会員には 404。管理者だけはプレビューとして閲覧できる。
-  const { canView, isPreview } = await resolveGameVisibility();
+  const { canView, isPreview } = await resolveGameVisibility('story');
   if (!canView) notFound();
 
   const session = await auth();

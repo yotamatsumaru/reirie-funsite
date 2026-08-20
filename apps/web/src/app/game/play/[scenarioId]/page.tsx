@@ -21,7 +21,7 @@ export default async function GamePlayPage({
   // 非公開中は一般会員には 404。管理者だけはプレビューとしてプレイできる。
   // （未ログインでもまずここで 404 にし、サインイン画面へ送って
   //   「ログインすれば遊べるゲームがある」と推測させない）
-  const { canView } = await resolveGameVisibility();
+  const { canView } = await resolveGameVisibility('story');
   if (!canView) notFound();
 
   const session = await auth();
