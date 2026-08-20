@@ -9,13 +9,13 @@ import { prisma } from '@idol/db';
 import { GiftUseInputSchema } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
-import { requireGameSectionVisible } from '@/lib/game-visibility';
+import { requireGameVisible } from '@/lib/game-visibility';
 
 export const runtime = 'nodejs';
 
 export const POST = handle(async (req: Request) => {
   // ゲーム非公開中は 404 (管理者のみ動作確認のため利用可)。
-  await requireGameSectionVisible(req);
+  await requireGameVisible(req, 'story');
   const session = await requireApiSession(req);
   const userId = session.user.id;
   const body = GiftUseInputSchema.parse(await req.json());
