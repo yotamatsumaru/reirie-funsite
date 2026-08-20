@@ -37,9 +37,9 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
   },
   {
     key: 'gamesVisible',
-    label: 'ゲーム',
+    label: 'ゲーム（全体のマスタースイッチ）',
     description:
-      'ミニゲーム・恋愛 ADV (/game, /me/games) を一般公開するか。OFF の間も管理者はプレイして動作確認できます（開発中の利用を想定）',
+      'ミニゲーム・恋愛 ADV (/game, /me/games) をまとめて一般公開するか。OFF にすると個別設定に関わらず全ゲームが隠れます。ゲーム 1 本ごとの公開設定は「ゲーム設定」ページで行えます。OFF の間も管理者はプレイして動作確認できます（開発中の利用を想定）',
   },
 ];
 
