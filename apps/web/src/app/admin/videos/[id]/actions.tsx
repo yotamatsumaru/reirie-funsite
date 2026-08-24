@@ -26,15 +26,18 @@ export function VideoAdminActions({
   videoId,
   status,
   hasHls,
+  isPublished,
 }: {
   videoId: string;
   status: string;
   hasHls: boolean;
+  /** 動画単位の公開スイッチの現在値 */
+  isPublished: boolean;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<null | 'encode' | 'publish' | 'preview' | 'sync'>(
-    null,
-  );
+  const [busy, setBusy] = useState<
+    null | 'encode' | 'publish' | 'preview' | 'sync' | 'visibility'
+  >(null);
   const [hlsUrl, setHlsUrl] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
@@ -111,6 +114,32 @@ export function VideoAdminActions({
     }
   }
 
+  /**
+   * 動画単位の公開 / 非公開を切り替える。
+   * status (エンコード進行状況) とは別軸なので、PROCESSING 中でも操作できる。
+   */
+  async function toggleVisibility() {
+    setBusy('visibility');
+    try {
+      const res = await fetch(`/api/admin/videos/${videoId}/visibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublished: !isPublished }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        error?: { message?: string };
+      };
+      if (!res.ok) throw new Error(j.error?.message ?? '切り替えに失敗しました');
+      toast.success(j.message ?? '切り替えました', '動画');
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message, 'エラー');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function preview() {
     setBusy('preview');
     try {
@@ -134,6 +163,34 @@ export function VideoAdminActions({
         <h2 className="text-sm font-semibold text-slate-800">操作</h2>
       </CardHeader>
       <CardBody className="space-y-4">
+        {/* 公開 / 非公開は運営の意思で切るスイッチなので、エンコード操作と分けて先頭に置く */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold text-slate-800">
+              {isPublished ? '公開中' : '非公開'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {isPublished
+                ? '会員向けの一覧に表示されます'
+                : '会員向けの一覧・詳細・再生から除外されます'}
+            </p>
+          </div>
+          <Button
+            variant={isPublished ? 'outline' : 'primary'}
+            onClick={toggleVisibility}
+            loading={busy === 'visibility'}
+            disabled={busy !== null}
+          >
+            {isPublished ? '非公開にする' : '公開する'}
+          </Button>
+        </div>
+
+        {isPublished && status !== 'READY' && (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            公開設定ですがエンコードが未完了（{status}）のため、まだ会員には表示されません。
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"

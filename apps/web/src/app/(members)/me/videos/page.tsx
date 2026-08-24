@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@idol/db';
-import { canAccess, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
+import { formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { resolveThumbnailUrl } from '@/lib/cdn-signer';
+import { listableVideoWhere, isVideoPlayable } from '@/lib/video-visibility';
 
 export const metadata: Metadata = { title: '動画' };
 export const dynamic = 'force-dynamic';
@@ -27,14 +28,11 @@ export default async function MemberVideosPage() {
   });
   const plan = (user?.subscriptions[0]?.planType as PlanTypeLiteral) ?? 'FREE';
 
-  // 公開済み (READY) かつ期限内の動画のみ
+  // 公開中 (isPublished + READY + 期間内) の動画のみ。
+  // プランでは絞らない — 無料プランにもサムネイルは見せ、再生だけを止める。
   const now = new Date();
   const videos = await prisma.video.findMany({
-    where: {
-      status: 'READY',
-      publishedAt: { not: null, lte: now },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-    },
+    where: listableVideoWhere(now),
     orderBy: { publishedAt: 'desc' },
     take: 60,
     select: {
@@ -44,7 +42,10 @@ export default async function MemberVideosPage() {
       thumbnailUrl: true,
       durationSeconds: true,
       accessLevel: true,
+      status: true,
+      isPublished: true,
       publishedAt: true,
+      expiresAt: true,
     },
   });
 
@@ -66,7 +67,17 @@ export default async function MemberVideosPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {videos.map((v) => {
-            const locked = !canAccess(plan, v.accessLevel);
+            const locked = !isVideoPlayable(
+              {
+                isPublished: v.isPublished,
+                status: v.status,
+                publishedAt: v.publishedAt,
+                expiresAt: v.expiresAt,
+                accessLevel: v.accessLevel,
+              },
+              plan,
+              now,
+            );
             // サムネイルは非公開バケット上の S3 キーなので CloudFront 署名が必要
             const thumbnailUrl = resolveThumbnailUrl(v.thumbnailUrl);
             return (

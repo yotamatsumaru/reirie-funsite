@@ -7,6 +7,7 @@ import { useSession, signOut } from 'next-auth/react';
 import {
   Home,
   Image as ImageIcon,
+  PlayCircle,
   ShoppingBag,
   Gamepad2,
   Bell,
@@ -53,6 +54,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/', label: 'ホーム', icon: Home },
       { href: '/contents', label: 'コンテンツ', icon: ImageIcon },
+      // 動画は content でなく video テーブルなので専用の導線が必要。
+      // 以前はこのリンクが無く、動画を公開しても会員が到達できなかった。
+      { href: '/me/videos', label: '動画', icon: PlayCircle },
       { href: '/game', label: 'ゲーム', icon: Gamepad2 },
       { href: '/notices', label: 'お知らせ', icon: Bell },
     ],
@@ -104,6 +108,8 @@ export function Sidebar({
     ...group,
     items: group.items.filter((item) => {
       if (item.href === '/contents') return contentsVisible;
+      // 動画はコンテンツの一部なので、コンテンツ非公開時はともに隠す。
+      if (item.href === '/me/videos') return contentsVisible;
       if (item.href === '/products') return productsVisible;
       // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
       // 一般会員にはナビからもページからも完全に見えなくなる。
