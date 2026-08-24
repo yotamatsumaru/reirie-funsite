@@ -6,7 +6,7 @@ import { prisma } from '@idol/db';
 import { formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { resolveThumbnailUrl } from '@/lib/cdn-signer';
+import { resolveThumbnailUrls } from '@/lib/video-delivery';
 import { listableVideoWhere, isVideoPlayable } from '@/lib/video-visibility';
 
 export const metadata: Metadata = { title: '動画' };
@@ -49,6 +49,11 @@ export default async function MemberVideosPage() {
     },
   });
 
+  // サムネイルは非公開バケット上の S3 キーなので署名が必要。
+  // S3 プリサインドは非同期なので、描画前に一括で並列解決しておく
+  // (map の中で await できないため)。
+  const thumbnailUrls = await resolveThumbnailUrls(videos.map((v) => v.thumbnailUrl));
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-5 flex items-center justify-between">
@@ -66,7 +71,7 @@ export default async function MemberVideosPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {videos.map((v) => {
+          {videos.map((v, i) => {
             const locked = !isVideoPlayable(
               {
                 isPublished: v.isPublished,
@@ -78,8 +83,7 @@ export default async function MemberVideosPage() {
               plan,
               now,
             );
-            // サムネイルは非公開バケット上の S3 キーなので CloudFront 署名が必要
-            const thumbnailUrl = resolveThumbnailUrl(v.thumbnailUrl);
+            const thumbnailUrl = thumbnailUrls[i] ?? null;
             return (
               <Link
                 key={v.id}

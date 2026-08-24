@@ -103,6 +103,19 @@ export type RewriteOptions = {
    * 省略時はセグメントと同じ扱い (CloudFront 直 + 署名クエリ)。
    */
   playlistUrl?: (relativePath: string) => string;
+  /**
+   * セグメント URI を「1 本ずつ」個別の URL に解決する関数。
+   *
+   * S3 プリサインド URL は CloudFront のワイルドカード署名と違い
+   * **オブジェクトごとに署名が必要** で、共有クエリが存在しない。
+   * そのため S3 フォールバック経路ではこの関数を渡し、
+   * 事前に署名した URL を URI ごとに differentiate する。
+   *
+   * 指定時は `segmentBase` / `signatureQuery` より優先される。
+   * 解決できなかった URI (Map に無い等) は undefined を返せば
+   * 従来の `segmentBase + signatureQuery` にフォールバックする。
+   */
+  segmentUrl?: (relativePath: string) => string | undefined;
 };
 
 function resolveUri(uri: string, opts: RewriteOptions): string {
@@ -114,7 +127,54 @@ function resolveUri(uri: string, opts: RewriteOptions): string {
   if (isPlaylistUri(raw) && opts.playlistUrl) {
     return opts.playlistUrl(raw);
   }
+  // S3 モード: URI ごとの個別署名を優先する
+  if (opts.segmentUrl) {
+    const resolved = opts.segmentUrl(raw);
+    if (resolved) return resolved;
+  }
   return appendQuery(`${opts.segmentBase}${raw}`, opts.signatureQuery);
+}
+
+/**
+ * プレイリスト本文に含まれる相対 URI を、プレイリストとセグメントに
+ * 分けて列挙する。
+ *
+ * S3 モードでは「書き換える前に、必要な URI を全部集めて並列で署名する」
+ * 必要があるため、書き換えとは独立に URI を取り出せるようにしている。
+ * 絶対 URL は署名対象外なので除外する。
+ */
+export function collectPlaylistUris(body: string): {
+  playlists: string[];
+  segments: string[];
+} {
+  const playlists: string[] = [];
+  const segments: string[] = [];
+
+  const push = (uri: string) => {
+    const raw = normalizeRelative(uri);
+    if (!raw || isAbsolute(raw)) return;
+    if (isPlaylistUri(raw)) playlists.push(raw);
+    else segments.push(raw);
+  };
+
+  for (const part of body.split(LINE_SPLIT)) {
+    if (part === '\n' || part === '\r\n') continue;
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#')) {
+      // タグ内の URI="..." 属性 (EXT-X-KEY / EXT-X-MAP / EXT-X-MEDIA 等)
+      for (const m of trimmed.matchAll(/URI="([^"]*)"/g)) {
+        if (m[1]) push(m[1]);
+      }
+      continue;
+    }
+    push(trimmed);
+  }
+
+  return {
+    playlists: Array.from(new Set(playlists)),
+    segments: Array.from(new Set(segments)),
+  };
 }
 
 /** タグ内の `URI="..."` 属性 (EXT-X-KEY / EXT-X-MAP / EXT-X-MEDIA 等) を書き換える */

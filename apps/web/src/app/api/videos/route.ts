@@ -3,7 +3,7 @@ import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
-import { resolveThumbnailUrl } from '@/lib/cdn-signer';
+import { resolveThumbnailUrls } from '@/lib/video-delivery';
 
 export const runtime = 'nodejs';
 
@@ -32,8 +32,10 @@ export const GET = handle(async (req: Request) => {
       publishedAt: true,
     },
   });
-  // サムネイルは非公開バケット上の S3 キーなので CloudFront 署名付き URL に変換
+  // サムネイルは非公開バケット上の S3 キーなので署名付き URL に変換する
+  // (CloudFront 署名鍵があればそれ、無ければ S3 プリサインドにフォールバック)
+  const thumbs = await resolveThumbnailUrls(items.map((v) => v.thumbnailUrl));
   return NextResponse.json({
-    items: items.map((v) => ({ ...v, thumbnailUrl: resolveThumbnailUrl(v.thumbnailUrl) })),
+    items: items.map((v, i) => ({ ...v, thumbnailUrl: thumbs[i] ?? null })),
   });
 });

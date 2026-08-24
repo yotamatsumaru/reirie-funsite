@@ -5,6 +5,7 @@ import {
   rewritePlaylist,
   looksLikeCloudFrontSignature,
   inheritQuery,
+  collectPlaylistUris,
 } from './hls-rewrite';
 
 const SIG = 'Policy=eyJTdGF0ZW1lbnQ&Key-Pair-Id=K123ABC&Signature=abc~def_';
@@ -226,5 +227,125 @@ describe('inheritQuery', () => {
   it('base が不正なら url をそのまま返す', () => {
     const url = 'seg.ts';
     expect(inheritQuery(url, 'not-a-url', SIG)).toBe(url);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S3 プリサインド フォールバック用の追加ロジック
+//
+// CloudFront はワイルドカード署名で 1 つのクエリを全セグメントに使えるが、
+// S3 プリサインドは **オブジェクトごとに署名が必要**。そのため
+//  1. collectPlaylistUris で署名すべき URI を全部集める
+//  2. segmentUrl で URI ごとの署名済み URL を差し込む
+// という 2 段構えになる。
+// ---------------------------------------------------------------------------
+
+describe('collectPlaylistUris', () => {
+  it('セグメントとプレイリストを分けて集める', () => {
+    const master = [
+      '#EXTM3U',
+      '#EXT-X-STREAM-INF:BANDWIDTH=1200000',
+      'index_480p.m3u8',
+      '#EXT-X-STREAM-INF:BANDWIDTH=3000000',
+      'index_720p.m3u8',
+    ].join('\n');
+    const { playlists, segments } = collectPlaylistUris(master);
+    expect(playlists).toEqual(['index_480p.m3u8', 'index_720p.m3u8']);
+    expect(segments).toEqual([]);
+  });
+
+  it('メディアプレイリストの .ts を集める', () => {
+    const media = [
+      '#EXTM3U',
+      '#EXTINF:6.000,',
+      'seg_00001.ts',
+      '#EXTINF:6.000,',
+      'seg_00002.ts',
+      '#EXT-X-ENDLIST',
+    ].join('\n');
+    const { segments } = collectPlaylistUris(media);
+    expect(segments).toEqual(['seg_00001.ts', 'seg_00002.ts']);
+  });
+
+  it('重複は 1 回だけ (署名の無駄打ちを避ける)', () => {
+    const body = '#EXTM3U\nseg.ts\nseg.ts\n';
+    expect(collectPlaylistUris(body).segments).toEqual(['seg.ts']);
+  });
+
+  it('絶対URL は署名対象にしない', () => {
+    const body = '#EXTM3U\nhttps://other.example.com/seg.ts\nlocal.ts\n';
+    expect(collectPlaylistUris(body).segments).toEqual(['local.ts']);
+  });
+
+  it('タグ内の URI="..." も集める (EXT-X-MAP / EXT-X-KEY)', () => {
+    const body =
+      '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\nseg.m4s\n';
+    const { segments } = collectPlaylistUris(body);
+    expect(segments).toContain('init.mp4');
+    expect(segments).toContain('key.bin');
+    expect(segments).toContain('seg.m4s');
+  });
+
+  it('./ 付きの相対パスを正規化する', () => {
+    expect(collectPlaylistUris('#EXTM3U\n./seg.ts\n').segments).toEqual(['seg.ts']);
+  });
+
+  it('空行・タグのみでも壊れない', () => {
+    const { playlists, segments } = collectPlaylistUris('#EXTM3U\n\n#EXT-X-ENDLIST\n');
+    expect(playlists).toEqual([]);
+    expect(segments).toEqual([]);
+  });
+});
+
+describe('rewritePlaylist (segmentUrl = S3 プリサインド経路)', () => {
+  const media = ['#EXTM3U', '#EXTINF:6.000,', 'seg1.ts', '#EXTINF:6.000,', 'seg2.ts', ''].join(
+    '\n',
+  );
+
+  it('URI ごとに個別の署名済みURLを差し込む', () => {
+    const map = new Map([
+      ['seg1.ts', 'https://s3.example.com/hls/v1/seg1.ts?X-Amz-Signature=AAA'],
+      ['seg2.ts', 'https://s3.example.com/hls/v1/seg2.ts?X-Amz-Signature=BBB'],
+    ]);
+    const out = rewritePlaylist(media, {
+      segmentBase: '',
+      signatureQuery: '',
+      segmentUrl: (rel) => map.get(rel),
+    });
+    expect(out).toContain('seg1.ts?X-Amz-Signature=AAA');
+    expect(out).toContain('seg2.ts?X-Amz-Signature=BBB');
+    // 署名が混ざっていないこと (セグメントごとに別署名であること)
+    expect(out).not.toContain('seg1.ts?X-Amz-Signature=BBB');
+  });
+
+  it('segmentUrl が undefined を返した URI は segmentBase にフォールバックする', () => {
+    const out = rewritePlaylist(media, {
+      segmentBase: BASE,
+      signatureQuery: SIG,
+      segmentUrl: (rel) => (rel === 'seg1.ts' ? 'https://signed.example.com/seg1.ts?s=1' : undefined),
+    });
+    expect(out).toContain('https://signed.example.com/seg1.ts?s=1');
+    expect(out).toContain(`${BASE}seg2.ts?${SIG}`);
+  });
+
+  it('variant playlist は segmentUrl より playlistUrl が優先される', () => {
+    const master = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nindex_720p.m3u8\n';
+    const out = rewritePlaylist(master, {
+      segmentBase: '',
+      signatureQuery: '',
+      playlistUrl: (rel) => rel,
+      segmentUrl: () => 'https://should-not-be-used.example.com/x',
+    });
+    expect(out).toContain('\nindex_720p.m3u8\n');
+    expect(out).not.toContain('should-not-be-used');
+  });
+
+  it('タグと改行を壊さない', () => {
+    const out = rewritePlaylist('#EXTM3U\r\n#EXTINF:6.000,\r\nseg1.ts\r\n', {
+      segmentBase: '',
+      signatureQuery: '',
+      segmentUrl: () => 'https://s3.example.com/seg1.ts?sig=1',
+    });
+    expect(out).toBe('#EXTM3U\r\n#EXTINF:6.000,\r\nhttps://s3.example.com/seg1.ts?sig=1\r\n');
   });
 });
