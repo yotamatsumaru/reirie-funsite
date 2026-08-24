@@ -46,13 +46,55 @@
 MediaConvert はジョブに指定されたロールを自分で引き受けて S3 を読み書きするため、
 **このロールが無いと CreateJob が必ず失敗します。**
 
-### 再生に必須（エンコードはできるが再生できない場合）
+### 再生（配信経路は 2 通り。どちらかが揃っていれば再生できる）
 
-| 変数 | 説明 |
-| --- | --- |
-| `CLOUDFRONT_VIDEO_DOMAIN` | 動画配信ディストリビューションのドメイン |
-| `CLOUDFRONT_KEY_PAIR_ID` | 署名付き URL 用のパブリックキー ID |
-| `CLOUDFRONT_PRIVATE_KEY` | 署名用の秘密鍵 (PEM) |
+配信URLの解決は `apps/web/src/lib/video-delivery.ts` が担当し、
+以下の優先順で経路を自動選択します。
+
+| 優先 | モード | 必要な設定 | 備考 |
+| --- | --- | --- | --- |
+| 1 | `cloudfront` | `CLOUDFRONT_VIDEO_DOMAIN` + `CLOUDFRONT_KEY_PAIR_ID` + `CLOUDFRONT_PRIVATE_KEY` | **推奨**。CDN キャッシュが効き転送量も安い |
+| 2 | `s3` | `S3_MEDIA_OUTPUT_BUCKET`（未設定なら `S3_VIDEO_BUCKET`） | フォールバック。S3 プリサインド URL で直接配信 |
+| 3 | `none` | — | 上記どちらも無い場合のみ再生不可 |
+
+現在どちらで配信されているかは
+`GET /api/admin/videos/encode-config` の `deliveryMode` で確認できます。
+
+> #### ⚠️ 以前あった落とし穴（修正済み）
+>
+> 以前は **CloudFront 署名付き URL 一本槍** だったため、上記 3 変数が
+> 揃わないと再生時に必ず
+> 「動画配信 (CloudFront 署名付き URL) が未設定です」というエラーになりました。
+>
+> ところが `CLOUDFRONT_KEY_PAIR_ID` / `CLOUDFRONT_PRIVATE_KEY` は
+> **CDK では自動作成されません**。
+>
+> - `storage-stack.ts` は context `cloudfrontPublicKeyPem` が渡されたときのみ
+>   PublicKey / KeyGroup を作る実装で、`infra/cdk.json` にその context はない
+> - 秘密鍵の SSM 登録（`cloudfront/private-key`）は手順 D-4 の手動作業
+>
+> 結果として「エンコードは成功し READY になるのに再生できない」状態が
+> **既定で発生**していました。現在は S3 プリサインドへ自動フォールバックするため、
+> CloudFront の鍵を用意しなくても再生できます。
+> （CloudFront を設定すれば自動的にそちらが優先されます）
+
+#### CloudFront 変数の内訳
+
+| 変数 | 説明 | 供給元 |
+| --- | --- | --- |
+| `CLOUDFRONT_VIDEO_DOMAIN` | 動画配信ディストリビューションのドメイン | CDK が SSM に**自動登録** |
+| `CLOUDFRONT_KEY_PAIR_ID` | 署名付き URL 用のパブリックキー ID | context 指定時のみ CDK が登録（手順 D-2 / D-3） |
+| `CLOUDFRONT_PRIVATE_KEY` | 署名用の秘密鍵 (PEM) | **手動で SSM に登録**（手順 D-4） |
+
+#### S3 フォールバックの注意点
+
+- 出力バケットは `BlockPublicAccess.BLOCK_ALL` のままで、公開はされません。
+  プリサインド URL を持つリクエストのみ通ります。
+- ブラウザが S3 を直接叩くため、出力バケットに **GET/HEAD の CORS 許可**が必要です
+  （`storage-stack.ts` で設定済み。既存環境は `cdk deploy '*-storage'` で反映）。
+- CloudFront と違いワイルドカード署名ができないため、
+  セグメントを 1 本ずつ署名します（HMAC のローカル計算のみで高速）。
+- CDN キャッシュが効かないため、視聴が多い場合は CloudFront の設定を推奨します。
 
 ### 完了時の自動公開に必要
 
@@ -824,8 +866,14 @@ shred -u ~/cf-keys/cf-private.pem 2>/dev/null || rm -f ~/cf-keys/cf-private.pem
 | 6 | `hls/<id>/index.m3u8` が生成 | `aws s3 ls s3://<出力バケット>/hls/<id>/` |
 | 7 | Video が READY になる | 管理画面 `/admin/videos/<id>` |
 | 8 | `playbackReady: true` | `/api/admin/videos/encode-config` |
+| 8.5 | `deliveryMode` が `cloudfront` or `s3` | `/api/admin/videos/encode-config` |
 | 9 | 署名付き URL で再生できる | 管理画面「プレビュー再生」 |
 | 10 | 署名なしは 403 | `curl https://<cf-domain>/hls/<id>/index.m3u8` |
+
+> `deliveryMode` が `s3` の場合、CloudFront の署名鍵が未設定です。
+> 再生自体は S3 プリサインド URL で可能ですが、CDN キャッシュが効かないため
+> 視聴数が増える前に手順 D で CloudFront 署名を設定することを推奨します。
+> `none` の場合は `S3_MEDIA_OUTPUT_BUCKET` すら未設定なので、まずそれを設定してください。
 
 ---
 

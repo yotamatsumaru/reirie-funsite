@@ -26,7 +26,7 @@ import { canAccess, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
-import { resolveThumbnailUrl } from '@/lib/cdn-signer';
+import { resolveThumbnailUrls } from '@/lib/video-delivery';
 import { listableVideoWhere, isVideoPlayable } from '@/lib/video-visibility';
 
 export const metadata: Metadata = { title: 'コンテンツ' };
@@ -103,6 +103,10 @@ export default async function ContentsPage() {
     }),
   ]);
 
+  // 動画サムネイルは非公開バケット上の S3 キーなので署名が必要。
+  // S3 プリサインドは非同期なので map の外で一括並列解決する。
+  const videoThumbs = await resolveThumbnailUrls(videos.map((v) => v.thumbnailUrl));
+
   const items: FeedItem[] = [
     ...contents.map((c) => ({
       key: `content:${c.id}`,
@@ -116,13 +120,12 @@ export default async function ContentsPage() {
       locked: false,
       durationSeconds: null,
     })),
-    ...videos.map((v) => ({
+    ...videos.map((v, i) => ({
       key: `video:${v.id}`,
       href: `/me/videos/${v.id}`,
       title: v.title,
       excerpt: v.description,
-      // サムネイルは非公開バケット上の S3 キーなので CloudFront 署名が必要
-      thumbnailUrl: resolveThumbnailUrl(v.thumbnailUrl),
+      thumbnailUrl: videoThumbs[i] ?? null,
       accessLevel: v.accessLevel,
       publishedAt: v.publishedAt,
       kindLabel: '動画',

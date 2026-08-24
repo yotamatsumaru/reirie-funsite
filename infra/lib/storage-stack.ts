@@ -104,6 +104,28 @@ export class StorageStack extends Stack {
       enforceSSL: true,
       removalPolicy,
       autoDeleteObjects: config.destroyOnRemove,
+      /**
+       * CORS (GET) が必要な理由:
+       *
+       * CloudFront 署名鍵 (CLOUDFRONT_KEY_PAIR_ID / CLOUDFRONT_PRIVATE_KEY) が
+       * 未設定の場合、アプリは **S3 プリサインド URL** で HLS を配信する
+       * (`apps/web/src/lib/video-delivery.ts`)。このとき hls.js は
+       * ブラウザから XHR で S3 のセグメントを直接取得するため、
+       * CORS 許可が無いと再生できない (ネイティブ HLS の iOS Safari は
+       * `<video src>` なので CORS 不要だが、PC ブラウザは hls.js 経路)。
+       *
+       * バケット自体は BLOCK_ALL のままなので公開はされない。
+       * プリサインド URL を持つリクエストだけが通る。
+       */
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['*'],
+          exposedHeaders: ['Content-Length', 'Content-Range', 'ETag'],
+          maxAge: 3000,
+        },
+      ],
     });
 
     // ---- S3: 公開アセット (画像など) ----

@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@idol/db';
 import { MAX_VIDEO_QUALITY, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
-import { resolveThumbnailUrl } from '@/lib/cdn-signer';
+import { resolveThumbnailUrlAsync } from '@/lib/video-delivery';
 import {
   isVideoListable,
   isVideoPlayable,
@@ -59,7 +59,7 @@ export default async function MemberVideoWatchPage({
   const allowed = isVideoPlayable(visibility, plan, now);
   const lockReason = videoLockReason(visibility, plan, now);
   const expired = lockReason === 'この動画の配信期間は終了しました。';
-  const thumbnailUrl = resolveThumbnailUrl(video.thumbnailUrl);
+  const thumbnailUrl = await resolveThumbnailUrlAsync(video.thumbnailUrl);
   const maxHeight = QUALITY_HEIGHT[MAX_VIDEO_QUALITY[plan]] ?? 720;
 
   return (

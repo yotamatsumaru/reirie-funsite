@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { MAX_VIDEO_QUALITY, allowedVideoQualities, VIDEO_SIGNED_URL_TTL_SEC } from '@idol/shared';
 import { handle, errors } from '@/lib/errors';
-import { isVideoCdnConfigured } from '@/lib/cdn-signer';
+import { currentDeliveryMode } from '@/lib/video-delivery';
 import { requirePlayableVideo } from '@/lib/video-access';
 import { hlsProxyUrl } from '@/lib/hls-proxy-url';
 
@@ -12,12 +12,19 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
   const { id } = await ctx.params;
   const { video, userId, plan, userAgent } = await requirePlayableVideo(req, id);
 
-  if (!isVideoCdnConfigured()) {
-    // CloudFront 署名設定 (ドメイン / キーペア / 秘密鍵) が未完了。
-    // このまま URL を返しても CloudFront が 403 を返すため、明確に原因を伝える。
-    throw errors.badRequest(
-      '動画配信 (CloudFront 署名付き URL) が未設定です。CLOUDFRONT_VIDEO_DOMAIN / CLOUDFRONT_KEY_PAIR_ID / CLOUDFRONT_PRIVATE_KEY を設定してください。',
-    );
+  // 配信経路を決定する。
+  //
+  // 以前はここで CloudFront 署名鍵 (CLOUDFRONT_KEY_PAIR_ID /
+  // CLOUDFRONT_PRIVATE_KEY) が無いと即エラーにしていた。しかしこの 2 つは
+  // CDK で自動作成されず手動登録が前提のため、既定では必ず未設定になり
+  // 「エンコードは成功したのに再生できない」状態になっていた。
+  //
+  // 現在は HLS 出力バケットが分かれば S3 プリサインド URL で配信できる
+  // (EC2 ロールに出力バケットの読み取り権限がある)。両方無い場合のみ
+  // エラーにする。エンドユーザーには設定変数名を見せない。
+  const mode = currentDeliveryMode();
+  if (mode === 'none') {
+    throw errors.internal('動画の配信先が設定されていません。管理者にお問い合わせください。');
   }
 
   // CloudFront の署名付き URL を直接返すのではなく、プレイリストプロキシを返す。

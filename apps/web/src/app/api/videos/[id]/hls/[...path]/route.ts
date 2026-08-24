@@ -24,9 +24,20 @@
 import { NextResponse } from 'next/server';
 import { handle, errors } from '@/lib/errors';
 import { requirePlayableVideo } from '@/lib/video-access';
-import { signVideoUrl, hlsDirPrefix, isVideoCdnConfigured } from '@/lib/cdn-signer';
-import { extractSignatureQuery, rewritePlaylist, isPlaylistUri } from '@/lib/hls-rewrite';
+import { signVideoUrl, hlsDirPrefix } from '@/lib/cdn-signer';
+import {
+  extractSignatureQuery,
+  rewritePlaylist,
+  isPlaylistUri,
+  collectPlaylistUris,
+} from '@/lib/hls-rewrite';
+import {
+  currentDeliveryMode,
+  presignS3Get,
+  presignPlaylistUris,
+} from '@/lib/video-delivery';
 import { env } from '@/lib/env';
+import { VIDEO_SIGNED_URL_TTL_SEC } from '@idol/shared';
 
 export const runtime = 'nodejs';
 /** 署名クエリを含むためキャッシュ不可 */
@@ -52,9 +63,12 @@ export const GET = handle(
 
     const { video } = await requirePlayableVideo(req, id);
 
-    if (!isVideoCdnConfigured()) {
-      throw errors.badRequest(
-        '動画配信 (CloudFront 署名付き URL) が未設定です。CLOUDFRONT_VIDEO_DOMAIN / CLOUDFRONT_KEY_PAIR_ID / CLOUDFRONT_PRIVATE_KEY を設定してください。',
+    // 配信経路を決定する。CloudFront 署名鍵が無くても、HLS 出力バケットが
+    // 分かっていれば S3 プリサインド URL で配信できる (video-delivery.ts)。
+    const mode = currentDeliveryMode();
+    if (mode === 'none') {
+      throw errors.internal(
+        '動画の配信先が設定されていません。管理者にお問い合わせください。',
       );
     }
 
@@ -62,11 +76,14 @@ export const GET = handle(
     const dir = hlsDirPrefix(video.s3HlsKey);
     const targetKey = `${dir}${rel}`;
 
-    // ワイルドカード署名 (hls/<videoId>/*) を取得
-    const { url: signedUrl, expiresAt } = signVideoUrl(targetKey);
-    const signatureQuery = extractSignatureQuery(signedUrl);
+    // プレイリスト自体の取得URL
+    //   CloudFront: ワイルドカード署名 (hls/<videoId>/*)
+    //   S3        : オブジェクト単体のプリサインド
+    const upstreamUrl =
+      mode === 'cloudfront' ? signVideoUrl(targetKey).url : await presignS3Get(targetKey);
+    const expiresAt = new Date(Date.now() + VIDEO_SIGNED_URL_TTL_SEC * 1000);
 
-    const upstream = await fetchWithTimeout(signedUrl);
+    const upstream = await fetchWithTimeout(upstreamUrl);
     if (!upstream.ok) {
       if (upstream.status === 403 || upstream.status === 404) {
         throw errors.notFound('プレイリストが見つかりません');
@@ -75,16 +92,34 @@ export const GET = handle(
     }
 
     const body = await upstream.text();
-    const segmentBase = `https://${env.cloudfront.videoDomain}/${dir}`;
 
-    const rewritten = rewritePlaylist(body, {
-      segmentBase,
-      signatureQuery,
-      // ネストされた variant playlist は相対パスのまま残す。
-      // このルート自身が `/api/videos/<id>/hls/index.m3u8` で配信されるため、
-      // 相対解決すると再びこのプロキシに入り、再帰的に書き換えられる。
-      playlistUrl: (relativePath) => relativePath,
-    });
+    // ネストされた variant playlist は相対パスのまま残す。
+    // このルート自身が `/api/videos/<id>/hls/index.m3u8` で配信されるため、
+    // 相対解決すると再びこのプロキシに入り、そこで再署名される。
+    const playlistUrl = (relativePath: string) => relativePath;
+
+    let rewritten: string;
+    if (mode === 'cloudfront') {
+      const signatureQuery = extractSignatureQuery(upstreamUrl);
+      rewritten = rewritePlaylist(body, {
+        segmentBase: `https://${env.cloudfront.videoDomain}/${dir}`,
+        signatureQuery,
+        playlistUrl,
+      });
+    } else {
+      // S3 はワイルドカード署名ができないため、セグメントを 1 本ずつ署名する。
+      // 署名はローカル HMAC 計算のみでネットワークを使わないため高速。
+      const { segments } = collectPlaylistUris(body);
+      const signedMap = await presignPlaylistUris(dir, segments);
+      rewritten = rewritePlaylist(body, {
+        // S3 モードでは segmentUrl が全件を解決するので base/query は未使用。
+        // 万一 Map に無い URI があってもプレイリストを壊さないよう空文字にする。
+        segmentBase: '',
+        signatureQuery: '',
+        playlistUrl,
+        segmentUrl: (rel2) => signedMap.get(rel2),
+      });
+    }
 
     return new NextResponse(rewritten, {
       status: 200,
