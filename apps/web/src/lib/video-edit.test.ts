@@ -15,6 +15,7 @@ function values(over: Partial<VideoEditFormValues> = {}): VideoEditFormValues {
     description: 'もとの説明',
     accessLevel: 'MEMBERS',
     expiresAt: '',
+    thumbnailUrl: '',
     ...over,
   };
 }
@@ -194,6 +195,7 @@ describe('buildVideoEditPatch', () => {
       description: '新説明',
       accessLevel: 'PUBLIC',
       expiresAt: '2026-12-31T23:59',
+      thumbnailUrl: '',
     });
     expect(patch.title).toBe('新タイトル');
     expect(patch.description).toBe('新説明');
@@ -228,5 +230,77 @@ describe('isEmptyPatch', () => {
   it('null を明示的に入れている場合も差分として扱う', () => {
     expect(isEmptyPatch({ description: null })).toBe(false);
     expect(isEmptyPatch({ expiresAt: null })).toBe(false);
+  });
+});
+
+describe('サムネイル (thumbnailUrl)', () => {
+  it('触っていなければ差分に含めない', () => {
+    // エンコードが自動設定した S3 キーが初期値に入っていることがあるため、
+    // これを毎回送ると URL 検証で弾かれ「タイトルを直しただけで保存失敗」になる。
+    const init = values({ thumbnailUrl: 'hls/abc/thumbnail.0000000.jpg' });
+    const patch = buildVideoEditPatch(init, { ...init, title: '新タイトル' });
+    expect(patch).not.toHaveProperty('thumbnailUrl');
+    expect(patch.title).toBe('新タイトル');
+  });
+
+  it('自動設定された S3 キーが初期値でも検証を通る', () => {
+    // 初期値 (エンコードが入れた S3 キー) をそのまま持ったまま「保存」を押しても
+    // 通らないと、説明文の修正すらできなくなる。
+    // フォームは initial を渡すので「触っていない」と判定される。
+    const init = values({ thumbnailUrl: 'hls/abc/thumbnail.0000000.jpg' });
+    const current = { ...init, description: '説明を直した' };
+    expect(validateVideoEdit(current, init).ok).toBe(true);
+  });
+
+  it('initial を渡さない場合は値をそのまま検証する（後方互換）', () => {
+    // 「触ったかどうか」が分からないので安全側 (検証する) に倒す。
+    expect(validateVideoEdit(values({ thumbnailUrl: 'javascript:alert(1)' })).ok).toBe(false);
+    expect(validateVideoEdit(values({ thumbnailUrl: '' })).ok).toBe(true);
+  });
+
+  it('URL を入力したら差分に含める', () => {
+    const init = values();
+    const patch = buildVideoEditPatch(init, {
+      ...init,
+      thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
+    });
+    expect(patch.thumbnailUrl).toBe('https://cdn.example.com/thumb.jpg');
+  });
+
+  it('空にしたら null（=未設定にする）を送る', () => {
+    const init = values({ thumbnailUrl: 'https://cdn.example.com/a.jpg' });
+    const patch = buildVideoEditPatch(init, { ...init, thumbnailUrl: '' });
+    expect(patch.thumbnailUrl).toBeNull();
+  });
+
+  it('前後の空白だけの変化は差分にしない', () => {
+    const init = values({ thumbnailUrl: 'https://cdn.example.com/a.jpg' });
+    const patch = buildVideoEditPatch(init, {
+      ...init,
+      thumbnailUrl: '  https://cdn.example.com/a.jpg  ',
+    });
+    expect(patch).toEqual({});
+  });
+
+  it('不正なURLに書き換えたら保存前に弾く（サーバーと同じ判定）', () => {
+    const init = values();
+    const r = validateVideoEdit({ ...init, thumbnailUrl: 'javascript:alert(1)' }, init);
+    expect(r.ok).toBe(false);
+  });
+
+  it('アップロードAPIが返した内部パスは検証を通り、差分にも乗る', () => {
+    const url = '/api/media/video-thumbnail/abc?v=1';
+    const init = values();
+    expect(validateVideoEdit({ ...init, thumbnailUrl: url }, init).ok).toBe(true);
+    expect(buildVideoEditPatch(init, { ...init, thumbnailUrl: url }).thumbnailUrl).toBe(url);
+  });
+
+  it('サムネイルだけ変えた場合も差分は空にならない', () => {
+    const init = values();
+    const patch = buildVideoEditPatch(init, {
+      ...init,
+      thumbnailUrl: 'https://cdn.example.com/a.jpg',
+    });
+    expect(isEmptyPatch(patch)).toBe(false);
   });
 });

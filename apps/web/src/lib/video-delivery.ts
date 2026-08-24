@@ -65,6 +65,7 @@ import { VIDEO_SIGNED_URL_TTL_SEC } from '@idol/shared';
 import { env } from './env';
 import { s3 } from './s3';
 import { isVideoCdnConfigured, signVideoUrl, hlsDirPrefix } from './cdn-signer';
+import { classifyThumbnailValue } from './video-thumbnail';
 
 /**
  * 配信経路。
@@ -189,15 +190,27 @@ export async function resolveObjectUrl(
  * プレースホルダになってしまう。こちらは S3 プリサインドに
  * フォールバックするため、鍵が無くてもサムネイルが表示される。
  *
- * - `http(s)://` で始まる値 (手動設定した外部URL) はそのまま返す
- * - どの経路でも配信できない場合のみ `null`
+ * 値の種類ごとに扱いを変える (`video-thumbnail.ts` の `classifyThumbnailValue`)。
+ *
+ * - `absolute` … `http(s)://` で始まる値。運営が手入力した外部URL、または
+ *   S3 アセットバケット / CloudFront に上げた画像。そのまま返す。
+ * - `internal` … `/` で始まる自サーバの内部パス
+ *   (`/api/media/video-thumbnail/<id>?v=...`)。S3 未設定環境で DB に
+ *   保存したサムネイルの配信先。**そのまま返さなければならない**。
+ *   ここを S3 キーとして署名してしまうと存在しないオブジェクトを指し、
+ *   サムネイルが全部壊れる。
+ * - `s3key`    … エンコードパイプラインが入れた出力バケットのキー。署名する。
+ *
+ * どの経路でも配信できない場合のみ `null` (壊れた画像ではなくプレースホルダになる)。
  */
 export async function resolveThumbnailUrlAsync(
   value: string | null | undefined,
   ttlSec: number = VIDEO_SIGNED_URL_TTL_SEC,
 ): Promise<string | null> {
   if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
+  const kind = classifyThumbnailValue(value);
+  // 絶対URL / 内部パスは既に配信可能な形なので加工しない。
+  if (kind === 'absolute' || kind === 'internal') return value;
   // サムネイルは単独ファイルなので wildcard=false (canned policy)
   const res = await resolveObjectUrl(value.replace(/^\/+/, ''), ttlSec, false);
   return res?.url ?? null;

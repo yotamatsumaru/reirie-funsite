@@ -582,6 +582,14 @@ model Video {
   id              String      @id @default(uuid()) @db.Uuid
   title           String
   description     String?     @db.Text
+  /// サムネイル画像の参照先。次の 3 形態のいずれかを取る。
+  ///   1. S3 キー (例 hls/<id>/thumbnail.0000000.jpg) … エンコードパイプラインが自動設定。
+  ///      表示時に署名付き / プリサインド URL へ変換する。
+  ///   2. http(s) から始まる絶対URL … 運営が外部URLを直接指定、または
+  ///      S3 アセットバケットへアップロードした場合。
+  ///   3. /api/media/video-thumbnail/<id>?v=... … S3 未設定環境で
+  ///      VideoThumbnail テーブルに保存したバイト列を配信する内部パス。
+  /// 判定・解決は apps/web/src/lib/video-thumbnail.ts に集約している。
   thumbnailUrl    String?     @map("thumbnail_url")
   s3SourceKey     String      @map("s3_source_key")
   s3HlsKey        String?     @map("s3_hls_key")
@@ -599,12 +607,39 @@ model Video {
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  viewLogs VideoViewLog[]
+  viewLogs  VideoViewLog[]
+  thumbnail VideoThumbnail?
 
   @@index([status, publishedAt])
   @@index([accessLevel])
   @@index([isPublished, status, publishedAt])
   @@map("videos")
+}
+
+/// S3 アセットバケット未設定時に、動画サムネイルの本体を保持するテーブル。
+/// 保存方針は SiteImage / CharacterImage / GameAudio と同一
+/// (standalone build + PM2 cluster + 再ビルドでも消えない単一の真実として DB を使う。
+///  ローカルディスク保存は配信ディレクトリとズレるため採用しない)。
+///
+/// videos に Bytes 列を直接足さない理由:
+/// 既存コードは `prisma.video.findUnique({ where: { id } })` のように
+/// select を指定しない呼び出しが 9 箇所以上ある。videos に画像本体を持たせると
+/// 一覧・再生・視聴ログのたびに最大 8MB の BYTEA を読み込んでしまう。
+/// 別テーブルに切れば、必要なとき (= 配信エンドポイント) だけ読める。
+model VideoThumbnail {
+  /// videos.id と 1:1。動画 1 本につきサムネイルは 1 枚。
+  videoId     String   @id @map("video_id") @db.Uuid
+  data        Bytes
+  contentType String   @map("content_type")
+  /// 元ファイル名 (管理画面での表示用)
+  fileName    String?  @map("file_name")
+  sizeBytes   Int      @map("size_bytes")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@map("video_thumbnails")
 }
 
 model VideoViewLog {

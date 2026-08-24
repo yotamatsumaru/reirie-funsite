@@ -1,7 +1,7 @@
 /**
  * 動画メタ情報の編集フォーム（Client Component）
  *
- * タイトル / 説明文 / 公開範囲 / 配信期限を後から直せるようにする。
+ * タイトル / 説明文 / 公開範囲 / 配信期限 / サムネイルを後から直せるようにする。
  * アップロード時にファイル名が仮タイトルとして入るため、
  * ここで直せないとファイル名がそのまま会員に見えてしまう。
  *
@@ -13,10 +13,17 @@
  * - 検証ロジック・日時変換は lib/video-edit.ts の純粋関数に寄せてテスト済み。
  * - 公開 / 非公開はここでは扱わない（専用の visibility API がある）。
  *   保存操作で公開状態が意図せず変わる事故を避けるため。
+ *
+ * ## サムネイルだけ「保存」を待たず即時反映する理由
+ * 画像のアップロードは multipart なので、テキストの差分 PATCH（JSON）と
+ * 同じ送信には乗せられない。ファイルを state に抛えて保留する道もあるが、
+ * 「選んだのに反映されていない」状態が見た目上分からず事故になるので、
+ * 選んだ時点で即 POST し、結果の URL をプレビューに反映する。
+ * （サムネイルは公開範囲を変えないので、即時反映でも危険な副作用がない。）
  */
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +39,30 @@ import {
   type VideoEditFormValues,
 } from '@/lib/video-edit';
 
+/**
+ * サムネイルのプレビュー。
+ *
+ * `next/image` ではなく素の `<img>` を使う。表示側 (`me/videos`, `/contents`) も
+ * 同じ理由で素の `<img>` を使っており、S3 プリサインド URL や
+ * 内部パス `/api/media/video-thumbnail/...` は `images.remotePatterns` /
+ * `localPatterns` に列挙できない（署名クエリ付き・ホストが環境依存）ため。
+ */
+function ThumbnailPreview({ url }: { url: string | null }) {
+  if (!url) {
+    return (
+      <div className="flex aspect-video w-full max-w-xs items-center justify-center rounded-md border border-dashed border-slate-300 text-xs text-slate-400">
+        未設定（一覧ではプレースホルダーが表示されます）
+      </div>
+    );
+  }
+  return (
+    <div className="w-full max-w-xs overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt="サムネイル" className="aspect-video w-full object-cover" />
+    </div>
+  );
+}
+
 const ACCESS_LABEL: Record<string, string> = {
   PUBLIC: '全員（無料会員・未ログインも視聴可）',
   MEMBERS: '会員限定（スタンダード以上）',
@@ -44,6 +75,8 @@ export function VideoEditForm({
   description,
   accessLevel,
   expiresAt,
+  thumbnailUrl,
+  thumbnailPreviewUrl,
 }: {
   videoId: string;
   title: string;
@@ -51,6 +84,14 @@ export function VideoEditForm({
   accessLevel: string;
   /** ISO 文字列 or null */
   expiresAt: string | null;
+  /** DB に入っている生の値（S3 キー / 絶対URL / 内部パス） */
+  thumbnailUrl: string | null;
+  /**
+   * 表示用に解決済みの URL。
+   * 生の値が S3 キーの場合はそのまま `<img src>` に入れても表示できないので、
+   * サーバで署名済み URL に直したものを別途受け取る。
+   */
+  thumbnailPreviewUrl: string | null;
 }) {
   const router = useRouter();
 
@@ -60,11 +101,16 @@ export function VideoEditForm({
     description: description ?? '',
     accessLevel,
     expiresAt: toDatetimeLocalJst(expiresAt),
+    thumbnailUrl: thumbnailUrl ?? '',
   };
 
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState<VideoEditFormValues>(initial);
   const [saving, setSaving] = useState(false);
+  // アップロード後はその URL を、未アップロードならサーバ解決済みの URL を使う。
+  const [preview, setPreview] = useState<string | null>(thumbnailPreviewUrl);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   function set<K extends keyof VideoEditFormValues>(key: K, value: VideoEditFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -72,12 +118,76 @@ export function VideoEditForm({
 
   function cancel() {
     // 編集を破棄してサーバーの値に戻す。
+    // なお画像のアップロードは即時保存なのでキャンセルでは戻らない
+    // （戻すなら削除ボタンで明示的に消してもらう）。
     setValues(initial);
     setEditing(false);
   }
 
+  /**
+   * 画像を選んだときのアップロード。
+   *
+   * S3 アセットバケットが設定されていない環境でも DB に保存されるので、
+   * AWS 側の設定なしでこの導線は常に使える。
+   */
+  async function uploadThumbnail(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/admin/videos/${videoId}/thumbnail`, {
+        method: 'POST',
+        body: fd,
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        thumbnailUrl?: string;
+        message?: string;
+        error?: { message?: string };
+      };
+      if (!res.ok || !j.thumbnailUrl) {
+        throw new Error(
+          j.error?.message ??
+            '画像のアップロードに失敗しました。下の欄に画像URLを直接入力することもできます。',
+        );
+      }
+      // 保存済みなので差分に乗せないよう values と initial 両方の意図を揃える。
+      // （router.refresh() でサーバから新しい値が降ってくる）
+      set('thumbnailUrl', j.thumbnailUrl);
+      setPreview(j.thumbnailUrl);
+      toast.success(j.message ?? 'サムネイルを設定しました', '動画');
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message, 'エラー');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  /** サムネイルを未設定に戻す。 */
+  async function removeThumbnail() {
+    if (!window.confirm('サムネイルを削除しますか？')) return;
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/admin/videos/${videoId}/thumbnail`, { method: 'DELETE' });
+      const j = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        error?: { message?: string };
+      };
+      if (!res.ok) throw new Error(j.error?.message ?? '削除に失敗しました');
+      set('thumbnailUrl', '');
+      setPreview(null);
+      toast.success(j.message ?? 'サムネイルを削除しました', '動画');
+      router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message, 'エラー');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function save() {
-    const check = validateVideoEdit(values);
+    const check = validateVideoEdit(values, initial);
     if (!check.ok) {
       toast.error(check.message, '入力エラー');
       return;
@@ -117,13 +227,19 @@ export function VideoEditForm({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-slate-800">タイトル / 説明文</h2>
+            <h2 className="text-sm font-semibold text-slate-800">
+              サムネイル / タイトル / 説明文
+            </h2>
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               編集
             </Button>
           </div>
         </CardHeader>
         <CardBody className="space-y-3">
+          <div>
+            <p className="mb-1 text-xs text-slate-400">サムネイル</p>
+            <ThumbnailPreview url={preview} />
+          </div>
           <div>
             <p className="text-xs text-slate-400">タイトル</p>
             <p className="text-sm font-medium text-slate-800">{title}</p>
@@ -144,9 +260,57 @@ export function VideoEditForm({
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-sm font-semibold text-slate-800">タイトル / 説明文を編集</h2>
+        <h2 className="text-sm font-semibold text-slate-800">
+          サムネイル / タイトル / 説明文を編集
+        </h2>
       </CardHeader>
       <CardBody className="space-y-4">
+        {/*
+          サムネイルはアップロードした時点で保存される（「保存」ボタン待ちではない）。
+          multipart と JSON 差分 PATCH を 1 回の送信に混ぜられないため。
+        */}
+        <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+          <p className="text-xs font-medium text-slate-600">サムネイル</p>
+          <ThumbnailPreview url={preview} />
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-600">
+              画像をアップロード（JPEG / PNG / WebP・8MB まで）
+            </span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              disabled={uploading || saving}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadThumbnail(f);
+              }}
+              className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100"
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            {uploading ? 'アップロード中…' : '選ぶとすぐに反映されます（「保存」は不要）'}
+          </p>
+          <Input
+            label="または画像URLを直接入力"
+            name="thumbnailUrl"
+            value={values.thumbnailUrl}
+            onChange={(e) => set('thumbnailUrl', e.target.value)}
+            placeholder="https://…"
+            hint="こちらは「保存」を押すと反映されます。空にするとサムネイルなしになります"
+          />
+          {preview && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={removeThumbnail}
+              disabled={uploading || saving}
+            >
+              サムネイルを削除
+            </Button>
+          )}
+        </div>
+
         <Input
           label="タイトル"
           name="title"

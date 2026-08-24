@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
 import { formatJstDateTime } from '@idol/shared';
+import { resolveThumbnailUrlAsync } from '@/lib/video-delivery';
 import { VideoAdminActions } from './actions';
 import { VideoEditForm } from './edit-form';
 
@@ -46,6 +47,10 @@ export default async function AdminVideoDetailPage({
     include: { _count: { select: { viewLogs: true } } },
   });
   if (!video) notFound();
+
+  // DB の生の値は S3 キーのこともあるため、プレビュー表示用に解決した URL も渡す。
+  // 解決できない場合 (配信設定が無い等) は null になり「未設定」表示にフォールバックする。
+  const thumbnailPreviewUrl = await resolveThumbnailUrlAsync(video.thumbnailUrl);
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -94,6 +99,8 @@ export default async function AdminVideoDetailPage({
       {/*
         タイトル / 説明文はアップロード時にファイル名から仮の値が入るため、
         後から直せるようにしておく（直せないとファイル名が会員に見えてしまう）。
+        サムネイルも同様で、エンコードが自動生成したコマが不適切なときや
+        そもそも生成されなかったときに差し替えられる必要がある。
       */}
       <VideoEditForm
         videoId={video.id}
@@ -101,6 +108,8 @@ export default async function AdminVideoDetailPage({
         description={video.description}
         accessLevel={video.accessLevel}
         expiresAt={video.expiresAt ? video.expiresAt.toISOString() : null}
+        thumbnailUrl={video.thumbnailUrl}
+        thumbnailPreviewUrl={thumbnailPreviewUrl}
       />
 
       <Card>

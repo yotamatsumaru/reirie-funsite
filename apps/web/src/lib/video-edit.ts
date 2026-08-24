@@ -7,7 +7,7 @@
  * React に依存しない形でここに集約してユニットテストの対象にする。
  *
  * ## 編集可能な項目と、そうでない項目
- * 編集可: title / description / accessLevel / expiresAt
+ * 編集可: title / description / accessLevel / expiresAt / thumbnailUrl
  *   → いずれも「運営が後から言い直せるべき」情報。アップロード時に
  *     ファイル名から仮のタイトルを入れる導線があるため、後から直せないと
  *     ファイル名がそのまま会員に見えてしまう。
@@ -18,6 +18,8 @@
  * （1 つの API に混ぜると「保存」で意図せず公開状態が変わる事故が起きる）。
  */
 
+import { validateThumbnailUrlInput } from './video-thumbnail';
+
 export const VIDEO_TITLE_MAX = 200;
 export const VIDEO_DESCRIPTION_MAX = 2000;
 
@@ -27,6 +29,17 @@ export type VideoEditFormValues = {
   accessLevel: string;
   /** `<input type="datetime-local">` の値。空文字は「期限なし」 */
   expiresAt: string;
+  /**
+   * サムネイルの参照先。空文字は「未設定」。
+   *
+   * 入り得る値は 3 種（video-thumbnail.ts の classifyThumbnailValue 参照）。
+   * フォームでは「画像をアップロード」か「URLを直接入力」のいずれかで埋まる。
+   * エンコードが自動設定した S3 キーが入っていることもあるので、
+   * フォームはこの値を **触っていないなら送らない**（差分送信）。
+   * そうしないと S3 キーが URL として検証されて弾かれ、
+   * タイトルを直しただけで保存に失敗する。
+   */
+  thumbnailUrl: string;
 };
 
 export type VideoEditPatch = {
@@ -34,6 +47,7 @@ export type VideoEditPatch = {
   description?: string | null;
   accessLevel?: string;
   expiresAt?: string | null;
+  thumbnailUrl?: string | null;
 };
 
 /**
@@ -70,8 +84,20 @@ export function fromDatetimeLocalJst(value: string): string | null {
 
 export type ValidationResult = { ok: true } | { ok: false; message: string };
 
-/** 保存前の入力検証。サーバー側の zod と条件を合わせること。 */
-export function validateVideoEdit(values: VideoEditFormValues): ValidationResult {
+/**
+ * 保存前の入力検証。サーバー側の zod / validateThumbnailUrlInput と条件を合わせること。
+ *
+ * `initial` を受け取るのはサムネイルのためだけ。
+ * `thumbnailUrl` の初期値にはエンコードが自動設定した S3 キー
+ * （`hls/<id>/thumbnail.0000000.jpg`）が入っていることがあり、これは URL としては
+ * 不正なので無条件に検証すると **タイトルを直すだけで保存できなくなる**。
+ * 実際に送るのは差分だけ（buildVideoEditPatch）なので、
+ * 「運営が触っていない値」は検証対象から外すのが正しい。
+ */
+export function validateVideoEdit(
+  values: VideoEditFormValues,
+  initial?: VideoEditFormValues,
+): ValidationResult {
   const title = values.title.trim();
   if (!title) return { ok: false, message: 'タイトルを入力してください' };
   if (title.length > VIDEO_TITLE_MAX) {
@@ -85,6 +111,15 @@ export function validateVideoEdit(values: VideoEditFormValues): ValidationResult
   }
   if (values.expiresAt.trim() && fromDatetimeLocalJst(values.expiresAt) === null) {
     return { ok: false, message: '配信期限の日時が不正です' };
+  }
+  // サムネイルは「運営が値を変えたとき」だけ検証する（上のコメント参照）。
+  // 検証ロジック自体は video-thumbnail.ts に集約してサーバと共用する
+  // （クライアントとサーバで判定がずれると「保存したらエラー」になる）。
+  const touchedThumbnail =
+    initial === undefined || values.thumbnailUrl.trim() !== initial.thumbnailUrl.trim();
+  if (touchedThumbnail) {
+    const thumb = validateThumbnailUrlInput(values.thumbnailUrl);
+    if (!thumb.ok) return { ok: false, message: thumb.message };
   }
   return { ok: true };
 }
@@ -116,6 +151,15 @@ export function buildVideoEditPatch(
   const nextExp = fromDatetimeLocalJst(current.expiresAt);
   const prevExp = fromDatetimeLocalJst(initial.expiresAt);
   if (nextExp !== prevExp) patch.expiresAt = nextExp;
+
+  // サムネイルは値が変わったときのみ送る。
+  // 自動生成の S3 キー（hls/<id>/thumbnail.0000000.jpg）が初期値に
+  // 入っているケースがあるため、毎回送ると URL 検証で弾かれて
+  // タイトルの修正すら保存できなくなる。
+  const nextThumb = current.thumbnailUrl.trim();
+  if (nextThumb !== initial.thumbnailUrl.trim()) {
+    patch.thumbnailUrl = nextThumb === '' ? null : nextThumb;
+  }
 
   return patch;
 }
