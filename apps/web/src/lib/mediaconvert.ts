@@ -27,6 +27,7 @@ import {
   MediaConvertClient,
   CreateJobCommand,
   DescribeEndpointsCommand,
+  GetJobCommand,
 } from '@aws-sdk/client-mediaconvert';
 import { env } from './env';
 
@@ -355,4 +356,115 @@ export async function createHlsJob(params: {
   const jobId = res.Job?.Id;
   if (!jobId) throw new Error('MediaConvert ジョブ ID が取得できませんでした');
   return jobId;
+}
+
+/* ------------------------------------------------------------------ *
+ * ジョブ状態の直接照会 (完了通知 Lambda が無くても復旧できるようにする)
+ * ------------------------------------------------------------------ */
+
+/** MediaConvert のジョブ状態 (SDK の JobStatus と同じ値域) */
+export type MediaConvertJobStatus =
+  | 'SUBMITTED'
+  | 'PROGRESSING'
+  | 'COMPLETE'
+  | 'CANCELED'
+  | 'ERROR'
+  | 'UNKNOWN';
+
+export type MediaConvertJobState = {
+  jobId: string;
+  status: MediaConvertJobStatus;
+  /** 進捗率 (PROGRESSING 中のみ AWS から返る) */
+  progressPercent?: number;
+  /** 出力から推定した尺 (秒) */
+  durationSeconds?: number;
+  /** ERROR 時のメッセージ (code=xxx を含む) */
+  errorMessage?: string;
+};
+
+/** GetJob レスポンスのうち本モジュールが参照する部分 */
+type GetJobLike = {
+  Job?: {
+    Id?: string;
+    Status?: string;
+    JobPercentComplete?: number;
+    ErrorCode?: number | string;
+    ErrorMessage?: string;
+    OutputGroupDetails?: Array<{
+      OutputDetails?: Array<{ DurationInMs?: number }>;
+    }>;
+  };
+};
+
+const KNOWN_JOB_STATUSES: MediaConvertJobStatus[] = [
+  'SUBMITTED',
+  'PROGRESSING',
+  'COMPLETE',
+  'CANCELED',
+  'ERROR',
+];
+
+/**
+ * GetJob のレスポンスを `MediaConvertJobState` に変換する純粋関数。
+ *
+ * EventBridge 経由 (functions/video-job-complete/parse-event.ts) と
+ * 同じ情報を、ポーリング経路でも同じ形で取り出せるようにするためのもの。
+ * ネットワークに依存しないので単体テストできる。
+ */
+export function parseJobState(res: GetJobLike, fallbackJobId: string): MediaConvertJobState {
+  const job = res?.Job;
+  const rawStatus = typeof job?.Status === 'string' ? job.Status : undefined;
+  const status: MediaConvertJobStatus =
+    rawStatus && (KNOWN_JOB_STATUSES as string[]).includes(rawStatus)
+      ? (rawStatus as MediaConvertJobStatus)
+      : 'UNKNOWN';
+
+  // 進捗率は 0〜100 の数値のみ採用
+  const rawPercent = job?.JobPercentComplete;
+  const progressPercent =
+    typeof rawPercent === 'number' && Number.isFinite(rawPercent) && rawPercent >= 0
+      ? Math.min(100, Math.round(rawPercent))
+      : undefined;
+
+  // 尺は全 output の最大 DurationInMs を秒に丸める
+  let maxMs = 0;
+  let foundDuration = false;
+  for (const group of job?.OutputGroupDetails ?? []) {
+    for (const output of group?.OutputDetails ?? []) {
+      const ms = output?.DurationInMs;
+      if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) {
+        foundDuration = true;
+        if (ms > maxMs) maxMs = ms;
+      }
+    }
+  }
+
+  // ERROR 時のメッセージ (EventBridge 経路と同じ `code=xxx message` 形式)
+  const errorParts: string[] = [];
+  if (job?.ErrorCode !== undefined && job.ErrorCode !== null) {
+    errorParts.push(`code=${job.ErrorCode}`);
+  }
+  if (job?.ErrorMessage) errorParts.push(job.ErrorMessage);
+
+  return {
+    jobId: job?.Id || fallbackJobId,
+    status,
+    ...(progressPercent !== undefined ? { progressPercent } : {}),
+    ...(foundDuration ? { durationSeconds: Math.round(maxMs / 1000) } : {}),
+    ...(errorParts.length > 0
+      ? { errorMessage: errorParts.join(' ').slice(0, 1000) }
+      : {}),
+  };
+}
+
+/**
+ * MediaConvert にジョブ状態を直接問い合わせる。
+ *
+ * 完了通知 (EventBridge → Lambda) が未整備・不通でも、管理画面から
+ * 「エンコード状態を確認」して READY 化できるようにするための復旧経路。
+ */
+export async function getJobState(jobId: string): Promise<MediaConvertJobState> {
+  const client = await getClient();
+  const res = await client.send(new GetJobCommand({ Id: jobId }));
+  return parseJobState(res as GetJobLike, jobId);
 }

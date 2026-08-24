@@ -1,8 +1,17 @@
 /**
  * 動画詳細ページの操作 (Client Component)
  *   - エンコード開始 / 再エンコード (MediaConvert)
+ *   - エンコード状態の確認 (MediaConvert / S3 に直接問い合わせて READY 化)
  *   - プレビュー再生 (READY のとき)
  *   - 手動公開 (MediaConvert 完了通知が来ない場合のフォールバック)
+ *
+ * ## 「エンコード状態を確認」がある理由 (重要)
+ * MediaConvert は完了を push 通知しない。完了通知の Lambda / EventBridge が
+ * 未整備だと Video は PROCESSING のまま止まる。従来は「手動で公開」が
+ * `hasHls` (= s3HlsKey が埋まっていること) を条件にしていたため、
+ *   完了通知が来ない → s3HlsKey が空 → ボタンが出ない → 待つしかない
+ * というデッドロックだった。この確認ボタンは Lambda に依存せず
+ * AWS の実状から状態を確定させるため、常に押せるようにしてある。
  */
 'use client';
 
@@ -23,8 +32,11 @@ export function VideoAdminActions({
   hasHls: boolean;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<null | 'encode' | 'publish' | 'preview'>(null);
+  const [busy, setBusy] = useState<null | 'encode' | 'publish' | 'preview' | 'sync'>(
+    null,
+  );
   const [hlsUrl, setHlsUrl] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   async function startEncode() {
     setBusy('encode');
@@ -49,6 +61,49 @@ export function VideoAdminActions({
       if (!res.ok) throw new Error(j.error?.message ?? '公開に失敗しました');
       toast.success('公開しました', '動画');
       router.refresh();
+    } catch (e) {
+      toast.error((e as Error).message, 'エラー');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * MediaConvert / S3 に直接問い合わせて状態を反映する。
+   * 完了していれば READY 化、失敗していれば FAILED 化、
+   * 進行中なら進捗率を表示する。
+   */
+  async function syncStatus() {
+    setBusy('sync');
+    setSyncMessage(null);
+    try {
+      const res = await fetch(`/api/admin/videos/${videoId}/sync`, { method: 'POST' });
+      const j = (await res.json().catch(() => ({}))) as {
+        changed?: boolean;
+        status?: string;
+        message?: string;
+        progressPercent?: number;
+        jobLookupError?: string;
+        s3CheckError?: string;
+        error?: { message?: string };
+      };
+      if (!res.ok) throw new Error(j.error?.message ?? '状態の確認に失敗しました');
+
+      const msg = j.message ?? '状態を確認しました';
+      setSyncMessage(
+        [msg, j.jobLookupError && `ジョブ照会エラー: ${j.jobLookupError}`,
+          j.s3CheckError && `S3 確認エラー: ${j.s3CheckError}`]
+          .filter(Boolean)
+          .join(' / '),
+      );
+
+      if (j.changed) {
+        toast.success(msg, '動画');
+        router.refresh();
+      } else {
+        // 状態が変わらない場合も原因が分かるよう info で見せる
+        toast.info(msg, '動画');
+      }
     } catch (e) {
       toast.error((e as Error).message, 'エラー');
     } finally {
@@ -89,6 +144,21 @@ export function VideoAdminActions({
             {status === 'FAILED' || hasHls ? '再エンコード' : 'エンコード開始'}
           </Button>
 
+          {/*
+            状態確認は s3HlsKey の有無に依存させない。
+            これが従来のデッドロック (完了通知が来ないと何も操作できない) の解消点。
+          */}
+          {status !== 'READY' && (
+            <Button
+              variant="primary"
+              onClick={syncStatus}
+              loading={busy === 'sync'}
+              disabled={busy !== null}
+            >
+              エンコード状態を確認
+            </Button>
+          )}
+
           {hasHls && (
             <Button
               variant="outline"
@@ -102,7 +172,7 @@ export function VideoAdminActions({
 
           {hasHls && status !== 'READY' && (
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={publish}
               loading={busy === 'publish'}
               disabled={busy !== null}
@@ -112,10 +182,17 @@ export function VideoAdminActions({
           )}
         </div>
 
+        {syncMessage && (
+          <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            {syncMessage}
+          </p>
+        )}
+
         {status === 'PROCESSING' && (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            エンコード中です。完了すると自動で READY になります（MediaConvert 完了通知の
-            Lambda が未整備の場合は、完了後に「手動で公開」を押してください）。
+            エンコード中です。完了すると自動で READY になります。
+            自動反映が有効でない場合は「エンコード状態を確認」を押すと、
+            MediaConvert に直接問い合わせて反映します。
           </p>
         )}
 

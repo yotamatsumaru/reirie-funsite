@@ -22,6 +22,10 @@
  * ## 必要な環境変数
  *   - WEB_APP_BASE_URL : 例 https://reirie.com  (末尾スラッシュは不要)
  *   - CRON_SECRET      : Web の CRON_SECRET と同じ値
+ *       もしくは
+ *     CRON_SECRET_PARAM : SSM SecureString のパラメータ名
+ *       (CloudFormation は Lambda 環境変数に SecureString の「値」を
+ *        埋め込めないため、CDK からは名前だけを渡し、実行時に取得する)
  *   - (任意) JOB_COMPLETE_PATH : 既定 /api/admin/videos/job-complete
  *   - (任意) REQUEST_TIMEOUT_MS : 既定 8000
  *
@@ -63,6 +67,44 @@ function requiredEnv(name: string): string {
   return v;
 }
 
+/**
+ * CRON_SECRET を解決する。
+ *
+ * 1. 環境変数 CRON_SECRET があればそれを使う (手動デプロイ / ローカル)
+ * 2. なければ CRON_SECRET_PARAM の名前で SSM SecureString から取得する
+ *    (CDK デプロイ時はこちら。CFn が SecureString の値を環境変数へ
+ *     埋め込めないため名前渡しになる)
+ *
+ * SSM の値はコンテナ再利用中キャッシュするので API 呼び出しは実質 1 回。
+ */
+let _cachedCronSecret: string | null = null;
+
+async function resolveCronSecret(): Promise<string> {
+  const direct = process.env.CRON_SECRET;
+  if (direct) return direct;
+
+  if (_cachedCronSecret) return _cachedCronSecret;
+
+  const paramName = process.env.CRON_SECRET_PARAM;
+  if (!paramName) {
+    throw new Error('missing required env: CRON_SECRET or CRON_SECRET_PARAM');
+  }
+
+  // @aws-sdk/client-ssm は Lambda Node.js 20 ランタイムに同梱されているため
+  // バンドルには含めない (esbuild の --external:@aws-sdk/*)。
+  const { SSMClient, GetParameterCommand } = await import('@aws-sdk/client-ssm');
+  const ssm = new SSMClient({});
+  const res = await ssm.send(
+    new GetParameterCommand({ Name: paramName, WithDecryption: true }),
+  );
+  const value = res.Parameter?.Value;
+  if (!value) {
+    throw new Error(`ssm parameter has no value: ${paramName}`);
+  }
+  _cachedCronSecret = value;
+  return value;
+}
+
 function buildUrl(): string {
   const base = requiredEnv('WEB_APP_BASE_URL').replace(/\/+$/, '');
   const path = process.env.JOB_COMPLETE_PATH ?? '/api/admin/videos/job-complete';
@@ -72,7 +114,7 @@ function buildUrl(): string {
 
 async function postJobComplete(payload: JobCompletePayload): Promise<number> {
   const url = buildUrl();
-  const cronSecret = requiredEnv('CRON_SECRET');
+  const cronSecret = await resolveCronSecret();
   const timeoutMs = Number(process.env.REQUEST_TIMEOUT_MS ?? '8000');
 
   const controller = new AbortController();
