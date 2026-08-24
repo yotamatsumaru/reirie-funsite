@@ -15,6 +15,7 @@
  *    6. WebhookStack        (depends on Network, Database)
  *    7. Ec2Stack            (depends on Network, Database, Storage, Email)
  *    8. MonitoringStack     (depends on Ec2, Database, Webhook)
+ *    9. VideoEncodeStack    (独立。MediaConvert 完了通知 Lambda + EventBridge)
  *   10. SiteCdnStack        (depends on Ec2Stack, DnsStack。domainName 指定時のみ作成)
  */
 import 'source-map-support/register';
@@ -28,6 +29,7 @@ import { LiveStack } from '../lib/live-stack';
 import { WebhookStack } from '../lib/webhook-stack';
 import { Ec2Stack } from '../lib/ec2-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
+import { VideoEncodeStack } from '../lib/video-encode-stack';
 import { DnsStack } from '../lib/dns-stack';
 import { SiteCdnStack } from '../lib/site-cdn-stack';
 import { IamDescriptionAsciiAspect } from '../lib/iam-description-aspect';
@@ -179,6 +181,32 @@ const monitoring = new MonitoringStack(app, `${stackPrefix}-monitoring`, {
 monitoring.addDependency(ec2Stack);
 monitoring.addDependency(database);
 monitoring.addDependency(webhook);
+
+// 9. Video Encode (MediaConvert 完了通知ブリッジ Lambda + EventBridge)
+//
+// MediaConvert は完了を push 通知しないため、この EventBridge → Lambda
+// 経路が無いと動画は「エンコード中」のまま READY にならない。
+// 従来 functions/video-job-complete は手動 aws CLI 手順しか無く CDK 未定義
+// だったため、cdk deploy しても永久にデプロイされない状態だった。
+//
+// 転送先の Web URL は context `webAppBaseUrl` で上書きできる。
+// 未指定なら config.domainName から https://<domain> を組み立てる。
+// domainName も無い環境ではスタックを作らない (URL を決められないため)。
+const webAppBaseUrl =
+  (app.node.tryGetContext('webAppBaseUrl') as string | undefined) ??
+  (config.domainName ? `https://${config.domainName}` : undefined);
+
+if (webAppBaseUrl) {
+  const videoEncode = new VideoEncodeStack(app, `${stackPrefix}-video-encode`, {
+    env,
+    config,
+    webAppBaseUrl,
+    description:
+      'MediaConvert job-complete bridge Lambda + EventBridge rule (+ DLQ)',
+  });
+  // EC2 (Web アプリ) が動いていないと通知先が無いので、順序を明示する
+  videoEncode.addDependency(ec2Stack);
+}
 
 // 10. Site CDN (domainName が context で指定された場合のみ作成)
 // dns は上の 3.5 で (domainName 指定時のみ) 既に作成済みなのでそれを再利用する。

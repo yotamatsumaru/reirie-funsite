@@ -1276,3 +1276,137 @@ Resource handler returned message: "User data is limited to 16384 bytes"
 
 将来さらにスクリプトが大きくなった場合は、
 S3 に置いて UserData 側で `aws s3 cp` して取得する方式に切り替えてください。
+
+---
+
+## 完了通知・状態同期・セグメント配信（2026-08 修正）
+
+### 背景: エンコードが「エンコード中」から進まなくなる不具合
+
+MediaConvert は完了を **push しません**。完了を知る唯一の経路は
+EventBridge の `MediaConvert Job State Change` イベントです。
+
+```
+MediaConvert  --(EventBridge)-->  Lambda  --(HTTP)-->  POST /api/admin/videos/job-complete
+                                                        └ status=READY / s3HlsKey を書き込む
+```
+
+この Lambda（`functions/video-job-complete`）は **CDK に定義されておらず**、
+手動デプロイ（README の aws CLI 手順）だけが手段でした。
+そのため未デプロイの環境では次のデッドロックが発生していました。
+
+1. 完了通知が来ない → `videos.status` が `PROCESSING` のまま
+2. `s3HlsKey` が空のまま
+3. 管理画面の「手動で公開（READY化）」は `s3HlsKey` がある時だけ表示される → 押せない
+4. `POST /api/admin/videos/[id]/publish` も `s3HlsKey が必要です` で拒否
+
+→ **どの経路でも復旧できない**。
+
+### ① 復旧手段: 「エンコード状態を確認」ボタン
+
+管理画面の動画詳細（`/admin/videos/<id>`）に、`s3HlsKey` の有無に関係なく
+常に表示されるボタンを追加しました。
+
+`POST /api/admin/videos/<id>/sync`（権限: `CONTENT`）は
+Lambda を経由せず **MediaConvert と S3 に直接問い合わせて** 状態を突き合わせます。
+
+| 判定材料 | 結果 |
+| --- | --- |
+| Job が `COMPLETE` | `READY` にして `s3HlsKey` / 再生時間 / 公開日時を補完 |
+| Job が `ERROR` / `CANCELED` | `FAILED` にしてエラー内容を記録 |
+| Job が `SUBMITTED` / `PROGRESSING` | 進捗率を表示（変更なし） |
+| Job ID が無い / 参照失敗 | `hls/<videoId>/index.m3u8` の存在（HeadObject）で判定 |
+
+既に `READY` のものを巻き戻すことはありません（`video-sync.ts` の
+`decideReconcile` が `already_ready` 等で `none` を返します）。
+
+### ② 恒久対策: 完了通知を CDK に載せる
+
+`infra/lib/video-encode-stack.ts` を追加し、以下を IaC 化しました。
+
+- Lambda `<prefix>-video-job-complete`（Node.js 20 / 20s / 256MB）
+- EventBridge Rule `<prefix>-mediaconvert-job-state-change`
+  （`source: aws.mediaconvert` / `detail.status: [COMPLETE, ERROR]`）
+- 失敗時の SQS DLQ（14日保持）+ `retryAttempts: 2`
+
+デプロイ:
+
+```bash
+# Lambda を先にビルド（未ビルドならスタックはリソースを作らずスキップし
+# CfnOutput VideoJobCompleteSkipped を出します）
+pnpm --filter @idol/video-job-complete build
+
+cd infra
+npx cdk deploy 'idol-fansite-dev-video-encode' --context domainName=reirie.com
+```
+
+- 通知先 URL は `webAppBaseUrl` コンテキスト（未指定なら `https://<domainName>`）
+  から決まります。どちらも無い場合スタックは作られません。
+- `CRON_SECRET` は CloudFormation の環境変数に SecureString を直接置けないため、
+  **SSM パラメータ名**（`/idol-fansite/<env>/app/cron-secret`）を渡し、
+  Lambda 実行時に復号して取得します（`resolveCronSecret()`）。
+
+### ③ `.ts` セグメントが 403 になる問題
+
+CloudFront の署名付き URL は **「その URL 1 本」にしか効きません**。
+従来は canned policy（`Expires` のみ）でマスタープレイリストだけを署名していたため、
+
+```
+index.m3u8            → 200（署名あり）
+index_720p.m3u8       → 403（署名なし）
+index_720p_00001.ts   → 403（署名なし）
+```
+
+となり「読み込みは進むのに再生できない」状態でした。
+`trustedKeyGroups` を設定しているため未署名アクセスは必ず 403 です。
+
+対策は 2 段構えです。
+
+**1. 署名をワイルドカード（カスタムポリシー）にする** — `apps/web/src/lib/cdn-signer.ts`
+
+```
+Resource: https://<videoDomain>/hls/<videoId>/*
+Condition: DateLessThan / AWS:EpochTime
+→ クエリは Policy / Key-Pair-Id / Signature
+```
+
+サムネイルのような単独ファイルは `signVideoUrl(key, ttl, false)` で
+従来どおり canned policy を使います（配下すべてを許可しないため）。
+
+**2. プレイリストをサーバ側で書き換える** — `GET /api/videos/<id>/hls/<file>.m3u8`
+
+プレイリスト内の相対 URI に署名クエリを埋め込んで返します。
+
+- `.m3u8` のみをプロキシし、`.ts` は CloudFront から直接配信
+  （帯域を Next.js サーバに通さない）
+- variant playlist は相対パスのまま残すので、再帰的に同じプロキシを通る
+- 認証・プラン・配信期限は `requirePlayableVideo()` で従来と同じ条件を再チェック
+
+> 署名付き Cookie は使えません。動画 CDN（`dxxxx.cloudfront.net`）は
+> サイト本体と **別ドメイン** のため Cookie が送信されないためです。
+> また iOS Safari はネイティブ HLS 再生で JS から介入できないため、
+> hls.js の `xhrSetup` だけでは不十分で、サーバ側書き換えが必須です。
+
+`/api/videos/<id>/playback` は署名付き CloudFront URL ではなく、この
+プロキシ URL（`/api/videos/<id>/hls/index.m3u8`）を `hlsUrl` として返します。
+
+### 検証手順（セグメントまで確認する）
+
+マスタープレイリストの 200 だけでは不十分です。**必ずセグメントまで確認してください。**
+
+```bash
+# 1. 再生用 URL を取得（要ログイン Cookie）
+curl -s -b cookie.txt -X POST https://reirie.com/api/videos/<videoId>/playback | jq .hlsUrl
+
+# 2. マスタープレイリスト（相対 URI が絶対 URL + 署名に書き換わっていること）
+curl -s -b cookie.txt "https://reirie.com/api/videos/<videoId>/hls/index.m3u8"
+
+# 3. variant playlist（.ts に Policy= が付いていること）
+curl -s -b cookie.txt "https://reirie.com/api/videos/<videoId>/hls/index_720p.m3u8" | head
+
+# 4. ★セグメント本体が 200 で返ること（ここが以前 403 だった）
+curl -s -o /dev/null -w '%{http_code}\n' "<上で得た .ts の完全な URL>"
+```
+
+`4.` が `403` の場合は署名鍵（`CLOUDFRONT_KEY_PAIR_ID` / `CLOUDFRONT_PRIVATE_KEY`）と
+`trustedKeyGroups` の公開鍵が一致していない可能性があります。

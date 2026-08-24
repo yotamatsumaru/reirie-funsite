@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from './env';
 
@@ -56,4 +56,29 @@ export async function putAsset(
     return `https://${env.cloudfront.assetDomain}/${key}`;
   }
   return `https://${env.s3.assetBucket}.s3.${env.aws.region}.amazonaws.com/${key}`;
+}
+
+/**
+ * 指定バケットにオブジェクトが存在するかを確認する (HeadObject)。
+ *
+ * MediaConvert の完了通知が届かなかった場合に、HLS 出力
+ * (`hls/<videoId>/index.m3u8`) が実際に生成済みかを確かめて
+ * 手動 READY 化を許可するために使う。
+ *
+ * 404 / NotFound は「存在しない」として false を返し、
+ * それ以外のエラー (権限不足など) は呼び出し側で扱えるよう throw する。
+ */
+export async function objectExists(bucket: string, key: string): Promise<boolean> {
+  if (!bucket || !key) return false;
+  try {
+    await s3().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return true;
+  } catch (e) {
+    const err = e as { name?: string; $metadata?: { httpStatusCode?: number } };
+    const code = err?.$metadata?.httpStatusCode;
+    if (err?.name === 'NotFound' || err?.name === 'NoSuchKey' || code === 404) {
+      return false;
+    }
+    throw e;
+  }
 }

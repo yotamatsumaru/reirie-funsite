@@ -210,6 +210,9 @@ importers:
 
   functions/video-job-complete:
     devDependencies:
+      '@aws-sdk/client-ssm':
+        specifier: ^3.682.0
+        version: 3.1064.0
       '@types/aws-lambda':
         specifier: ^8.10.145
         version: 8.10.161
