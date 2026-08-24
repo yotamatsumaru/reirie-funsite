@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
 import { formatJstDateTime } from '@idol/shared';
 import { VideoAdminActions } from './actions';
+import { VideoEditForm } from './edit-form';
 
 export const metadata: Metadata = { title: '動画詳細' };
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,13 @@ const STATUS_LABEL: Record<string, string> = {
   PROCESSING: 'エンコード中',
   READY: '公開可能（READY）',
   FAILED: '失敗',
+};
+
+/** 生の enum 値だと運用者に伝わりにくいので日本語に直す */
+const ACCESS_LABEL: Record<string, string> = {
+  PUBLIC: '全員',
+  MEMBERS: '会員限定',
+  PREMIUM: 'プレミアム限定',
 };
 
 function tone(status: string): 'success' | 'danger' | 'info' | 'warning' {
@@ -63,7 +71,7 @@ export default async function AdminVideoDetailPage({
         </CardHeader>
         <CardBody>
           <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-2">
-            <Field label="アクセス範囲" value={video.accessLevel} />
+            <Field label="公開範囲" value={ACCESS_LABEL[video.accessLevel] ?? video.accessLevel} />
             <Field
               label="尺"
               value={video.durationSeconds ? `${Math.floor(video.durationSeconds / 60)}分${video.durationSeconds % 60}秒` : '—'}
@@ -78,14 +86,22 @@ export default async function AdminVideoDetailPage({
               value={video.expiresAt ? formatJstDateTime(video.expiresAt) : 'なし'}
             />
             <Field label="作成" value={formatJstDateTime(video.createdAt)} />
+            <Field label="最終更新" value={formatJstDateTime(video.updatedAt)} />
           </dl>
-          {video.description && (
-            <p className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-3 text-sm text-slate-600">
-              {video.description}
-            </p>
-          )}
         </CardBody>
       </Card>
+
+      {/*
+        タイトル / 説明文はアップロード時にファイル名から仮の値が入るため、
+        後から直せるようにしておく（直せないとファイル名が会員に見えてしまう）。
+      */}
+      <VideoEditForm
+        videoId={video.id}
+        title={video.title}
+        description={video.description}
+        accessLevel={video.accessLevel}
+        expiresAt={video.expiresAt ? video.expiresAt.toISOString() : null}
+      />
 
       <Card>
         <CardHeader>
