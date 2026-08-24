@@ -169,4 +169,47 @@ describe('resolveThumbnailUrlAsync', () => {
       expect(await mod.resolveThumbnailUrlAsync('hls/v1/thumbnail.0000000.jpg')).toBeNull();
     });
   });
+
+  it('内部パス (DB 保存サムネイル) はそのまま返す', async () => {
+    // ここを S3 キーとして署名してしまうと存在しないオブジェクトを指し、
+    // S3 未設定環境でアップロードしたサムネイルが全部壊れる。
+    await load(async (mod) => {
+      const p = '/api/media/video-thumbnail/abc-123?v=1700000000000';
+      expect(await mod.resolveThumbnailUrlAsync(p)).toBe(p);
+    });
+  });
+
+  it('内部パスは配信設定が皆無でも返る (S3 に依存しないため)', async () => {
+    delete process.env.CLOUDFRONT_VIDEO_DOMAIN;
+    delete process.env.CLOUDFRONT_KEY_PAIR_ID;
+    delete process.env.CLOUDFRONT_PRIVATE_KEY;
+    delete process.env.S3_MEDIA_OUTPUT_BUCKET;
+    delete process.env.S3_VIDEO_BUCKET;
+    await load(async (mod) => {
+      const p = '/api/media/video-thumbnail/abc-123?v=1';
+      expect(await mod.resolveThumbnailUrlAsync(p)).toBe(p);
+    });
+  });
+
+  it('resolveThumbnailUrls は種類が混ざっていても正しく解決する', async () => {
+    delete process.env.CLOUDFRONT_VIDEO_DOMAIN;
+    delete process.env.CLOUDFRONT_KEY_PAIR_ID;
+    delete process.env.CLOUDFRONT_PRIVATE_KEY;
+    delete process.env.S3_MEDIA_OUTPUT_BUCKET;
+    delete process.env.S3_VIDEO_BUCKET;
+    await load(async (mod) => {
+      const out = await mod.resolveThumbnailUrls([
+        null,
+        'https://img.example.com/a.jpg',
+        '/api/media/video-thumbnail/x?v=1',
+        'hls/v1/thumbnail.0000000.jpg',
+      ]);
+      expect(out).toEqual([
+        null,
+        'https://img.example.com/a.jpg',
+        '/api/media/video-thumbnail/x?v=1',
+        null,
+      ]);
+    });
+  });
 });

@@ -1,7 +1,7 @@
 /**
  * PATCH /api/admin/videos/[id]
  *
- * 投稿済み動画のメタ情報（タイトル / 説明文 / 公開範囲 / 配信期限）を編集する。
+ * 投稿済み動画のメタ情報（タイトル / 説明文 / 公開範囲 / 配信期限 / サムネイルURL）を編集する。
  *
  * ## なぜ必要か
  * アップロード時にファイル名から仮のタイトルを自動入力する導線があるため
@@ -10,12 +10,23 @@
  * そのまま会員に見えてしまう。誤字の修正も再アップロードしかなくなる。
  *
  * ## 編集できる / できない項目の線引き
- * 可: title / description / accessLevel / expiresAt
+ * 可: title / description / accessLevel / expiresAt / thumbnailUrl
  *     → 運営が後から言い直せるべき「表示上の情報」。
  * 不可: s3SourceKey / s3HlsKey / status / durationSeconds / mediaConvertJob
  *     → S3 上の実体やエンコード結果と紐づく。DB だけ書き換えると
  *       実体と乖離して再生できなくなるため、意図的に受け付けない
  *       （zod の strict で未知キーを弾く）。
+ *
+ * ## thumbnailUrl をここで受ける理由と制限
+ * サムネイルの主導線は画像アップロード
+ * （POST /api/admin/videos/[id]/thumbnail、multipart）だが、
+ * 外部CDNの画像を使いたい / アップロードが使えない環境向けに
+ * 「URL 直接指定」も残している。ここはその URL 指定を受ける。
+ *
+ * 任意文字列をそのまま `<img src>` に流すと `javascript:` 等が入り得るため、
+ * http(s) 限定に絞る（validateThumbnailUrlInput）。null は「サムネイルを外す」。
+ * URL を指定した場合は DB 保存されていたバイト列（thumbnailData）も
+ * 併せて消す。残しておくと容量を食うだけで、もう配信されないため。
  *
  * ## isPublished を扱わない理由
  * 公開 / 非公開は visibility 専用 API に分けている。ここに混ぜると
@@ -33,6 +44,8 @@ import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { VIDEO_TITLE_MAX, VIDEO_DESCRIPTION_MAX } from '@/lib/video-edit';
+import { validateThumbnailUrlInput, classifyThumbnailValue } from '@/lib/video-thumbnail';
+import { deleteStoredThumbnailData } from '@/lib/video-thumbnail-store';
 
 export const runtime = 'nodejs';
 
@@ -44,6 +57,9 @@ const PatchSchema = z
     accessLevel: z.enum(['PUBLIC', 'MEMBERS', 'PREMIUM']).optional(),
     // null は「配信期限なし」
     expiresAt: z.iso.datetime().nullable().optional(),
+    // null は「サムネイルを外す」。値は http(s) の絶対URL、または
+    // アップロード API が返した内部パスのみ許す（後段で検証）。
+    thumbnailUrl: z.string().nullable().optional(),
   })
   // 実体と紐づくカラム（s3HlsKey / status など）を誤って渡せないよう未知キーを拒否する。
   .strict()
@@ -65,6 +81,19 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
 
   const data = parsed.data;
 
+  // サムネイルURLは zod だけでは足りない（javascript: 等を弾く必要がある）ので
+  // 専用の検証を通し、空文字列は null（=未設定）へ正規化する。
+  let thumbnailUrl: string | null | undefined;
+  if (data.thumbnailUrl !== undefined) {
+    if (data.thumbnailUrl === null) {
+      thumbnailUrl = null;
+    } else {
+      const check = validateThumbnailUrlInput(data.thumbnailUrl);
+      if (!check.ok) throw errors.unprocessable(check.message);
+      thumbnailUrl = check.value;
+    }
+  }
+
   const updated = await prisma.video.update({
     where: { id },
     data: {
@@ -74,7 +103,9 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
       ...(data.expiresAt !== undefined
         ? { expiresAt: data.expiresAt ? new Date(data.expiresAt) : null }
         : {}),
+      ...(thumbnailUrl !== undefined ? { thumbnailUrl } : {}),
     },
+
     select: {
       id: true,
       title: true,
@@ -83,6 +114,7 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
       expiresAt: true,
       isPublished: true,
       status: true,
+      thumbnailUrl: true,
     },
   });
 
@@ -114,8 +146,25 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
             },
           }
         : {}),
+      ...(thumbnailUrl !== undefined
+        ? {
+            thumbnailUrl: { from: existing.thumbnailUrl ?? null, to: thumbnailUrl },
+            thumbnailSource: 'url',
+          }
+        : {}),
     },
   });
+
+  // URL 直接指定（または解除）に切り替えた場合、DB に保存されていた画像本体は
+  // もう誰からも参照されないゴミになるので消す。
+  // ただし「アップロード API が返した内部パスをそのまま送り返した」ケースは
+  // 実体が今まさに参照されているので消してはいけない。
+  if (
+    thumbnailUrl !== undefined &&
+    classifyThumbnailValue(thumbnailUrl ?? '') !== 'internal'
+  ) {
+    await deleteStoredThumbnailData(id);
+  }
 
   // 公開範囲を厳しくした場合は、既存会員が見られなくなる点を伝える。
   const tightened =
