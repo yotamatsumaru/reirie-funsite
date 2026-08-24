@@ -588,6 +588,11 @@ model Video {
   durationSeconds Int?        @map("duration_seconds")
   accessLevel     AccessLevel @default(MEMBERS) @map("access_level")
   status          VideoStatus @default(UPLOADING)
+  /// 動画単位の公開 / 非公開スイッチ。
+  /// status(READY) はエンコードが終わったかどうかを表すだけなので、
+  /// 「エンコード済みだがまだ見せない」を表現できるよう独立したフラグを持つ。
+  /// 一覧・視聴に出るのは isPublished = true かつ status = READY のときのみ。
+  isPublished     Boolean     @default(true) @map("is_published")
   publishedAt     DateTime?   @map("published_at")
   expiresAt       DateTime?   @map("expires_at")
   mediaConvertJob String?     @map("media_convert_job_id")
@@ -598,6 +603,7 @@ model Video {
 
   @@index([status, publishedAt])
   @@index([accessLevel])
+  @@index([isPublished, status, publishedAt])
   @@map("videos")
 }
 

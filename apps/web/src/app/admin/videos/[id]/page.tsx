@@ -47,7 +47,13 @@ export default async function AdminVideoDetailPage({
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">{video.title}</h1>
-          <Badge tone={tone(video.status)}>{STATUS_LABEL[video.status] ?? video.status}</Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 公開スイッチとエンコード状態は別軸なので並べて表示する */}
+            <Badge tone={video.isPublished ? 'success' : 'gray'}>
+              {video.isPublished ? '公開中' : '非公開'}
+            </Badge>
+            <Badge tone={tone(video.status)}>{STATUS_LABEL[video.status] ?? video.status}</Badge>
+          </div>
         </div>
       </div>
 
@@ -98,6 +104,7 @@ export default async function AdminVideoDetailPage({
         videoId={video.id}
         status={video.status}
         hasHls={Boolean(video.s3HlsKey)}
+        isPublished={video.isPublished}
       />
     </div>
   );

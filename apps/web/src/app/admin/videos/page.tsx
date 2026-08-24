@@ -18,6 +18,7 @@ export default async function AdminVideosPage() {
       id: true,
       title: true,
       status: true,
+      isPublished: true,
       accessLevel: true,
       durationSeconds: true,
       publishedAt: true,
@@ -57,6 +58,9 @@ export default async function AdminVideosPage() {
                   {v.title}
                 </Link>
                 <div className="flex flex-wrap gap-1.5 text-xs">
+                  <Badge tone={v.isPublished ? 'success' : 'gray'}>
+                    {v.isPublished ? '公開中' : '非公開'}
+                  </Badge>
                   <Badge tone="gray">{v.accessLevel}</Badge>
                   <Badge tone={tone(v.status)}>{v.status}</Badge>
                   {v.durationSeconds && (
@@ -79,6 +83,7 @@ export default async function AdminVideosPage() {
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">タイトル</th>
+                <th className="px-4 py-3">公開</th>
                 <th className="px-4 py-3">アクセス</th>
                 <th className="px-4 py-3">尺</th>
                 <th className="px-4 py-3">状態</th>
@@ -92,6 +97,11 @@ export default async function AdminVideosPage() {
                     <Link href={`/admin/videos/${v.id}`} className="text-brand-600 hover:underline">
                       {v.title}
                     </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={v.isPublished ? 'success' : 'gray'}>
+                      {v.isPublished ? '公開中' : '非公開'}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">{v.accessLevel}</td>
                   <td className="px-4 py-3">
@@ -107,7 +117,7 @@ export default async function AdminVideosPage() {
               ))}
               {videos.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                     動画はありません
                   </td>
                 </tr>
