@@ -37,8 +37,27 @@
  * を署名できるため、1 つの署名クエリを全セグメントで共有できる。
  * 一方 **S3 プリサインド URL はオブジェクト 1 つごとに署名が必要** で、
  * 共有クエリという概念が無い。
- * そのため S3 モードではプレイリストを書き換える際に、含まれる URI を
- * 全て列挙して個別に署名する必要がある (`presignPlaylistUris`)。
+ *
+ * ## S3 プリサインド URL をブラウザに渡さない理由 (CORS)
+ *
+ * 当初は「セグメント 1 本ごとにプリサインドして、その URL をプレイリストに
+ * 埋め込む」実装にしていた。しかしこれだとブラウザが
+ * `https://<bucket>.s3.<region>.amazonaws.com/...` へ **クロスオリジン**で
+ * セグメントを取りに行くため、出力バケットに CORS 許可が必要になる。
+ * CORS を付けるには `cdk deploy` (= AWS 側の追加作業) が必要で、
+ * 「AWS を触らずに再生できるようにする」という要件を満たせない。
+ *
+ * そこで **プリサインド URL はサーバ内部でしか使わない**。
+ * セグメントは `/api/videos/<id>/hls/<file>` から自サーバが中継して配信し、
+ * ブラウザから見れば全て同一オリジンになる (CORS 設定は一切不要)。
+ * 詳細は `hls-segment.ts` と HLS プロキシルートを参照。
+ *
+ * その結果このファイルが公開する非同期署名は
+ *   - プレイリスト本体の取得 (サーバ→S3)
+ *   - セグメント中継時の取得 (サーバ→S3)
+ *   - サムネイル (これは `<img src>` で単純 GET されるだけなので
+ *     クロスオリジンでも CORS 不要 = そのままブラウザに渡してよい)
+ * の 3 用途のみとなる。
  */
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl as s3SignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -196,30 +215,6 @@ export async function resolveThumbnailUrls(
   ttlSec: number = VIDEO_SIGNED_URL_TTL_SEC,
 ): Promise<Array<string | null>> {
   return Promise.all(values.map((v) => resolveThumbnailUrlAsync(v, ttlSec)));
-}
-
-/**
- * プレイリスト内の相対 URI をすべて署名し、`URI → 署名済み絶対URL` の
- * Map を返す (S3 モード用)。
- *
- * CloudFront のように共有署名クエリが使えないため、セグメント 1 本ごとに
- * プリサインドを発行する。1 プレイリストあたり数十〜数百本になり得るので
- * 並列化する。プリサインドはローカル計算 (HMAC) でネットワークアクセスを
- * 伴わないため、件数が多くても実用的に高速。
- */
-export async function presignPlaylistUris(
-  dir: string,
-  uris: string[],
-  ttlSec: number = VIDEO_SIGNED_URL_TTL_SEC,
-): Promise<Map<string, string>> {
-  const unique = Array.from(new Set(uris));
-  const entries = await Promise.all(
-    unique.map(async (uri) => {
-      const url = await presignS3Get(`${dir}${uri}`, ttlSec);
-      return [uri, url] as const;
-    }),
-  );
-  return new Map(entries);
 }
 
 /** 再エクスポート (呼び出し側の import を 1 箇所にまとめるため) */

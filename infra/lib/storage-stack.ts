@@ -105,17 +105,19 @@ export class StorageStack extends Stack {
       removalPolicy,
       autoDeleteObjects: config.destroyOnRemove,
       /**
-       * CORS (GET) が必要な理由:
+       * CORS (GET/HEAD) — **現在の再生経路では不要**。将来用の保険として残す。
        *
-       * CloudFront 署名鍵 (CLOUDFRONT_KEY_PAIR_ID / CLOUDFRONT_PRIVATE_KEY) が
-       * 未設定の場合、アプリは **S3 プリサインド URL** で HLS を配信する
-       * (`apps/web/src/lib/video-delivery.ts`)。このとき hls.js は
-       * ブラウザから XHR で S3 のセグメントを直接取得するため、
-       * CORS 許可が無いと再生できない (ネイティブ HLS の iOS Safari は
-       * `<video src>` なので CORS 不要だが、PC ブラウザは hls.js 経路)。
+       * CloudFront 署名鍵が未設定のとき、アプリは S3 から HLS を配信するが
+       * (`apps/web/src/lib/video-delivery.ts`)、プリサインド URL を
+       * **ブラウザには渡さず、Next.js が中継して同一オリジンで配信する**
+       * 実装になっている (`apps/web/src/lib/hls-segment.ts`)。
+       * そのためブラウザは S3 へクロスオリジン要求を行わず、
+       * この CORS 設定に依存しない = 既存環境で `cdk deploy` は不要。
        *
-       * バケット自体は BLOCK_ALL のままなので公開はされない。
-       * プリサインド URL を持つリクエストだけが通る。
+       * 残している理由: 将来「セグメントを S3 から直接ブラウザへ配る」
+       * (帯域をアプリサーバに通さない) 構成に切り替える余地を残すため。
+       * 付けていても公開範囲は広がらない (バケットは BLOCK_ALL のままで、
+       * プリサインド URL を持つリクエストだけが通る)。
        */
       cors: [
         {
