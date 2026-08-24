@@ -54,7 +54,7 @@ MediaConvert はジョブに指定されたロールを自分で引き受けて 
 | 優先 | モード | 必要な設定 | 備考 |
 | --- | --- | --- | --- |
 | 1 | `cloudfront` | `CLOUDFRONT_VIDEO_DOMAIN` + `CLOUDFRONT_KEY_PAIR_ID` + `CLOUDFRONT_PRIVATE_KEY` | **推奨**。CDN キャッシュが効き転送量も安い |
-| 2 | `s3` | `S3_MEDIA_OUTPUT_BUCKET`（未設定なら `S3_VIDEO_BUCKET`） | フォールバック。S3 プリサインド URL で直接配信 |
+| 2 | `s3` | `S3_MEDIA_OUTPUT_BUCKET`（未設定なら `S3_VIDEO_BUCKET`） | フォールバック。**AWS 側の追加設定は一切不要** |
 | 3 | `none` | — | 上記どちらも無い場合のみ再生不可 |
 
 現在どちらで配信されているかは
@@ -86,15 +86,34 @@ MediaConvert はジョブに指定されたロールを自分で引き受けて 
 | `CLOUDFRONT_KEY_PAIR_ID` | 署名付き URL 用のパブリックキー ID | context 指定時のみ CDK が登録（手順 D-2 / D-3） |
 | `CLOUDFRONT_PRIVATE_KEY` | 署名用の秘密鍵 (PEM) | **手動で SSM に登録**（手順 D-4） |
 
-#### S3 フォールバックの注意点
+#### S3 フォールバックの仕組みと注意点
 
+**AWS 側の設定作業は一切不要です。**（CloudFront の鍵作成も、S3 の CORS 設定も不要）
+
+仕組み：`s3` モードではプレイリストもセグメントも
+`/api/videos/<id>/hls/<file>` から **自サーバが中継して配信**します。
+
+```
+ブラウザ ──(同一オリジン)──> Next.js ──(プリサインドURL)──> S3
+```
+
+- **なぜ中継するのか（重要）**
+  S3 のプリサインド URL をプレイリストに直接埋め込むと、ブラウザが
+  `<bucket>.s3.<region>.amazonaws.com` へ**クロスオリジン**で
+  セグメントを取得するため、出力バケットに CORS 許可が必要になります
+  （= `cdk deploy` が必要）。
+  自サーバから配れば同一オリジンなので **CORS 設定は完全に不要**です。
+  プリサインド URL はサーバ内部でしか使わず、ブラウザには渡しません。
 - 出力バケットは `BlockPublicAccess.BLOCK_ALL` のままで、公開はされません。
-  プリサインド URL を持つリクエストのみ通ります。
-- ブラウザが S3 を直接叩くため、出力バケットに **GET/HEAD の CORS 許可**が必要です
-  （`storage-stack.ts` で設定済み。既存環境は `cdk deploy '*-storage'` で反映）。
-- CloudFront と違いワイルドカード署名ができないため、
-  セグメントを 1 本ずつ署名します（HMAC のローカル計算のみで高速）。
-- CDN キャッシュが効かないため、視聴が多い場合は CloudFront の設定を推奨します。
+- セグメントも `requirePlayableVideo()` を通るため、
+  未ログイン / プラン不足では 401 / 403 になります（オープンプロキシではない）。
+- `Range` ヘッダを S3 へ転送し `206` をそのまま返すため、シークも動作します。
+- 帯域が Next.js サーバを通るため、視聴が多い場合は CloudFront を推奨します
+  （鍵を設定すれば自動的に `cloudfront` モードへ切り替わります）。
+
+> 出力バケットの CORS 設定（`storage-stack.ts`）は、この中継方式では
+> **不要**になりました。将来 S3 を直接ブラウザに配らせる構成に戻す場合の
+> 保険として残していますが、反映のための `cdk deploy` は不要です。
 
 ### 完了時の自動公開に必要
 
@@ -871,7 +890,8 @@ shred -u ~/cf-keys/cf-private.pem 2>/dev/null || rm -f ~/cf-keys/cf-private.pem
 | 10 | 署名なしは 403 | `curl https://<cf-domain>/hls/<id>/index.m3u8` |
 
 > `deliveryMode` が `s3` の場合、CloudFront の署名鍵が未設定です。
-> 再生自体は S3 プリサインド URL で可能ですが、CDN キャッシュが効かないため
+> **この状態でも再生できます**（自サーバ中継のため AWS 側の追加設定は不要）。
+> ただし帯域が Next.js サーバを通り CDN キャッシュも効かないため、
 > 視聴数が増える前に手順 D で CloudFront 署名を設定することを推奨します。
 > `none` の場合は `S3_MEDIA_OUTPUT_BUCKET` すら未設定なので、まずそれを設定してください。
 
