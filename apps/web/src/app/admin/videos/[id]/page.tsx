@@ -82,9 +82,20 @@ export default async function AdminVideoDetailPage({
               value={video.durationSeconds ? `${Math.floor(video.durationSeconds / 60)}分${video.durationSeconds % 60}秒` : '—'}
             />
             <Field label="視聴回数" value={`${video._count.viewLogs} 回`} />
+            {/*
+              公開開始日時が未来のときは「予約」と明示する。
+              日時だけを出すと、公開済みなのか待機中なのかが読み取れず
+              「公開したのに会員側に出ない」という問い合わせにつながる。
+            */}
             <Field
-              label="公開日時"
-              value={video.publishedAt ? formatJstDateTime(video.publishedAt) : '未公開'}
+              label="公開開始日時"
+              value={
+                video.publishedAt
+                  ? `${formatJstDateTime(video.publishedAt)}${
+                      video.publishedAt > new Date() ? '（公開予約中）' : ''
+                    }`
+                  : '未設定'
+              }
             />
             <Field
               label="配信期限"
@@ -107,6 +118,7 @@ export default async function AdminVideoDetailPage({
         title={video.title}
         description={video.description}
         accessLevel={video.accessLevel}
+        publishedAt={video.publishedAt ? video.publishedAt.toISOString() : null}
         expiresAt={video.expiresAt ? video.expiresAt.toISOString() : null}
         thumbnailUrl={video.thumbnailUrl}
         thumbnailPreviewUrl={thumbnailPreviewUrl}

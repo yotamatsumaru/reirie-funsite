@@ -1,13 +1,19 @@
 /**
- * 動画メタ情報（タイトル / 説明 / 公開範囲 / 配信期限）編集のロジック。
+ * 動画メタ情報（タイトル / 説明 / 公開範囲 / 公開開始日時 / 配信期限）編集のロジック。
  *
  * ## なぜ純粋関数として切り出すか
  * jest の testMatch は `**\/*.test.ts` のみで `.tsx` を拾わない。
  * 入力の正規化や差分検出はバグが混入しやすい割に UI と絡めるとテストしづらいので、
  * React に依存しない形でここに集約してユニットテストの対象にする。
  *
+ * ## 公開期間（publishedAt / expiresAt）
+ * `publishedAt` は「いつから見せるか」、`expiresAt` は「いつまで見せるか」。
+ * 一覧クエリ（listableVideoWhere）が `publishedAt <= now < expiresAt` を
+ * 条件にしているので、publishedAt に未来の日時を入れるだけで
+ * 「予約公開」になる（バッチ処理は不要）。
+ *
  * ## 編集可能な項目と、そうでない項目
- * 編集可: title / description / accessLevel / expiresAt / thumbnailUrl
+ * 編集可: title / description / accessLevel / publishedAt / expiresAt / thumbnailUrl
  *   → いずれも「運営が後から言い直せるべき」情報。アップロード時に
  *     ファイル名から仮のタイトルを入れる導線があるため、後から直せないと
  *     ファイル名がそのまま会員に見えてしまう。
@@ -27,6 +33,12 @@ export type VideoEditFormValues = {
   title: string;
   description: string;
   accessLevel: string;
+  /**
+   * 公開開始日時。`<input type="datetime-local">` の値。
+   * 空文字は「未設定」= 公開スイッチが ON でも一覧に出ない。
+   * 未来の日時なら予約公開。
+   */
+  publishedAt: string;
   /** `<input type="datetime-local">` の値。空文字は「期限なし」 */
   expiresAt: string;
   /**
@@ -46,6 +58,7 @@ export type VideoEditPatch = {
   title?: string;
   description?: string | null;
   accessLevel?: string;
+  publishedAt?: string | null;
   expiresAt?: string | null;
   thumbnailUrl?: string | null;
 };
@@ -109,8 +122,23 @@ export function validateVideoEdit(
       message: `説明文は${VIDEO_DESCRIPTION_MAX}文字以内で入力してください`,
     };
   }
-  if (values.expiresAt.trim() && fromDatetimeLocalJst(values.expiresAt) === null) {
+  const publishedIso = values.publishedAt.trim()
+    ? fromDatetimeLocalJst(values.publishedAt)
+    : null;
+  if (values.publishedAt.trim() && publishedIso === null) {
+    return { ok: false, message: '公開開始日時の日時が不正です' };
+  }
+  const expiresIso = values.expiresAt.trim() ? fromDatetimeLocalJst(values.expiresAt) : null;
+  if (values.expiresAt.trim() && expiresIso === null) {
     return { ok: false, message: '配信期限の日時が不正です' };
+  }
+  // 公開開始が終了以降だと「一度も表示されない動画」ができてしまう。
+  // 保存自体は DB 制約上通ってしまうため、ここで気付けるようにする。
+  if (publishedIso && expiresIso && publishedIso >= expiresIso) {
+    return {
+      ok: false,
+      message: '公開開始日時は配信期限より前にしてください（このままでは動画が表示されません）',
+    };
   }
   // サムネイルは「運営が値を変えたとき」だけ検証する（上のコメント参照）。
   // 検証ロジック自体は video-thumbnail.ts に集約してサーバと共用する
@@ -148,6 +176,10 @@ export function buildVideoEditPatch(
   if (current.accessLevel !== initial.accessLevel) patch.accessLevel = current.accessLevel;
 
   // 日時は文字列比較だと表記揺れを拾うので ISO 化して比較する。
+  const nextPub = fromDatetimeLocalJst(current.publishedAt);
+  const prevPub = fromDatetimeLocalJst(initial.publishedAt);
+  if (nextPub !== prevPub) patch.publishedAt = nextPub;
+
   const nextExp = fromDatetimeLocalJst(current.expiresAt);
   const prevExp = fromDatetimeLocalJst(initial.expiresAt);
   if (nextExp !== prevExp) patch.expiresAt = nextExp;

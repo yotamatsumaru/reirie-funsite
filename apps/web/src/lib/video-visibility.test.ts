@@ -3,6 +3,8 @@ import {
   isVideoPlayable,
   isVideoLocked,
   isVideoExpired,
+  isVideoScheduled,
+  videoPublishState,
   videoLockReason,
   listableVideoWhere,
   type VideoVisibilityInput,
@@ -179,5 +181,113 @@ describe('listableVideoWhere', () => {
     const where = listableVideoWhere(NOW);
     // where 句にプラン/accessLevel の条件が入っていないこと
     expect(Object.keys(where)).not.toContain('accessLevel');
+  });
+});
+
+/**
+ * 公開予約の判定。
+ *
+ * 管理画面のバッジ表示に使う。ここがずれると
+ * 「予約したつもりが公開されていた」「公開したのに出ない」の取り違えが起きる。
+ */
+describe('isVideoScheduled', () => {
+  it('公開開始日時が未来なら予約中', () => {
+    expect(
+      isVideoScheduled(video({ publishedAt: new Date('2026-09-01T00:00:00Z') }), NOW),
+    ).toBe(true);
+  });
+
+  it('公開開始日時が過去なら予約中ではない（もう公開済み）', () => {
+    expect(isVideoScheduled(video(), NOW)).toBe(false);
+  });
+
+  it('公開スイッチが OFF なら予約ではなく単なる非公開', () => {
+    expect(
+      isVideoScheduled(
+        video({ isPublished: false, publishedAt: new Date('2026-09-01T00:00:00Z') }),
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it('エンコード未完了なら予約中と表示しない（日時が来ても公開されないため）', () => {
+    expect(
+      isVideoScheduled(
+        video({ status: 'PROCESSING', publishedAt: new Date('2026-09-01T00:00:00Z') }),
+        NOW,
+      ),
+    ).toBe(false);
+  });
+
+  it('公開開始日時が未設定なら予約中ではない', () => {
+    expect(isVideoScheduled(video({ publishedAt: null }), NOW)).toBe(false);
+  });
+
+  it('期限切れなら予約中にしない', () => {
+    expect(
+      isVideoScheduled(
+        video({
+          publishedAt: new Date('2026-09-01T00:00:00Z'),
+          expiresAt: new Date('2026-08-01T00:00:00Z'),
+        }),
+        NOW,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('videoPublishState', () => {
+  it('公開中', () => {
+    expect(videoPublishState(video(), NOW)).toBe('live');
+  });
+
+  it('非公開スイッチが最優先', () => {
+    expect(videoPublishState(video({ isPublished: false }), NOW)).toBe('unpublished');
+  });
+
+  it('エンコード中', () => {
+    expect(videoPublishState(video({ status: 'PROCESSING' }), NOW)).toBe('encoding');
+  });
+
+  it('公開予約中', () => {
+    expect(
+      videoPublishState(video({ publishedAt: new Date('2026-09-01T00:00:00Z') }), NOW),
+    ).toBe('scheduled');
+  });
+
+  it('配信終了', () => {
+    expect(
+      videoPublishState(video({ expiresAt: new Date('2026-08-01T00:00:00Z') }), NOW),
+    ).toBe('expired');
+  });
+
+  it('公開スイッチ ON でも公開日時が無ければ一覧に出ないので専用の状態にする', () => {
+    expect(videoPublishState(video({ publishedAt: null }), NOW)).toBe('no_date');
+  });
+
+  it('期限切れは予約より優先される（過去の期限が入っていれば結果は終了）', () => {
+    expect(
+      videoPublishState(
+        video({
+          publishedAt: new Date('2026-09-01T00:00:00Z'),
+          expiresAt: new Date('2026-08-01T00:00:00Z'),
+        }),
+        NOW,
+      ),
+    ).toBe('expired');
+  });
+
+  it('live と判定される状態は isVideoListable と一致する', () => {
+    const cases = [
+      video(),
+      video({ publishedAt: new Date('2026-09-01T00:00:00Z') }),
+      video({ isPublished: false }),
+      video({ status: 'PROCESSING' }),
+      video({ publishedAt: null }),
+      video({ expiresAt: new Date('2026-08-01T00:00:00Z') }),
+    ];
+    for (const v of cases) {
+      expect(videoPublishState(v, NOW) === 'live').toBe(isVideoListable(v, NOW));
+    }
   });
 });
