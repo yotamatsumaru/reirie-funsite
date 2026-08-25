@@ -1,8 +1,9 @@
 /**
- * PATCH /api/admin/videos/[id]
+ * PATCH / DELETE /api/admin/videos/[id]
  *
- * 投稿済み動画のメタ情報（タイトル / 説明文 / 公開範囲 / 公開開始日時 / 配信期限 /
+ * PATCH: 投稿済み動画のメタ情報（タイトル / 説明文 / 公開範囲 / 公開開始日時 / 配信期限 /
  * サムネイルURL）を編集する。
+ * DELETE: 動画を DB と S3 の実体ごと削除する（詳細は DELETE 直前のコメント参照）。
  *
  * ## なぜ必要か
  * アップロード時にファイル名から仮のタイトルを自動入力する導線があるため
@@ -47,6 +48,9 @@ import { logAudit } from '@/lib/audit';
 import { VIDEO_TITLE_MAX, VIDEO_DESCRIPTION_MAX } from '@/lib/video-edit';
 import { validateThumbnailUrlInput, classifyThumbnailValue } from '@/lib/video-thumbnail';
 import { deleteStoredThumbnailData } from '@/lib/video-thumbnail-store';
+import { buildVideoDeletionPlan } from '@/lib/video-delete';
+import { deleteObject, deleteByPrefix } from '@/lib/s3';
+import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
@@ -222,6 +226,134 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
       : tightened
         ? '保存しました。公開範囲を狭めたため、対象外のプランの会員には表示されなくなります。'
         : '保存しました',
+  });
+});
+
+/**
+ * DELETE /api/admin/videos/[id]
+ *
+ * 動画を削除する。DB のレコードと S3 上の実体（ソース動画 / HLS 出力 /
+ * アップロード済みサムネイル）をまとめて消す。
+ *
+ * ## なぜ必要か
+ * これまで動画には削除手段が無く、不要になったものは「非公開」にして
+ * 一覧に残し続けるしかなかった。テストアップロードやエンコード失敗で
+ * PROCESSING のまま固まった行が管理画面に溜まり、
+ *   - 運営が本番の動画を探しにくい
+ *   - S3 に二度と使われないファイルの課金が発生し続ける
+ * という状態になっていた。
+ *
+ * ## 論理削除ではなく物理削除にした理由
+ * 非公開スイッチ（isPublished）が既に「消さずに隠す」役割を持っている。
+ * ここにさらに deletedAt を足すと「非公開」と「削除済み」の2つの隠し状態が
+ * 並立し、一覧・視聴・エンコード完了通知のすべてに条件が増える。
+ * 「隠したいだけなら非公開、消したいなら削除」と役割を分ける方が明快。
+ *
+ * ## 削除順序（DB → S3）
+ * 先に DB を消す。逆順（S3 → DB）にすると、S3 削除の後で DB 削除に失敗した場合に
+ * 「一覧に出るのに再生できない壊れた動画」が残る。DB を先に消せば、
+ * 万一 S3 削除が失敗しても残るのは “誰からも参照されないファイル” だけで、
+ * 会員から見える不整合は起きない。
+ *
+ * ## S3 削除を失敗させない（best-effort）理由
+ * S3 の権限不足やネットワーク断で例外が出たときに 500 を返すと、
+ * DB は既に消えているのに管理画面には「削除に失敗しました」と出て、
+ * 運営が再実行しても “動画が見つかりません” になり混乱する。
+ * S3 側は失敗しても課金が続くだけで機能的な破綻はないため、
+ * 例外を握りつぶして監査ログに記録し、レスポンスでも件数を伝える。
+ *
+ * ## 関連レコード
+ * VideoViewLog / VideoThumbnail は schema.prisma で onDelete: Cascade を
+ * 宣言しているため、video.delete だけで一緒に消える（手動削除は不要）。
+ * 視聴ログが消えることで過去の視聴回数集計からも除かれるが、
+ * 動画自体が存在しない以上その集計対象にする意味が無いので許容する。
+ */
+export const DELETE = handle(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  const session = await requireCapability('CONTENT');
+  const { id } = await ctx.params;
+
+  const existing = await prisma.video.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      isPublished: true,
+      s3SourceKey: true,
+      thumbnailUrl: true,
+    },
+  });
+  if (!existing) throw errors.notFound('動画が見つかりません');
+
+  // 消す対象は DB を消す前に確定させる（消した後では s3SourceKey を読めない）。
+  const plan = buildVideoDeletionPlan(existing);
+
+  // 監査ログを先に書く。DB 削除後だと、S3 削除の途中で
+  // プロセスが落ちた場合に「誰が何を消したか」の記録だけが失われる。
+  await logAudit({
+    userId: session.user.id,
+    action: 'admin.video.delete',
+    resource: `video:${id}`,
+    metadata: {
+      title: existing.title,
+      status: existing.status,
+      isPublished: existing.isPublished,
+      sourceKey: plan.sourceKey,
+      hlsPrefix: plan.hlsPrefix,
+    },
+  });
+
+  // Cascade により video_view_logs / video_thumbnails も同時に消える。
+  await prisma.video.delete({ where: { id } });
+
+  // ここから先は best-effort。失敗しても削除自体は成立している。
+  const storageErrors: string[] = [];
+  let deletedObjects = 0;
+
+  if (plan.sourceKey) {
+    try {
+      await deleteObject(env.s3.videoBucket, plan.sourceKey);
+      deletedObjects += 1;
+    } catch (e) {
+      storageErrors.push(`source: ${(e as Error).message}`);
+    }
+  }
+
+  try {
+    deletedObjects += await deleteByPrefix(env.s3.mediaOutputBucket, plan.hlsPrefix);
+  } catch (e) {
+    storageErrors.push(`hls: ${(e as Error).message}`);
+  }
+
+  // アセットバケット未設定時（サムネイルを DB 保存している構成）は
+  // 消すものが無いので呼ばない。deleteByPrefix はバケット空文字なら
+  // 0 を返すが、意図を明示するため条件を書いておく。
+  if (env.s3.assetBucket) {
+    try {
+      deletedObjects += await deleteByPrefix(env.s3.assetBucket, plan.thumbnailPrefix);
+    } catch (e) {
+      storageErrors.push(`thumbnail: ${(e as Error).message}`);
+    }
+  }
+
+  if (storageErrors.length > 0) {
+    // 運営には「DBからは消えた」ことを伝えつつ、S3 に残骸がある事実も残す。
+    await logAudit({
+      userId: session.user.id,
+      action: 'admin.video.delete_storage_failed',
+      resource: `video:${id}`,
+      metadata: { errors: storageErrors },
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    deletedObjects,
+    storageWarning: storageErrors.length > 0,
+    message:
+      storageErrors.length > 0
+        ? '動画を削除しました（一部のファイルはストレージ上に残った可能性があります）'
+        : '動画を削除しました',
   });
 });
 
