@@ -1,7 +1,8 @@
 /**
  * PATCH /api/admin/videos/[id]
  *
- * 投稿済み動画のメタ情報（タイトル / 説明文 / 公開範囲 / 配信期限 / サムネイルURL）を編集する。
+ * 投稿済み動画のメタ情報（タイトル / 説明文 / 公開範囲 / 公開開始日時 / 配信期限 /
+ * サムネイルURL）を編集する。
  *
  * ## なぜ必要か
  * アップロード時にファイル名から仮のタイトルを自動入力する導線があるため
@@ -10,7 +11,7 @@
  * そのまま会員に見えてしまう。誤字の修正も再アップロードしかなくなる。
  *
  * ## 編集できる / できない項目の線引き
- * 可: title / description / accessLevel / expiresAt / thumbnailUrl
+ * 可: title / description / accessLevel / publishedAt / expiresAt / thumbnailUrl
  *     → 運営が後から言い直せるべき「表示上の情報」。
  * 不可: s3SourceKey / s3HlsKey / status / durationSeconds / mediaConvertJob
  *     → S3 上の実体やエンコード結果と紐づく。DB だけ書き換えると
@@ -55,6 +56,10 @@ const PatchSchema = z
     // null は「説明文を消す」の意思表示。undefined（キー自体なし）は「変更しない」。
     description: z.string().max(VIDEO_DESCRIPTION_MAX).nullable().optional(),
     accessLevel: z.enum(['PUBLIC', 'MEMBERS', 'PREMIUM']).optional(),
+    // 公開開始日時。未来の日時を入れると「予約公開」になる
+    // （一覧クエリが publishedAt <= now を条件にしているため、時刻が来るまで出ない）。
+    // null は「公開開始日時なし」= 公開スイッチが ON でも一覧に出ない状態。
+    publishedAt: z.iso.datetime().nullable().optional(),
     // null は「配信期限なし」
     expiresAt: z.iso.datetime().nullable().optional(),
     // null は「サムネイルを外す」。値は http(s) の絶対URL、または
@@ -94,12 +99,36 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
     }
   }
 
+  // 公開開始が終了以降だと一度も表示されない動画になるので、保存前に弾く。
+  // 部分更新なので、送られていない項目は既存値を使って判定する
+  // （片方だけ直したときも矛盾を検知できるように）。
+  const nextPublishedAt =
+    data.publishedAt !== undefined
+      ? data.publishedAt
+        ? new Date(data.publishedAt)
+        : null
+      : existing.publishedAt;
+  const nextExpiresAt =
+    data.expiresAt !== undefined
+      ? data.expiresAt
+        ? new Date(data.expiresAt)
+        : null
+      : existing.expiresAt;
+  if (nextPublishedAt && nextExpiresAt && nextPublishedAt >= nextExpiresAt) {
+    throw errors.unprocessable(
+      '公開開始日時は配信期限より前にしてください（このままでは動画が表示されません）',
+    );
+  }
+
   const updated = await prisma.video.update({
     where: { id },
     data: {
       ...(data.title !== undefined ? { title: data.title } : {}),
       ...(data.description !== undefined ? { description: data.description } : {}),
       ...(data.accessLevel !== undefined ? { accessLevel: data.accessLevel } : {}),
+      ...(data.publishedAt !== undefined
+        ? { publishedAt: data.publishedAt ? new Date(data.publishedAt) : null }
+        : {}),
       ...(data.expiresAt !== undefined
         ? { expiresAt: data.expiresAt ? new Date(data.expiresAt) : null }
         : {}),
@@ -111,6 +140,7 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
       title: true,
       description: true,
       accessLevel: true,
+      publishedAt: true,
       expiresAt: true,
       isPublished: true,
       status: true,
@@ -137,6 +167,14 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
         : {}),
       ...(data.accessLevel !== undefined
         ? { accessLevel: { from: existing.accessLevel, to: data.accessLevel } }
+        : {}),
+      ...(data.publishedAt !== undefined
+        ? {
+            publishedAt: {
+              from: existing.publishedAt?.toISOString() ?? null,
+              to: data.publishedAt ?? null,
+            },
+          }
         : {}),
       ...(data.expiresAt !== undefined
         ? {
@@ -171,14 +209,28 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
     data.accessLevel !== undefined &&
     rank(data.accessLevel) > rank(existing.accessLevel);
 
+  // 予約公開になった場合は「今は見えない」ことを明示する。
+  // これを言わないと運営が「保存したのに会員側に出ない」と混乱する。
+  const scheduled =
+    data.publishedAt !== undefined && nextPublishedAt !== null && nextPublishedAt > new Date();
+
   return NextResponse.json({
     ok: true,
     video: updated,
-    message: tightened
-      ? '保存しました。公開範囲を狭めたため、対象外のプランの会員には表示されなくなります。'
-      : '保存しました',
+    message: scheduled
+      ? `保存しました。${formatJstForMessage(nextPublishedAt)} に公開予約されました（それまで会員側には表示されません）。`
+      : tightened
+        ? '保存しました。公開範囲を狭めたため、対象外のプランの会員には表示されなくなります。'
+        : '保存しました',
   });
 });
+
+/** 管理者向けメッセージ用に日時を JST で読みやすく整形する */
+function formatJstForMessage(d: Date): string {
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  const iso = jst.toISOString();
+  return `${iso.slice(0, 4)}/${iso.slice(5, 7)}/${iso.slice(8, 10)} ${iso.slice(11, 16)}`;
+}
 
 /** 公開範囲の厳しさ（大きいほど限定的） */
 function rank(level: string): number {

@@ -49,6 +49,12 @@ export const CreateVideoSchema = z.object({
   description: z.string().optional(),
   s3SourceKey: z.string().min(1),
   accessLevel: z.enum(ACCESS_LEVELS).default('MEMBERS'),
+  /**
+   * 公開開始日時。未来の日時を入れると「公開予約」になる
+   * （一覧クエリが publishedAt <= now を条件にしているため、時刻が来るまで出ない）。
+   * 未指定の場合はエンコード完了時に現在時刻が入る（= 完了しだい公開）。
+   */
+  publishedAt: z.iso.datetime().optional(),
   expiresAt: z.iso.datetime().optional(),
 });
 export type CreateVideoInput = z.infer<typeof CreateVideoSchema>;

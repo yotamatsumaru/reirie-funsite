@@ -1,7 +1,8 @@
 /**
  * 動画メタ情報の編集フォーム（Client Component）
  *
- * タイトル / 説明文 / 公開範囲 / 配信期限 / サムネイルを後から直せるようにする。
+ * タイトル / 説明文 / 公開範囲 / 公開開始日時 / 配信期限 / サムネイルを
+ * 後から直せるようにする。
  * アップロード時にファイル名が仮タイトルとして入るため、
  * ここで直せないとファイル名がそのまま会員に見えてしまう。
  *
@@ -11,8 +12,14 @@
  * - 保存は差分のみ送る（buildVideoEditPatch）。触っていない項目は送らないので
  *   同時編集時に他人の変更を巻き戻さない。
  * - 検証ロジック・日時変換は lib/video-edit.ts の純粋関数に寄せてテスト済み。
- * - 公開 / 非公開はここでは扱わない（専用の visibility API がある）。
- *   保存操作で公開状態が意図せず変わる事故を避けるため。
+ * - 公開 / 非公開のスイッチ（isPublished）はここでは扱わない
+ *   （専用の visibility API がある）。保存操作で公開状態が
+ *   意図せず変わる事故を避けるため。
+ *
+ * ## 公開開始日時（publishedAt）をここで扱う理由
+ * スイッチの ON/OFF と違い、日時は「いつから見せるか」という
+ * 予定の入力であり、保存した瞬間に公開状態が反転するわけではない。
+ * 配信期限（expiresAt）と対で入力したい項目なので同じフォームに置く。
  *
  * ## サムネイルだけ「保存」を待たず即時反映する理由
  * 画像のアップロードは multipart なので、テキストの差分 PATCH（JSON）と
@@ -34,6 +41,7 @@ import {
   isEmptyPatch,
   validateVideoEdit,
   toDatetimeLocalJst,
+  fromDatetimeLocalJst,
   VIDEO_TITLE_MAX,
   VIDEO_DESCRIPTION_MAX,
   type VideoEditFormValues,
@@ -74,6 +82,7 @@ export function VideoEditForm({
   title,
   description,
   accessLevel,
+  publishedAt,
   expiresAt,
   thumbnailUrl,
   thumbnailPreviewUrl,
@@ -82,6 +91,8 @@ export function VideoEditForm({
   title: string;
   description: string | null;
   accessLevel: string;
+  /** 公開開始日時。ISO 文字列 or null */
+  publishedAt: string | null;
   /** ISO 文字列 or null */
   expiresAt: string | null;
   /** DB に入っている生の値（S3 キー / 絶対URL / 内部パス） */
@@ -100,6 +111,7 @@ export function VideoEditForm({
     title,
     description: description ?? '',
     accessLevel,
+    publishedAt: toDatetimeLocalJst(publishedAt),
     expiresAt: toDatetimeLocalJst(expiresAt),
     thumbnailUrl: thumbnailUrl ?? '',
   };
@@ -115,6 +127,17 @@ export function VideoEditForm({
   function set<K extends keyof VideoEditFormValues>(key: K, value: VideoEditFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
   }
+
+  // 入力中の値が未来日時なら「予約公開になる」と即座に伝える。
+  // 保存後のメッセージだけだと、入力の時点で気付けず取り違えやすい。
+  // Date 比較は描画時評価でよい（秒単位の精度は不要）。
+  const publishedIso = values.publishedAt.trim()
+    ? fromDatetimeLocalJst(values.publishedAt)
+    : null;
+  const scheduledHint =
+    publishedIso && new Date(publishedIso) > new Date()
+      ? '⏰ 未来の日時です。この時刻になるまで会員側には表示されません（公開予約）'
+      : null;
 
   function cancel() {
     // 編集を破棄してサーバーの値に戻す。
@@ -342,6 +365,18 @@ export function VideoEditForm({
             </option>
           ))}
         </Select>
+
+        <Input
+          label="公開開始日時"
+          name="publishedAt"
+          type="datetime-local"
+          value={values.publishedAt}
+          onChange={(e) => set('publishedAt', e.target.value)}
+          hint={
+            scheduledHint ??
+            '日本時間で指定します。未来の日時にすると、その時刻まで会員側に表示されません（公開予約）'
+          }
+        />
 
         <Input
           label="配信期限"

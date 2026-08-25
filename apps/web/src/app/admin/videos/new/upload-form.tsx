@@ -49,6 +49,7 @@ export function UploadVideoForm({ encodeReady = true }: { encodeReady?: boolean 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('MEMBERS');
+  const [publishedAt, setPublishedAt] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
@@ -98,6 +99,7 @@ export function UploadVideoForm({ encodeReady = true }: { encodeReady?: boolean 
           description: description.trim() || undefined,
           s3SourceKey,
           accessLevel,
+          publishedAt: publishedAt ? new Date(publishedAt).toISOString() : undefined,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         }),
       });
@@ -200,6 +202,14 @@ export function UploadVideoForm({ encodeReady = true }: { encodeReady?: boolean 
             <option value="MEMBERS">会員（無料プラン以上）</option>
             <option value="PREMIUM">プレミアム限定</option>
           </Select>
+          <Input
+            type="datetime-local"
+            label="公開開始日時（任意）"
+            value={publishedAt}
+            onChange={(e) => setPublishedAt(e.target.value)}
+            disabled={busy}
+            hint="未指定ならエンコード完了次第公開。未来の日時で公開予約"
+          />
           <Input
             type="datetime-local"
             label="配信期限（任意）"

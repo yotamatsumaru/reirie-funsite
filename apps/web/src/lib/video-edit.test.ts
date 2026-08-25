@@ -14,6 +14,7 @@ function values(over: Partial<VideoEditFormValues> = {}): VideoEditFormValues {
     title: 'もとのタイトル',
     description: 'もとの説明',
     accessLevel: 'MEMBERS',
+    publishedAt: '',
     expiresAt: '',
     thumbnailUrl: '',
     ...over,
@@ -194,6 +195,7 @@ describe('buildVideoEditPatch', () => {
       title: '新タイトル',
       description: '新説明',
       accessLevel: 'PUBLIC',
+      publishedAt: '',
       expiresAt: '2026-12-31T23:59',
       thumbnailUrl: '',
     });
@@ -302,5 +304,82 @@ describe('サムネイル (thumbnailUrl)', () => {
       thumbnailUrl: 'https://cdn.example.com/a.jpg',
     });
     expect(isEmptyPatch(patch)).toBe(false);
+  });
+});
+
+/**
+ * 公開開始日時（publishedAt）まわり。
+ *
+ * 一覧クエリ（listableVideoWhere）が `publishedAt <= now` を条件にしているため、
+ * 未来の日時を入れるだけで「公開予約」になる。バッチ処理は無い。
+ * その代わり、入力を誤ると「いつまでも出ない動画」ができるので、
+ * 矛盾する入力をフォーム側で止められることをここで担保する。
+ */
+describe('公開開始日時 (publishedAt)', () => {
+  it('未来の日時を入れると差分に乗る（公開予約になる）', () => {
+    const init = values();
+    const patch = buildVideoEditPatch(init, { ...init, publishedAt: '2099-01-01T10:00' });
+    // JST で解釈されるので UTC では前日 01:00
+    expect(patch.publishedAt).toBe('2099-01-01T01:00:00.000Z');
+  });
+
+  it('空にすると null を送る（公開開始日時を外す）', () => {
+    const init = values({ publishedAt: '2026-08-24T09:00' });
+    const patch = buildVideoEditPatch(init, { ...init, publishedAt: '' });
+    expect(patch.publishedAt).toBeNull();
+  });
+
+  it('同じ日時なら差分にしない', () => {
+    const init = values({ publishedAt: '2026-08-24T09:00' });
+    const patch = buildVideoEditPatch(init, { ...init, publishedAt: '2026-08-24T09:00' });
+    expect(patch).toEqual({});
+  });
+
+  it('公開開始だけ変えても差分は空にならない', () => {
+    const init = values();
+    const patch = buildVideoEditPatch(init, { ...init, publishedAt: '2026-09-01T00:00' });
+    expect(isEmptyPatch(patch)).toBe(false);
+  });
+
+  it('JST として解釈する（実行環境の TZ に依存しない）', () => {
+    const init = values();
+    const patch = buildVideoEditPatch(init, { ...init, publishedAt: '2026-08-24T09:00' });
+    // 2026-08-24 09:00 JST = 2026-08-24T00:00:00Z
+    expect(patch.publishedAt).toBe('2026-08-24T00:00:00.000Z');
+  });
+
+  it('不正な日時は保存前に弾く', () => {
+    const r = validateVideoEdit(values({ publishedAt: 'あああ' }));
+    expect(r.ok).toBe(false);
+  });
+
+  it('公開開始が配信期限より後だと弾く（一度も表示されない動画を防ぐ）', () => {
+    const r = validateVideoEdit(
+      values({ publishedAt: '2026-12-31T23:59', expiresAt: '2026-01-01T00:00' }),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toContain('公開開始日時は配信期限より前');
+  });
+
+  it('公開開始と配信期限が同時刻でも弾く（表示される瞬間が無いため）', () => {
+    const r = validateVideoEdit(
+      values({ publishedAt: '2026-06-01T12:00', expiresAt: '2026-06-01T12:00' }),
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it('公開開始 < 配信期限なら通す', () => {
+    const r = validateVideoEdit(
+      values({ publishedAt: '2026-06-01T12:00', expiresAt: '2026-06-30T23:59' }),
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it('期限だけ設定されている場合は開始との比較をしない', () => {
+    expect(validateVideoEdit(values({ expiresAt: '2026-06-30T23:59' })).ok).toBe(true);
+  });
+
+  it('開始だけ設定されている場合も通す（期限なしの予約公開）', () => {
+    expect(validateVideoEdit(values({ publishedAt: '2099-01-01T00:00' })).ok).toBe(true);
   });
 });

@@ -53,6 +53,42 @@ export function isVideoExpired(v: VideoVisibilityInput, now: Date = new Date()):
 }
 
 /**
+ * 公開予約中（公開開始日時が未来）か。
+ *
+ * 運営が「予約したつもりが公開されていた / 公開したつもりが出ていない」を
+ * 取り違えないよう、管理画面のバッジ表示に使う。
+ *
+ * 公開スイッチ（isPublished）が OFF のものは予約ではなく単に非公開なので false。
+ * status も見るのは、エンコード未完了の動画は日時が来ても公開されないため
+ * 「予約中」と表示すると誤解を招くから。
+ */
+export function isVideoScheduled(v: VideoVisibilityInput, now: Date = new Date()): boolean {
+  if (!v.isPublished) return false;
+  if (v.status !== 'READY') return false;
+  if (!v.publishedAt) return false;
+  if (isVideoExpired(v, now)) return false;
+  return v.publishedAt > now;
+}
+
+/** 管理画面に出す公開状態のラベル。運営が一目で状況を判断できるようにする。 */
+export type VideoPublishState = 'unpublished' | 'encoding' | 'scheduled' | 'expired' | 'live' | 'no_date';
+
+export function videoPublishState(
+  v: VideoVisibilityInput,
+  now: Date = new Date(),
+): VideoPublishState {
+  if (!v.isPublished) return 'unpublished';
+  if (v.status !== 'READY') return 'encoding';
+  // 期限切れは予約より先に判定する（過去の期限が入っていれば結果は「終了」）。
+  if (isVideoExpired(v, now)) return 'expired';
+  // 公開スイッチが ON でも publishedAt が無いと一覧クエリに乗らない。
+  // 放置すると「公開したのに出ない」の原因になるため専用の状態として扱う。
+  if (!v.publishedAt) return 'no_date';
+  if (v.publishedAt > now) return 'scheduled';
+  return 'live';
+}
+
+/**
  * 実際に再生（HLS 取得）を許してよいか。
  *
  * 一覧に出る条件をすべて満たし、かつプランが accessLevel を満たす場合のみ true。
