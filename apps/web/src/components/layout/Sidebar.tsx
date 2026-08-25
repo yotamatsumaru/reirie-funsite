@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -8,6 +8,7 @@ import {
   Home,
   Image as ImageIcon,
   PlayCircle,
+  FileText,
   ShoppingBag,
   Gamepad2,
   Bell,
@@ -25,6 +26,7 @@ import {
   MessageCircle,
   Menu,
   X,
+  ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
 import { useCartItemCount } from '@/stores/cart-store';
@@ -33,54 +35,42 @@ import { RankBadge } from '@/components/membership/RankBadge';
 import { Badge } from '@/components/ui/Badge';
 import { isAdmin as roleIsAdmin, PLAN_LABELS } from '@idol/shared';
 import { resolveAdminNavVisibility, type AdminNavVisibility } from '@/lib/admin-nav';
+import {
+  NAV_GROUPS,
+  filterNavGroups,
+  isNavItemActive,
+  resolveNavItemState,
+  type NavGroup,
+  type NavIconKey,
+  type NavItem,
+} from '@/lib/site-nav';
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  /** カートバッジ用 */
-  badge?: 'cart';
+/**
+ * ナビ構造 (lib/site-nav.ts) はテストしたいので React 非依存にしてあり、
+ * アイコンは文字列キーで持っている。実体の解決はここで行う。
+ */
+const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
+  home: Home,
+  contents: ImageIcon,
+  blog: FileText,
+  video: PlayCircle,
+  game: Gamepad2,
+  notice: Bell,
+  goods: ShoppingBag,
+  plan: Sparkles,
+  cart: ShoppingCart,
 };
 
-type NavGroup = {
-  title: string;
-  items: NavItem[];
-};
-
-// ===== メインナビ（将来項目が増えてもここに追加するだけ） =====
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: 'メニュー',
-    items: [
-      { href: '/', label: 'ホーム', icon: Home },
-      { href: '/contents', label: 'コンテンツ', icon: ImageIcon },
-      // 動画は content でなく video テーブルなので専用の導線が必要。
-      // 以前はこのリンクが無く、動画を公開しても会員が到達できなかった。
-      { href: '/me/videos', label: '動画', icon: PlayCircle },
-      { href: '/game', label: 'ゲーム', icon: Gamepad2 },
-      { href: '/notices', label: 'お知らせ', icon: Bell },
-    ],
-  },
-  {
-    title: 'ショップ',
-    items: [
-      { href: '/products', label: 'グッズ', icon: ShoppingBag },
-      { href: '/plans', label: 'プラン', icon: Sparkles },
-      { href: '/cart', label: 'カート', icon: ShoppingCart, badge: 'cart' },
-    ],
-  },
-];
+/** 会員メニュー等、階層を持たない項目用の簡易型 */
+type FlatNavItem = { href: string; label: string; icon: LucideIcon; badge?: 'cart' };
 
 // ===== 会員メニュー（ログイン時のみ表示） =====
-const MEMBER_GROUP: NavGroup = {
-  title: '会員',
-  items: [
-    { href: '/me/card', label: '会員カード', icon: CreditCard },
-    { href: '/me/points', label: 'ポイント履歴', icon: Repeat },
-    { href: '/me/rewards', label: '景品交換', icon: Gift },
-    { href: '/me/dm', label: 'REIRIE への DM', icon: MessageCircle },
-  ],
-};
+const MEMBER_ITEMS: FlatNavItem[] = [
+  { href: '/me/card', label: '会員カード', icon: CreditCard },
+  { href: '/me/points', label: 'ポイント履歴', icon: Repeat },
+  { href: '/me/rewards', label: '景品交換', icon: Gift },
+  { href: '/me/dm', label: 'REIRIE への DM', icon: MessageCircle },
+];
 
 export function Sidebar({
   contentsVisible = true,
@@ -104,27 +94,26 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  const navGroups = NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => {
-      if (item.href === '/contents') return contentsVisible;
-      // 動画はコンテンツの一部なので、コンテンツ非公開時はともに隠す。
-      if (item.href === '/me/videos') return contentsVisible;
-      if (item.href === '/products') return productsVisible;
-      // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
-      // 一般会員にはナビからもページからも完全に見えなくなる。
-      if (item.href === '/game') return gamesVisible || roleIsAdmin(role);
-      return true;
-    }),
-  })).filter((group) => group.items.length > 0);
+  const navGroups = useMemo(
+    () =>
+      filterNavGroups(NAV_GROUPS, (item) => {
+        // 「コンテンツ」を隠すと配下のブログ / 動画も丸ごと落ちる
+        // (filterNavGroups が再帰的に子を処理する)。
+        if (item.href === '/contents') return contentsVisible;
+        if (item.href === '/me/videos') return contentsVisible;
+        if (item.href === '/products') return productsVisible;
+        // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
+        // 一般会員にはナビからもページからも完全に見えなくなる。
+        if (item.href === '/game') return gamesVisible || roleIsAdmin(role);
+        return true;
+      }),
+    [contentsVisible, productsVisible, gamesVisible, role],
+  );
 
-  const memberGroup: NavGroup = {
-    ...MEMBER_GROUP,
-    items: MEMBER_GROUP.items.filter((item) => {
-      if (item.href === '/me/dm') return dmVisible;
-      return true;
-    }),
-  };
+  const memberItems = useMemo(
+    () => MEMBER_ITEMS.filter((item) => (item.href === '/me/dm' ? dmVisible : true)),
+    [dmVisible],
+  );
 
   // ログイン中はプラン/ランク/ポイントを取得し、ログアウトしたらクリア
   useEffect(() => {
@@ -181,7 +170,7 @@ export function Sidebar({
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:w-64 md:flex-col md:border-r-2 md:border-black md:bg-white">
         <SidebarContent
           navGroups={navGroups}
-          memberGroup={memberGroup}
+          memberItems={memberItems}
           cartCount={cartCount}
           status={status}
           session={session}
@@ -220,7 +209,7 @@ export function Sidebar({
           </button>
           <SidebarContent
             navGroups={navGroups}
-            memberGroup={memberGroup}
+            memberItems={memberItems}
             cartCount={cartCount}
             status={status}
             session={session}
@@ -236,7 +225,7 @@ export function Sidebar({
 /* ===== サイドバー中身（PC / モバイル共通） ===== */
 function SidebarContent({
   navGroups,
-  memberGroup,
+  memberItems,
   cartCount,
   status,
   session,
@@ -244,7 +233,7 @@ function SidebarContent({
   pathname,
 }: {
   navGroups: NavGroup[];
-  memberGroup: NavGroup;
+  memberItems: FlatNavItem[];
   cartCount: number;
   status: string;
   session: ReturnType<typeof useSession>['data'];
@@ -270,15 +259,7 @@ function SidebarContent({
             <ul className="space-y-1">
               {group.items.map((item) => (
                 <li key={item.href}>
-                  <NavLink
-                    item={item}
-                    active={
-                      item.href === '/'
-                        ? pathname === '/'
-                        : pathname.startsWith(item.href)
-                    }
-                    cartCount={cartCount}
-                  />
+                  <NavTreeItem item={item} pathname={pathname} cartCount={cartCount} />
                 </li>
               ))}
             </ul>
@@ -286,13 +267,13 @@ function SidebarContent({
         ))}
 
         {/* 会員メニュー（ログイン時のみ） */}
-        {session?.user && memberGroup.items.length > 0 && (
+        {session?.user && memberItems.length > 0 && (
           <div>
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-black/40">
-              {memberGroup.title}
+              会員
             </p>
             <ul className="space-y-1">
-              {memberGroup.items.map((item) => (
+              {memberItems.map((item) => (
                 <li key={item.href}>
                   <NavLink
                     item={item}
@@ -417,24 +398,141 @@ function SidebarContent({
   );
 }
 
+/**
+ * ===== 階層ナビ項目（親 + 折りたたみ可能な子リスト） =====
+ *
+ * 「コンテンツ」の下に「ブログ」「動画」を入れ子にするための描画。
+ *
+ * 設計:
+ *   - 親リンク自体はクリックでき、/contents（すべて）に飛ぶ。
+ *     子を隠すためにリンクを潰さない（「コンテンツ全部」を見る導線は残す）。
+ *   - 開閉はリンクとは別の三角ボタンで行う。リンクと同じ要素にすると
+ *     ページ遷移せず開閉するだけになり、親ページに行けなくなる。
+ *   - 選択中の子があるときは強制的に開く（判定は lib/site-nav.ts）。
+ */
+function NavTreeItem({
+  item,
+  pathname,
+  cartCount,
+}: {
+  item: NavItem;
+  pathname: string;
+  cartCount: number;
+}) {
+  // 手動トグルはルート変更で破棄する。そうしないと
+  // 「畳んだ状態で子ページへ遷移 → 選択中の項目が見えない」が起きる。
+  const [manualOpen, setManualOpen] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    setManualOpen(undefined);
+  }, [pathname]);
+
+  const state = resolveNavItemState(item, pathname, manualOpen);
+  const children = item.children ?? [];
+  const Icon = NAV_ICONS[item.iconKey];
+
+  // 子を持たない項目は従来どおりのフラットなリンク
+  if (children.length === 0) {
+    return (
+      <NavLink
+        item={{ href: item.href, label: item.label, icon: Icon, badge: item.badge }}
+        active={state.active}
+        cartCount={cartCount}
+      />
+    );
+  }
+
+  const submenuId = `nav-sub-${item.href.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
+  return (
+    <div>
+      <div
+        className={`group flex items-center rounded-xl pr-1 transition ${
+          state.active
+            ? 'bg-twilight-btn text-white shadow-sm'
+            : state.childActive
+              ? 'bg-twilight-lavender/30 text-black'
+              : 'text-black/75 hover:bg-twilight-lavender/40 hover:text-black'
+        }`}
+      >
+        <Link
+          href={item.href}
+          aria-current={state.active ? 'page' : undefined}
+          className="flex flex-1 items-center gap-3 px-3 py-2.5 text-sm font-semibold"
+        >
+          <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+          <span className="flex-1">{item.label}</span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => setManualOpen(!state.expanded)}
+          aria-expanded={state.expanded}
+          aria-controls={submenuId}
+          aria-label={`${item.label}のサブメニューを${state.expanded ? '閉じる' : '開く'}`}
+          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+            state.active ? 'hover:bg-white/20' : 'hover:bg-black/5'
+          }`}
+        >
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${state.expanded ? '' : '-rotate-90'}`}
+            aria-hidden="true"
+          />
+        </button>
+      </div>
+
+      {state.expanded && (
+        <ul
+          id={submenuId}
+          // 縦線 + インデントで「配下」であることを視覚的に示す
+          className="ml-5 mt-1 space-y-1 border-l-2 border-black/10 pl-2"
+        >
+          {children.map((child) => {
+            const ChildIcon = NAV_ICONS[child.iconKey];
+            const childActive = isNavItemActive(child.href, pathname);
+            return (
+              <li key={child.href}>
+                <NavLink
+                  item={{
+                    href: child.href,
+                    label: child.label,
+                    icon: ChildIcon,
+                    badge: child.badge,
+                  }}
+                  active={childActive}
+                  cartCount={cartCount}
+                  compact
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* ===== ナビリンク（アイコン + ラベル + アクティブ表示 + カートバッジ） ===== */
 function NavLink({
   item,
   active,
   cartCount,
   special,
+  compact,
 }: {
-  item: NavItem;
+  item: FlatNavItem;
   active: boolean;
   cartCount: number;
   special?: boolean;
+  /** 入れ子の子項目。親より一段控えめな見た目にする */
+  compact?: boolean;
 }) {
   const Icon = item.icon;
   return (
     <Link
       href={item.href}
       aria-current={active ? 'page' : undefined}
-      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+      className={`group relative flex items-center gap-3 rounded-xl transition ${
+        compact ? 'px-3 py-2 text-[13px] font-semibold' : 'px-3 py-2.5 text-sm font-semibold'
+      } ${
         active
           ? 'bg-twilight-btn text-white shadow-sm'
           : special
@@ -442,7 +540,10 @@ function NavLink({
             : 'text-black/75 hover:bg-twilight-lavender/40 hover:text-black'
       }`}
     >
-      <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+      <Icon
+        className={`${compact ? 'h-4 w-4' : 'h-[18px] w-[18px]'} shrink-0`}
+        aria-hidden="true"
+      />
       <span className="flex-1">{item.label}</span>
       {item.badge === 'cart' && cartCount > 0 && (
         <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-twilight-rose px-1.5 text-[11px] font-semibold text-white">
