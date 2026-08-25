@@ -9,6 +9,7 @@ import { formatJstDateTime } from '@idol/shared';
 import { resolveThumbnailUrlAsync } from '@/lib/video-delivery';
 import { VideoAdminActions } from './actions';
 import { VideoEditForm } from './edit-form';
+import { VideoDeletePanel } from './delete-panel';
 
 export const metadata: Metadata = { title: '動画詳細' };
 export const dynamic = 'force-dynamic';
@@ -142,6 +143,16 @@ export default async function AdminVideoDetailPage({
         status={video.status}
         hasHls={Boolean(video.s3HlsKey)}
         isPublished={video.isPublished}
+      />
+
+      {/*
+        削除は取り消せないので、通常操作から離してページ最下部に置く。
+        （上に置くと編集のたびに視界に入り、誤操作の確率が上がる）
+      */}
+      <VideoDeletePanel
+        videoId={video.id}
+        title={video.title}
+        viewCount={video._count.viewLogs}
       />
     </div>
   );
