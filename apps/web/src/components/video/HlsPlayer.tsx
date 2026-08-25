@@ -28,6 +28,7 @@ import {
   looksLikeCloudFrontSignature,
   inheritQuery,
 } from '@/lib/hls-rewrite';
+import { useWatchProgress } from './useWatchProgress';
 
 export type HlsPlayerProps = {
   src: string;
@@ -36,11 +37,38 @@ export type HlsPlayerProps = {
   poster?: string;
   autoPlay?: boolean;
   className?: string;
+  /**
+   * 視聴計測に使う情報。省略すると計測しない（管理画面のプレビュー等）。
+   *
+   * 運営のプレビュー再生を計測対象にすると、会員の視聴データに
+   * 運営の確認作業が混ざって集計が歪むため、明示的に渡す設計にしている。
+   */
+  progress?: { videoId: string; viewLogId: string | null };
+  /**
+   * 再生開始位置（秒）。前回の続きから再生する用途。
+   * メタデータ読込後に一度だけ適用する。
+   */
+  startAtSec?: number;
 };
 
-export function HlsPlayer({ src, maxHeight, poster, autoPlay, className }: HlsPlayerProps) {
+export function HlsPlayer({
+  src,
+  maxHeight,
+  poster,
+  autoPlay,
+  className,
+  progress,
+  startAtSec,
+}: HlsPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 視聴計測。progress が無ければ内部で何もしない。
+  useWatchProgress({
+    videoRef,
+    videoId: progress?.videoId ?? '',
+    viewLogId: progress?.videoId ? (progress.viewLogId ?? null) : null,
+  });
 
   useEffect(() => {
     const video = videoRef.current;
@@ -137,6 +165,34 @@ export function HlsPlayer({ src, maxHeight, poster, autoPlay, className }: HlsPl
       cleanup();
     };
   }, [src, maxHeight]);
+
+  // 前回の続きから再生する。
+  //
+  // 別の useEffect に分けているのは、上の effect は src / maxHeight の変化で
+  // プレイヤーを作り直すため、そこに再開位置を混ぜると
+  // 画質変更のたびに再生位置が巻き戻る挙動になるため。
+  //
+  // `loadedmetadata` を待つ理由: 尺が確定する前に currentTime を代入しても
+  // 無視される（duration が NaN の間はシークできない）。
+  const seekedOnceRef = useRef(false);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !startAtSec || startAtSec <= 0) return;
+    seekedOnceRef.current = false;
+
+    const apply = () => {
+      // 一度だけ適用する。以後のシークは視聴者の操作を尊重する。
+      if (seekedOnceRef.current) return;
+      // 尺を超える位置は無視する（尺が縮む再エンコード後などに備える）。
+      if (Number.isFinite(video.duration) && startAtSec >= video.duration) return;
+      seekedOnceRef.current = true;
+      video.currentTime = startAtSec;
+    };
+
+    if (video.readyState >= 1) apply();
+    video.addEventListener('loadedmetadata', apply);
+    return () => video.removeEventListener('loadedmetadata', apply);
+  }, [src, startAtSec]);
 
   return (
     <div className={className}>
