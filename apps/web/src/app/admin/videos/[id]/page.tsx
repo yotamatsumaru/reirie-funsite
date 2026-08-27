@@ -5,7 +5,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
-import { formatJstDateTime } from '@idol/shared';
+import { accessLevelLabel, formatJstDateTime } from '@idol/shared';
 import { resolveThumbnailUrlAsync } from '@/lib/video-delivery';
 import { getVideoAnalytics } from '@/lib/video-analytics-store';
 import { VideoAdminActions } from './actions';
@@ -23,12 +23,8 @@ const STATUS_LABEL: Record<string, string> = {
   FAILED: '失敗',
 };
 
-/** 生の enum 値だと運用者に伝わりにくいので日本語に直す */
-const ACCESS_LABEL: Record<string, string> = {
-  PUBLIC: '全員',
-  MEMBERS: '会員限定',
-  PREMIUM: 'プレミアム限定',
-};
+// 公開範囲の日本語ラベルは @idol/shared の accessLevelLabel に集約。
+// 画面ごとにベタ書きすると表記がすぐに食い違うため。
 
 function tone(status: string): 'success' | 'danger' | 'info' | 'warning' {
   if (status === 'READY') return 'success';
@@ -82,7 +78,7 @@ export default async function AdminVideoDetailPage({
         </CardHeader>
         <CardBody>
           <dl className="grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-2">
-            <Field label="公開範囲" value={ACCESS_LABEL[video.accessLevel] ?? video.accessLevel} />
+            <Field label="公開範囲" value={accessLevelLabel(video.accessLevel)} />
             <Field
               label="尺"
               value={video.durationSeconds ? `${Math.floor(video.durationSeconds / 60)}分${video.durationSeconds % 60}秒` : '—'}

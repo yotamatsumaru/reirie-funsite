@@ -12,12 +12,12 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { AccessLevelLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
-import { Input, Textarea, Select } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { AccessLevelSelect } from '@/components/admin/AccessLevelSelect';
 import { toast } from '@/stores/ui-store';
-
-type AccessLevel = 'PUBLIC' | 'MEMBERS' | 'PREMIUM';
 
 /** 署名URLへ XHR で PUT し、進捗を通知する */
 function putWithProgress(
@@ -48,7 +48,9 @@ export function UploadVideoForm({ encodeReady = true }: { encodeReady?: boolean 
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [accessLevel, setAccessLevel] = useState<AccessLevel>('MEMBERS');
+  // 初期値は「会員限定」。選び忘れたときに意図より広く公開されるよりは
+  // 狭く出てしまう方が安全なので、従来どおり MEMBERS を既定とする。
+  const [accessLevel, setAccessLevel] = useState<AccessLevelLiteral>('MEMBERS');
   const [publishedAt, setPublishedAt] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -192,16 +194,7 @@ export function UploadVideoForm({ encodeReady = true }: { encodeReady?: boolean 
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label="アクセス範囲"
-            value={accessLevel}
-            onChange={(e) => setAccessLevel(e.target.value as AccessLevel)}
-            disabled={busy}
-          >
-            <option value="PUBLIC">全員（公開）</option>
-            <option value="MEMBERS">会員（無料プラン以上）</option>
-            <option value="PREMIUM">プレミアム限定</option>
-          </Select>
+          <AccessLevelSelect value={accessLevel} onChange={setAccessLevel} disabled={busy} />
           <Input
             type="datetime-local"
             label="公開開始日時（任意）"

@@ -25,6 +25,20 @@
 import { canAccess } from '@idol/shared';
 import type { PlanTypeLiteral, AccessLevelLiteral } from '@idol/shared';
 
+/**
+ * 公開範囲ごとの「なぜ見られないか」の説明文。
+ *
+ * ユーザーには「どうすれば見られるのか」が伝わらないと意味がないので、
+ * FREE_MEMBERS は「ログインすれば良い」ことが分かる文言にしている
+ * （有料プランへの加入を促してしまうと誤解させるため）。
+ */
+const LOCK_REASON: Record<AccessLevelLiteral, string> = {
+  PUBLIC: 'この動画は現在再生できません。',
+  FREE_MEMBERS: 'この動画は会員限定です。無料会員登録（ログイン）すると視聴できます。',
+  MEMBERS: 'この動画は会員限定（スタンダード以上）です。',
+  PREMIUM: 'この動画はプレミアムプラン限定です。',
+};
+
 /** 判定に必要な最小のフィールド */
 export type VideoVisibilityInput = {
   isPublished: boolean;
@@ -124,9 +138,7 @@ export function videoLockReason(
 ): string | null {
   if (isVideoPlayable(v, plan, now)) return null;
   if (isVideoExpired(v, now)) return 'この動画の配信期間は終了しました。';
-  if (v.accessLevel === 'PREMIUM') return 'この動画はプレミアムプラン限定です。';
-  if (v.accessLevel === 'MEMBERS') return 'この動画は会員限定です。';
-  return 'この動画は現在再生できません。';
+  return LOCK_REASON[v.accessLevel] ?? 'この動画は現在再生できません。';
 }
 
 /**

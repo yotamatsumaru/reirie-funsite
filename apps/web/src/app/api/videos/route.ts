@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { canAccess } from '@idol/shared';
+import { accessibleLevels } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { resolveThumbnailUrls } from '@/lib/video-delivery';
@@ -9,9 +9,9 @@ export const runtime = 'nodejs';
 
 export const GET = handle(async (req: Request) => {
   const session = await resolveApiSession(req);
-  const allowed: Array<'PUBLIC' | 'MEMBERS' | 'PREMIUM'> = ['PUBLIC'];
-  if (canAccess(session?.user?.plan, 'MEMBERS')) allowed.push('MEMBERS');
-  if (canAccess(session?.user?.plan, 'PREMIUM')) allowed.push('PREMIUM');
+  // 公開範囲の段階を追加したときにここの列挙を直し忘れると、
+  // その段階のコンテンツが誰にも表示されなくなるので共通関数から導出する。
+  const allowed = accessibleLevels(session?.user?.plan);
 
   const items = await prisma.video.findMany({
     where: {

@@ -1,0 +1,21 @@
+-- 公開範囲に「無料会員以上」(FREE_MEMBERS) を追加する。
+--
+-- 背景:
+--   これまでの AccessLevel は PUBLIC / MEMBERS / PREMIUM の 3 段階しかなく、
+--   「ログインした無料会員には見せたいが、未ログインには見せたくない」
+--   という指定ができなかった。
+--   MEMBERS はスタンダード以上を意味する (canAccess の REQUIRED_RANK が 1)
+--   にもかかわらず、動画アップロード画面が「会員（無料プラン以上）」という
+--   誤ったラベルを出していたため、運営の意図と実際の公開範囲がズレていた。
+--   その中間段階を正式な値として追加する。
+--
+-- 並び順:
+--   制限が緩い順 (PUBLIC < FREE_MEMBERS < MEMBERS < PREMIUM) になるよう
+--   MEMBERS の前に挿入する。enum の並びは管理画面の選択肢順にも使われる。
+--
+-- 既存データ:
+--   既存行の値は変更しない。3 段階時代に MEMBERS で登録されたものは
+--   引き続き「会員限定 (スタンダード以上)」として扱われる。
+--   無料会員にも公開したいものは、運営が管理画面で FREE_MEMBERS に
+--   付け替える運用とする (自動変換すると意図せず公開範囲が広がるため)。
+ALTER TYPE "AccessLevel" ADD VALUE IF NOT EXISTS 'FREE_MEMBERS' BEFORE 'MEMBERS';

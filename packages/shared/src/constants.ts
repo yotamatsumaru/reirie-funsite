@@ -1,8 +1,46 @@
 export const PLAN_TYPES = ['FREE', 'STANDARD', 'PREMIUM'] as const;
 export type PlanTypeLiteral = (typeof PLAN_TYPES)[number];
 
-export const ACCESS_LEVELS = ['PUBLIC', 'MEMBERS', 'PREMIUM'] as const;
+/**
+ * 公開範囲 (Prisma AccessLevel enum と同期)。制限が緩い順に並べる。
+ *
+ *  - PUBLIC       : だれでも       (未ログインでも閲覧可)
+ *  - FREE_MEMBERS : 無料会員以上   (ログインしていれば無料プランでも閲覧可)
+ *  - MEMBERS      : 会員限定       (スタンダード以上。無料会員は閲覧不可)
+ *  - PREMIUM      : プレミアム限定 (プレミアムのみ)
+ *
+ * 並び順は管理画面の select の選択肢順としてもそのまま使うので、
+ * 「緩い→厳しい」の順序を崩さないこと。
+ */
+export const ACCESS_LEVELS = ['PUBLIC', 'FREE_MEMBERS', 'MEMBERS', 'PREMIUM'] as const;
 export type AccessLevelLiteral = (typeof ACCESS_LEVELS)[number];
+
+/**
+ * 管理画面・会員画面で共通して使う公開範囲のラベル。
+ *
+ * かつては画面ごとにラベルをベタ書きしていたため、同じ MEMBERS を
+ * 「会員（無料プラン以上）」と書く画面と「会員限定（スタンダード以上）」と
+ * 書く画面が混在し、実装 (canAccess) と食い違っていた。
+ * 表示名は必ずここを参照すること。
+ */
+export const ACCESS_LEVEL_LABELS: Record<AccessLevelLiteral, string> = {
+  PUBLIC: 'だれでも',
+  FREE_MEMBERS: '無料会員以上',
+  MEMBERS: '会員限定',
+  PREMIUM: 'プレミアム限定',
+};
+
+/** 選択時に迷わないための補足説明 (select の hint やヘルプに使う)。 */
+export const ACCESS_LEVEL_DESCRIPTIONS: Record<AccessLevelLiteral, string> = {
+  PUBLIC: '未ログインの人も視聴できます',
+  FREE_MEMBERS: 'ログインしている会員なら無料プランでも視聴できます',
+  MEMBERS: 'スタンダード以上の有料会員のみ視聴できます',
+  PREMIUM: 'プレミアム会員のみ視聴できます',
+};
+
+export function accessLevelLabel(level: AccessLevelLiteral | string): string {
+  return ACCESS_LEVEL_LABELS[level as AccessLevelLiteral] ?? level;
+}
 
 /**
  * ユーザーロール (Prisma UserRole enum と同期)

@@ -22,7 +22,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
+import { accessLevelLabel, accessibleLevels, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
@@ -61,9 +61,9 @@ export default async function ContentsPage() {
   const session = await auth();
   const plan = (session?.user?.plan as PlanTypeLiteral | undefined) ?? undefined;
 
-  const allowed: Array<'PUBLIC' | 'MEMBERS' | 'PREMIUM'> = ['PUBLIC'];
-  if (canAccess(plan, 'MEMBERS')) allowed.push('MEMBERS');
-  if (canAccess(plan, 'PREMIUM')) allowed.push('PREMIUM');
+  // 公開範囲の段階を追加したときにここの列挙を直し忘れると、
+  // その段階のコンテンツが誰にも表示されなくなるので共通関数から導出する。
+  const allowed = accessibleLevels(plan);
 
   const now = new Date();
 
@@ -192,8 +192,14 @@ export default async function ContentsPage() {
                 <CardBody>
                   <div className="mb-2 flex items-center gap-2">
                     <Badge tone="gray">{c.kindLabel}</Badge>
-                    {c.accessLevel === 'PREMIUM' && <Badge tone="brand">PREMIUM</Badge>}
-                    {c.accessLevel === 'MEMBERS' && <Badge tone="info">MEMBERS</Badge>}
+                    {/* 生の enum 名 (PREMIUM/MEMBERS) をそのまま出していたため、
+                        公開範囲を増やしても新しい段階のバッジが出なかった。
+                        PUBLIC 以外は共通ラベルでバッジを出す。 */}
+                    {c.accessLevel !== 'PUBLIC' && (
+                      <Badge tone={c.accessLevel === 'PREMIUM' ? 'brand' : 'info'}>
+                        {accessLevelLabel(c.accessLevel)}
+                      </Badge>
+                    )}
                   </div>
                   <h2 className="mb-1 line-clamp-2 text-base font-semibold text-slate-800">
                     {c.title}

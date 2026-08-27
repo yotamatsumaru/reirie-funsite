@@ -4,7 +4,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
-import { formatJstDateTime } from '@idol/shared';
+import { accessLevelLabel, formatJstDateTime } from '@idol/shared';
 import { videoPublishState } from '@/lib/video-visibility';
 import { getVideoListStats } from '@/lib/video-analytics-store';
 import { formatMs } from '@/lib/video-analytics';
@@ -108,7 +108,7 @@ export default async function AdminVideosPage() {
                 </Link>
                 <div className="flex flex-wrap gap-1.5 text-xs">
                   <Badge tone={publishBadge(v).tone}>{publishBadge(v).label}</Badge>
-                  <Badge tone="gray">{v.accessLevel}</Badge>
+                  <Badge tone="gray">{accessLevelLabel(v.accessLevel)}</Badge>
                   <Badge tone={tone(v.status)}>{v.status}</Badge>
                   {v.durationSeconds && (
                     <Badge tone="gray">{Math.floor(v.durationSeconds / 60)}分</Badge>
@@ -165,7 +165,7 @@ export default async function AdminVideosPage() {
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3">{v.accessLevel}</td>
+                  <td className="px-4 py-3">{accessLevelLabel(v.accessLevel)}</td>
                   <td className="px-4 py-3">
                     {v.durationSeconds ? `${Math.floor(v.durationSeconds / 60)}分` : '-'}
                   </td>

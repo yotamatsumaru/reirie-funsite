@@ -42,6 +42,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
+import { ACCESS_LEVELS, accessLevelRank } from '@idol/shared';
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
@@ -59,7 +60,9 @@ const PatchSchema = z
     title: z.string().trim().min(1, 'タイトルを入力してください').max(VIDEO_TITLE_MAX).optional(),
     // null は「説明文を消す」の意思表示。undefined（キー自体なし）は「変更しない」。
     description: z.string().max(VIDEO_DESCRIPTION_MAX).nullable().optional(),
-    accessLevel: z.enum(['PUBLIC', 'MEMBERS', 'PREMIUM']).optional(),
+    // 公開範囲。共有定数を参照することで、段階を追加したときに
+    // API だけ古い値しか受け付けない状態になるのを防ぐ。
+    accessLevel: z.enum(ACCESS_LEVELS).optional(),
     // 公開開始日時。未来の日時を入れると「予約公開」になる
     // （一覧クエリが publishedAt <= now を条件にしているため、時刻が来るまで出ない）。
     // null は「公開開始日時なし」= 公開スイッチが ON でも一覧に出ない状態。
@@ -211,7 +214,7 @@ export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: st
   // 公開範囲を厳しくした場合は、既存会員が見られなくなる点を伝える。
   const tightened =
     data.accessLevel !== undefined &&
-    rank(data.accessLevel) > rank(existing.accessLevel);
+    accessLevelRank(data.accessLevel) > accessLevelRank(existing.accessLevel);
 
   // 予約公開になった場合は「今は見えない」ことを明示する。
   // これを言わないと運営が「保存したのに会員側に出ない」と混乱する。
@@ -364,9 +367,6 @@ function formatJstForMessage(d: Date): string {
   return `${iso.slice(0, 4)}/${iso.slice(5, 7)}/${iso.slice(8, 10)} ${iso.slice(11, 16)}`;
 }
 
-/** 公開範囲の厳しさ（大きいほど限定的） */
-function rank(level: string): number {
-  if (level === 'PREMIUM') return 2;
-  if (level === 'MEMBERS') return 1;
-  return 0;
-}
+// 公開範囲の厳しさ判定は @idol/shared の accessLevelRank に集約している。
+// 以前はここにローカルな rank() を持っていたが、段階を追加したときに
+// 更新を忘れると「公開範囲を狭めました」の警告が出なくなるため共通化した。

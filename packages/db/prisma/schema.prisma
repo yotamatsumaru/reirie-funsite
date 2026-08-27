@@ -38,10 +38,12 @@ enum BillingInterval {
   YEAR
 }
 
+/// 公開範囲 (制限が緩い順)。表示ラベルは @idol/shared の ACCESS_LEVEL_LABELS に集約。
 enum AccessLevel {
-  PUBLIC
-  MEMBERS
-  PREMIUM
+  PUBLIC // だれでも (未ログインでも閲覧可)
+  FREE_MEMBERS // 無料会員以上 (ログインしていれば無料プランでも閲覧可)
+  MEMBERS // 会員限定 (スタンダード以上)
+  PREMIUM // プレミアム限定
 }
 
 /// お問い合わせの対応状況

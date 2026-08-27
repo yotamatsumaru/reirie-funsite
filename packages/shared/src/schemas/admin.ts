@@ -2,6 +2,7 @@
  * 管理画面 (Admin) で使う追加スキーマ
  */
 import { z } from 'zod';
+import { ACCESS_LEVELS } from '../constants';
 
 // ---- Product Variant ----
 export const CreateProductVariantSchema = z.object({
@@ -96,7 +97,9 @@ export const UpdateLiveStreamSchema = z.object({
   description: z.string().optional(),
   thumbnailUrl: z.url().optional(),
   isPrivate: z.boolean().optional(),
-  accessLevel: z.enum(['PUBLIC', 'MEMBERS', 'PREMIUM']).optional(),
+  // 公開範囲の値をここにベタ書きすると ACCESS_LEVELS に段階を足したときに
+  // 取りこぼすので、必ず共有定数を参照する。
+  accessLevel: z.enum(ACCESS_LEVELS).optional(),
   status: z.enum(['SCHEDULED', 'LIVE', 'ENDED', 'CANCELED']).optional(),
   scheduledStartAt: z.iso.datetime().optional(),
   ivsChannelArn: z.string().optional(),
