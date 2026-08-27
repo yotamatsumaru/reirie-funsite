@@ -7,9 +7,11 @@ import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
 import { formatJstDateTime } from '@idol/shared';
 import { resolveThumbnailUrlAsync } from '@/lib/video-delivery';
+import { getVideoAnalytics } from '@/lib/video-analytics-store';
 import { VideoAdminActions } from './actions';
 import { VideoEditForm } from './edit-form';
 import { VideoDeletePanel } from './delete-panel';
+import { VideoStatsPanel } from './stats-panel';
 
 export const metadata: Metadata = { title: '動画詳細' };
 export const dynamic = 'force-dynamic';
@@ -49,6 +51,9 @@ export default async function AdminVideoDetailPage({
   });
   if (!video) notFound();
 
+  // 視聴集計。尺が分からないと視聴率・離脱位置は出せないので渡す。
+  const analytics = await getVideoAnalytics(video.id, video.durationSeconds);
+
   // DB の生の値は S3 キーのこともあるため、プレビュー表示用に解決した URL も渡す。
   // 解決できない場合 (配信設定が無い等) は null になり「未設定」表示にフォールバックする。
   const thumbnailPreviewUrl = await resolveThumbnailUrlAsync(video.thumbnailUrl);
@@ -82,7 +87,11 @@ export default async function AdminVideoDetailPage({
               label="尺"
               value={video.durationSeconds ? `${Math.floor(video.durationSeconds / 60)}分${video.durationSeconds % 60}秒` : '—'}
             />
-            <Field label="視聴回数" value={`${video._count.viewLogs} 回`} />
+            {/*
+              以前ここに「視聴回数」を出していたが、実体は再生ボタンが
+              押された回数で「どれくらい見られたか」を表さなかった。
+              視聴系の指標は下の専用カードにまとめ、ここでは重複させない。
+            */}
             {/*
               公開開始日時が未来のときは「予約」と明示する。
               日時だけを出すと、公開済みなのか待機中なのかが読み取れず
@@ -107,6 +116,16 @@ export default async function AdminVideoDetailPage({
           </dl>
         </CardBody>
       </Card>
+
+      {/*
+        視聴データは「公開して効果があったか」を判断する材料なので、
+        編集フォームより上（基本情報の直後）に置く。
+      */}
+      <VideoStatsPanel
+        stats={analytics.stats}
+        dropOff={analytics.dropOff}
+        durationSeconds={video.durationSeconds}
+      />
 
       {/*
         タイトル / 説明文はアップロード時にファイル名から仮の値が入るため、

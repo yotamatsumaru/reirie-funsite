@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
 import { formatJstDateTime } from '@idol/shared';
 import { videoPublishState } from '@/lib/video-visibility';
+import { getVideoListStats } from '@/lib/video-analytics-store';
+import { formatMs } from '@/lib/video-analytics';
 
 export const metadata: Metadata = { title: '動画管理' };
 export const dynamic = 'force-dynamic';
@@ -27,6 +29,13 @@ export default async function AdminVideosPage() {
       createdAt: true,
     },
   });
+
+  // 一覧でも「どの動画が見られているか」を見たいので集計を一括取得する。
+  // 動画ごとにクエリを投げると 50 件で 100 クエリになるため、
+  // GROUP BY でまとめた store 関数を使う。
+  const statsMap = await getVideoListStats(videos.map((v) => v.id));
+  const statOf = (id: string) =>
+    statsMap.get(id) ?? { playStarts: 0, uniqueViewers: 0, totalWatchedMs: 0 };
 
   const tone = (status: string) =>
     status === 'READY' ? 'success' : status === 'FAILED' ? 'danger' : 'info';
@@ -105,6 +114,11 @@ export default async function AdminVideosPage() {
                     <Badge tone="gray">{Math.floor(v.durationSeconds / 60)}分</Badge>
                   )}
                 </div>
+                {/* モバイルは幅が無いので、回数と合計視聴時間だけに絞る */}
+                <p className="text-xs text-slate-500">
+                  再生 {statOf(v.id).playStarts} 回 / 視聴{' '}
+                  {formatMs(statOf(v.id).totalWatchedMs)}
+                </p>
                 <p className="text-xs text-slate-500">
                   {formatJstDateTime(v.createdAt)}
                 </p>
@@ -124,6 +138,11 @@ export default async function AdminVideosPage() {
                 <th className="px-4 py-3">公開</th>
                 <th className="px-4 py-3">アクセス</th>
                 <th className="px-4 py-3">尺</th>
+                {/* 「視聴回数」ではなく「再生」としているのは、
+                    この値が再生ボタンを押された回数であり、
+                    最後まで見た人数ではないことを誤認させないため。 */}
+                <th className="px-4 py-3">再生</th>
+                <th className="px-4 py-3">視聴時間</th>
                 <th className="px-4 py-3">状態</th>
                 <th className="px-4 py-3">作成</th>
               </tr>
@@ -150,6 +169,21 @@ export default async function AdminVideosPage() {
                   <td className="px-4 py-3">
                     {v.durationSeconds ? `${Math.floor(v.durationSeconds / 60)}分` : '-'}
                   </td>
+                  {/* 「8 (3人)」が折り返されると数字と人数が別行になって
+                      読みづらいので改行させない。 */}
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                    {statOf(v.id).playStarts}
+                    {/* 実人数と回数は別の指標。回数だけ多い場合は
+                        同じ人が何度も開き直していると判断できる。 */}
+                    {statOf(v.id).uniqueViewers > 0 && (
+                      <span className="ml-1 text-xs text-slate-400">
+                        ({statOf(v.id).uniqueViewers}人)
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-xs text-slate-600">
+                    {formatMs(statOf(v.id).totalWatchedMs)}
+                  </td>
                   <td className="px-4 py-3">
                     <Badge tone={tone(v.status)}>{v.status}</Badge>
                   </td>
@@ -160,7 +194,7 @@ export default async function AdminVideosPage() {
               ))}
               {videos.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                     動画はありません
                   </td>
                 </tr>

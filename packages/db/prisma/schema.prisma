@@ -642,20 +642,42 @@ model VideoThumbnail {
   @@map("video_thumbnails")
 }
 
+/// 視聴 1 回につき 1 行。再生開始時に作成し、再生中の進捗送信
+/// (PATCH /api/videos/[id]/progress) で同じ行を更新していく。
+///
+/// 進捗ごとに行を増やさない理由: 15 秒間隔で行を作ると 1 時間の動画で
+/// 240 行になり、行数 = 視聴回数という意味が壊れる。
+/// 「その視聴でどこまで見たか」は 1 行に集約する。
 model VideoViewLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  videoId   String   @map("video_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  watchedMs Int      @default(0) @map("watched_ms")
-  ipHash    String?  @map("ip_hash")
-  userAgent String?  @map("user_agent")
-  createdAt DateTime @default(now()) @map("created_at")
+  id      String @id @default(uuid()) @db.Uuid
+  videoId String @map("video_id") @db.Uuid
+  userId  String @map("user_id") @db.Uuid
+  /// 実際に再生された時間の累計 (ミリ秒)。シークで見直した分も加算される。
+  /// 「合計どれくらい見られたか」の集計に使う。
+  watchedMs Int @default(0) @map("watched_ms")
+  /// 最後に見ていた再生位置 (ミリ秒)。watchedMs と分けているのは、
+  /// 巻き戻して見直すと「位置は戻るが視聴時間は増える」ため。
+  /// 離脱ポイントの把握と、続きから再生する導線に使う。
+  lastPositionMs Int @default(0) @map("last_position_ms")
+  /// 実質的に最後まで見たか (再生位置が尺の 95% に到達)。
+  /// 完視聴率の集計を毎回 durationSeconds と突き合わせて計算せずに済むよう、
+  /// 判定結果を保存する (動画の尺は後から変わり得るため、判定時点の結果を残す)。
+  completed Boolean @default(false)
+  /// 進捗が最後に届いた時刻。createdAt は再生開始時刻なので、
+  /// この 2 つの差がその視聴セッションの実経過時間になる。
+  lastActiveAt DateTime? @map("last_active_at")
+  ipHash       String?   @map("ip_hash")
+  userAgent    String?   @map("user_agent")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([videoId, createdAt])
   @@index([userId, createdAt])
+  /// 「この人がこの動画をどこまで見たか」を引くため
+  /// (続きから再生 / 会員別の視聴状況)。
+  @@index([userId, videoId])
   @@map("video_view_logs")
 }
 
