@@ -161,10 +161,22 @@ describe('videoLockReason', () => {
     );
   });
 
-  it('会員限定の案内', () => {
+  it('会員限定（スタンダード以上）の案内', () => {
     expect(videoLockReason(video({ accessLevel: 'MEMBERS' }), 'FREE', NOW)).toBe(
-      'この動画は会員限定です。',
+      'この動画は会員限定（スタンダード以上）です。',
     );
+  });
+
+  it('無料会員以上は「ログインすれば見られる」と案内する', () => {
+    // 有料プランへの加入を促す文言を出すと、実際はログインだけで足りるのに
+    // 課金が必要だと誤解させてしまうので、文言を分けている。
+    expect(videoLockReason(video({ accessLevel: 'FREE_MEMBERS' }), undefined, NOW)).toBe(
+      'この動画は会員限定です。無料会員登録（ログイン）すると視聴できます。',
+    );
+  });
+
+  it('無料会員以上はログイン済みなら無料プランでも再生できる', () => {
+    expect(videoLockReason(video({ accessLevel: 'FREE_MEMBERS' }), 'FREE', NOW)).toBeNull();
   });
 });
 

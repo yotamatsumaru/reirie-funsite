@@ -34,7 +34,8 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input, Textarea, Select } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
+import { AccessLevelSelect } from '@/components/admin/AccessLevelSelect';
 import { toast } from '@/stores/ui-store';
 import {
   buildVideoEditPatch,
@@ -71,11 +72,9 @@ function ThumbnailPreview({ url }: { url: string | null }) {
   );
 }
 
-const ACCESS_LABEL: Record<string, string> = {
-  PUBLIC: '全員（無料会員・未ログインも視聴可）',
-  MEMBERS: '会員限定（スタンダード以上）',
-  PREMIUM: 'プレミアム限定',
-};
+// 公開範囲の選択肢とラベルは AccessLevelSelect（→ @idol/shared）に集約している。
+// 以前はここにローカルな ACCESS_LABEL を持っており、アップロード画面と
+// 同じ値に別の表記を当てていた。
 
 export function VideoEditForm({
   videoId,
@@ -353,18 +352,10 @@ export function VideoEditForm({
           hint={`${values.description.length} / ${VIDEO_DESCRIPTION_MAX} 文字・空にすると説明なしになります`}
         />
 
-        <Select
-          label="公開範囲"
-          name="accessLevel"
+        <AccessLevelSelect
           value={values.accessLevel}
-          onChange={(e) => set('accessLevel', e.target.value)}
-        >
-          {Object.entries(ACCESS_LABEL).map(([v, label]) => (
-            <option key={v} value={v}>
-              {label}
-            </option>
-          ))}
-        </Select>
+          onChange={(v) => set('accessLevel', v)}
+        />
 
         <Input
           label="公開開始日時"

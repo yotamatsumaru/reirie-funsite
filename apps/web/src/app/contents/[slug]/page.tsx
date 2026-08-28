@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess, formatJstDate} from '@idol/shared';
+import { accessLevelLabel, canAccess, formatJstDate } from '@idol/shared';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
@@ -46,8 +46,14 @@ export default async function ContentDetailPage({
     <article className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge tone="gray">{content.type === 'BLOG' ? 'ブログ' : 'ギャラリー'}</Badge>
-        {content.accessLevel === 'PREMIUM' && <Badge tone="brand">PREMIUM</Badge>}
-        {content.accessLevel === 'MEMBERS' && <Badge tone="info">MEMBERS</Badge>}
+        {/* 生の enum 名 (PREMIUM/MEMBERS) をそのまま出していたため、
+            公開範囲を増やしても新しい段階のバッジが出なかった。
+            PUBLIC 以外は共通ラベルでバッジを出す。 */}
+        {content.accessLevel !== 'PUBLIC' && (
+          <Badge tone={content.accessLevel === 'PREMIUM' ? 'brand' : 'info'}>
+            {accessLevelLabel(content.accessLevel)}
+          </Badge>
+        )}
       </div>
       <h1 className="text-2xl font-bold leading-snug text-slate-800 sm:text-3xl">{content.title}</h1>
       <p className="mt-2 text-xs text-slate-500 sm:text-sm">

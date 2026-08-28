@@ -17,11 +17,15 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
+import { AccessLevelSelect } from '@/components/admin/AccessLevelSelect';
 import { toast } from '@/stores/ui-store';
+import type { AccessLevelLiteral } from '@idol/shared';
 
 export type ContentType = 'BLOG' | 'GALLERY';
 export type ContentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-export type AccessLevel = 'PUBLIC' | 'MEMBERS' | 'PREMIUM';
+// 公開範囲の値は共有定義（Prisma enum と同期済み）をそのまま使う。
+// ここで独自に union を定義していたため、段階追加時に取りこぼしが起きやすかった。
+export type AccessLevel = AccessLevelLiteral;
 
 export interface ContentInitial {
   id?: string;
@@ -292,15 +296,10 @@ export function ContentForm({
                 <option value="PUBLISHED">公開</option>
                 <option value="ARCHIVED">アーカイブ</option>
               </Select>
-              <Select
-                label="閲覧権限"
+              <AccessLevelSelect
                 value={form.accessLevel}
-                onChange={(e) => set('accessLevel', e.target.value as AccessLevel)}
-              >
-                <option value="PUBLIC">誰でも (PUBLIC)</option>
-                <option value="MEMBERS">会員以上 (MEMBERS)</option>
-                <option value="PREMIUM">プレミアム限定 (PREMIUM)</option>
-              </Select>
+                onChange={(v) => set('accessLevel', v)}
+              />
               <Input
                 label="著者名 (任意)"
                 value={form.authorName}

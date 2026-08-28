@@ -4,7 +4,7 @@ import { prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
-import { formatJstDateTime } from '@idol/shared';
+import { accessLevelLabel, formatJstDateTime } from '@idol/shared';
 
 export const metadata: Metadata = { title: 'コンテンツ管理' };
 export const dynamic = 'force-dynamic';
@@ -66,7 +66,7 @@ export default async function AdminContentsPage() {
                 <div className="flex flex-wrap gap-1.5 text-xs">
                   <Badge tone="gray">{typeLabel(c.type)}</Badge>
                   <Badge tone={c.accessLevel === 'PREMIUM' ? 'brand' : c.accessLevel === 'MEMBERS' ? 'info' : 'gray'}>
-                    {c.accessLevel}
+                    {accessLevelLabel(c.accessLevel)}
                   </Badge>
                   <Badge tone={c.status === 'PUBLISHED' ? 'success' : 'gray'}>{c.status}</Badge>
                 </div>
@@ -103,7 +103,7 @@ export default async function AdminContentsPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3">{typeLabel(c.type)}</td>
-                  <td className="px-4 py-3">{c.accessLevel}</td>
+                  <td className="px-4 py-3">{accessLevelLabel(c.accessLevel)}</td>
                   <td className="px-4 py-3">
                     <Badge tone={c.status === 'PUBLISHED' ? 'success' : 'gray'}>{c.status}</Badge>
                   </td>

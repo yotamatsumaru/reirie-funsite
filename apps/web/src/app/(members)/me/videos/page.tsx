@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@idol/db';
-import { formatJstDate, type PlanTypeLiteral } from '@idol/shared';
+import { accessLevelLabel, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { resolveThumbnailUrls } from '@/lib/video-delivery';
@@ -113,7 +113,7 @@ export default async function MemberVideosPage() {
                   )}
                   {locked && (
                     <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                      {v.accessLevel === 'PREMIUM' ? 'プレミアム限定' : '会員限定'}
+                      {accessLevelLabel(v.accessLevel)}
                     </span>
                   )}
                 </div>
@@ -123,11 +123,7 @@ export default async function MemberVideosPage() {
                   </h2>
                   <div className="flex items-center gap-1.5">
                     <Badge tone={v.accessLevel === 'PREMIUM' ? 'brand' : 'gray'}>
-                      {v.accessLevel === 'PREMIUM'
-                        ? 'プレミアム'
-                        : v.accessLevel === 'MEMBERS'
-                          ? '会員'
-                          : '公開'}
+                      {accessLevelLabel(v.accessLevel)}
                     </Badge>
                     {v.publishedAt && (
                       <span className="text-[11px] text-slate-400">
