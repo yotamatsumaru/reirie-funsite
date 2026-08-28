@@ -23,6 +23,7 @@
     "@idol/db": "workspace:*",
     "@idol/shared": "workspace:*",
     "@stripe/stripe-js": "^4.6.0",
+    "@tiptap/core": "3.29.0",
     "@tiptap/extension-image": "3.29.0",
     "@tiptap/extension-text-align": "3.29.0",
     "@tiptap/extensions": "3.29.0",
