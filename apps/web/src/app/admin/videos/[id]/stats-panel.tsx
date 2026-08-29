@@ -110,7 +110,7 @@ export function VideoStatsPanel({
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-xs font-semibold text-slate-700">視聴の離脱ポイント</h3>
               <p className="text-xs text-slate-400">
-                各区間まで到達した人数（計測対象 {stats.measuredCount} 回）
+                5% 区切りで到達した人数（計測対象 {stats.measuredCount} 回）
               </p>
             </div>
             {/*
@@ -118,26 +118,48 @@ export function VideoStatsPanel({
               管理画面にグラフライブラリを 1 つ入れるだけで
               バンドルが数十 KB 増えるが、ここで必要なのは
               「どこで減ったか」が読み取れる程度の粒度のため。
+
+              5% 刻み (20 本) に細かくしたため、10% 刻みの頃の
+              行高 (h-4 + space-y-1) のままだと縦に伸びすぎて
+              一画面に収まらない。バーを薄く・間隔を詰めて
+              「グラフとして一目で形が読める」高さに抑えている。
             */}
-            <ul className="space-y-1">
-              {bars.map((b) => (
-                <li key={b.label} className="flex items-center gap-2 text-xs">
-                  <span className="w-20 shrink-0 text-right text-slate-500">{b.label}</span>
-                  <span className="h-4 flex-1 overflow-hidden rounded bg-slate-100">
+            <ul className="space-y-px">
+              {bars.map((b, i) => {
+                // 10% ごと (偶数区間) の目盛だけラベルを出す。
+                // 20 本すべてに「0〜5%」と書くと文字が密集して
+                // かえって形が読めなくなるため。
+                const major = i % 2 === 0;
+                return (
+                  <li key={b.label} className="flex items-center gap-2 text-xs">
                     <span
-                      className="block h-full rounded bg-brand-500"
-                      style={{ width: `${Math.round(b.ratio * 100)}%` }}
-                    />
-                  </span>
-                  <span className="w-14 shrink-0 text-right tabular-nums text-slate-600">
-                    {b.viewers} 人
-                  </span>
-                </li>
-              ))}
+                      className={`w-10 shrink-0 text-right tabular-nums ${
+                        major ? 'text-slate-500' : 'text-transparent'
+                      }`}
+                      // ラベルを省いた行もマウスオーバーで区間が分かるようにする
+                      title={b.label}
+                    >
+                      {major ? `${Math.round((i * 100) / bars.length)}%` : '·'}
+                    </span>
+                    <span
+                      className="h-2.5 flex-1 overflow-hidden rounded-sm bg-slate-100"
+                      title={`${b.label}: ${b.viewers} 人`}
+                    >
+                      <span
+                        className="block h-full rounded-sm bg-brand-500"
+                        style={{ width: `${Math.round(b.ratio * 100)}%` }}
+                      />
+                    </span>
+                    <span className="w-12 shrink-0 text-right tabular-nums text-slate-600">
+                      {b.viewers}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
             <p className="text-xs text-slate-400">
-              右に行くほど棒が短くなるのが通常です。特定の区間で急に短くなる場合、
-              そこが離脱の起きやすい箇所です。
+              下に行くほど棒が短くなるのが通常です。特定の区間で急に短くなる場合、
+              そこが離脱の起きやすい箇所です。数字は到達した人数（各行にマウスを乗せると区間が出ます）。
             </p>
           </div>
         )}

@@ -96,9 +96,18 @@ describe('dropOffBucketIndex', () => {
     expect(dropOffBucketIndex(0, 100_000)).toBe(0);
   });
 
-  it('10% 刻みで区間が進む', () => {
-    expect(dropOffBucketIndex(10_000, 100_000)).toBe(1);
-    expect(dropOffBucketIndex(55_000, 100_000)).toBe(5);
+  it('5% 刻みで区間が進む', () => {
+    // 区間数 20 = 5% 刻み。5% ごとにインデックスが 1 つ進む。
+    expect(dropOffBucketIndex(5_000, 100_000)).toBe(1); // 5%
+    expect(dropOffBucketIndex(10_000, 100_000)).toBe(2); // 10%
+    expect(dropOffBucketIndex(55_000, 100_000)).toBe(11); // 55%
+  });
+
+  it('区間の境界ちょうどは次の区間に入る', () => {
+    // 5% ちょうど → 区間 1 (「5〜10%」) の先頭。
+    // 境界を跨ぐ位置がどちらに入るかは離脱位置の解釈に直結するため固定する。
+    expect(dropOffBucketIndex(4_999, 100_000)).toBe(0);
+    expect(dropOffBucketIndex(5_000, 100_000)).toBe(1);
   });
 
   it('尺ちょうどは最後の区間に入る（範囲外にならない）', () => {
@@ -204,5 +213,36 @@ describe('formatRatio', () => {
   it('範囲外は 0〜100% に丸める', () => {
     expect(formatRatio(1.5)).toBe('100%');
     expect(formatRatio(-0.2)).toBe('0%');
+  });
+});
+
+describe('5% 刻み (RETENTION_BUCKETS=20) の整合性', () => {
+  it('区間数は 20 = 5% 刻み', () => {
+    expect(RETENTION_BUCKETS).toBe(20);
+    expect(100 / RETENTION_BUCKETS).toBe(5);
+  });
+
+  it('既定の区間数でラベルが 5% 刻みになる', () => {
+    const bars = retentionBars(new Array<number>(RETENTION_BUCKETS).fill(1));
+    expect(bars).toHaveLength(20);
+    expect(bars[0]?.label).toBe('0〜5%');
+    expect(bars[1]?.label).toBe('5〜10%');
+    expect(bars[19]?.label).toBe('95〜100%');
+  });
+
+  it('ラベルに重複や欠けが無い（区間が連続している）', () => {
+    // 刻みを変えたときにラベル生成 (100/buckets) がズレて
+    // 「0〜5%」が 2 つ出るような事故を防ぐ。
+    const bars = retentionBars(new Array<number>(RETENTION_BUCKETS).fill(1));
+    const labels = bars.map((b) => b.label);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it('完視聴しきい値 95% が最終区間の開始と一致する', () => {
+    // COMPLETION_RATIO = 0.95 なので、5% 刻みなら
+    // 最終区間「95〜100%」に到達した人 ≒ 完視聴者になる。
+    // 刻みを変えるとこの対応が崩れるため固定しておく。
+    const bars = retentionBars(new Array<number>(RETENTION_BUCKETS).fill(1));
+    expect(bars[RETENTION_BUCKETS - 1]?.label).toBe('95〜100%');
   });
 });
