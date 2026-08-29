@@ -417,6 +417,9 @@ model User {
   miniGamePlays      MiniGamePlay[]
   extraPlayPurchases MiniGameExtraPlayPurchase[]
 
+  // MyRoom (家具の部屋) — 家具マスタを追加した運営アカウントとしての履歴
+  myRoomFurnituresCreated MyRoomFurniture[] @relation("MyRoomFurnitureCreatedBy")
+
   // 景品カタログ関連 (交換は Pui を消費する。旧特典ポイント関連の名残の型/テーブル名は維持)
   rewardPointPurchases     RewardPointPurchase[]
   rewardRedemptions        RewardRedemption[]
@@ -2061,4 +2064,74 @@ model BirthdayMailDelivery {
   @@unique([userId, year])
   @@index([year, sentAt])
   @@map("birthday_mail_deliveries")
+}
+
+// ===========================================================================
+// MyRoom (家具の部屋)
+// ===========================================================================
+
+/// MyRoom の家具の分類。どこに置けるかで分けている
+/// (見た目のジャンルではなく配置ルールで分ける。詳細は
+///  packages/shared/src/myroom-furniture.ts のコメント参照)。
+enum MyRoomFurnitureCategory {
+  FLOOR
+  WALL
+  DESKTOP
+  RUG
+  PLANT
+  OTHER
+}
+
+/// 家具マスタ 1 件の状態。
+/// ARCHIVED は「もう売らないが、既に持っている会員の家具は消さない」ための状態。
+enum MyRoomFurnitureStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// MyRoom の家具マスタ (運営が管理画面から追加する家具の種類)。
+///
+/// 会員が実際に部屋へ置いた家具は別テーブル (MyRoomPlacedFurniture) で持つ予定
+/// (PR2)。マスタと配置を分けているのは、価格や画像を後から差し替えても
+/// 既に購入した会員の部屋が壊れないようにするため。
+///
+/// 【画像の保存方式】他の画像 (ProductImage / SiteImage) と同じ二段構え。
+///   1. S3 が設定済み  → S3 に置き、url は外部 URL (data は null)
+///   2. S3 が未設定    → data にバイト列を保存し、url は /api/media/myroom-furniture/{id}
+/// ローカルディスクには書かない (standalone build で配信ディレクトリがズレる /
+/// 再ビルドで消える / PM2 cluster 間で不整合になるため)。
+model MyRoomFurniture {
+  id          String                  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?                 @db.Text
+  category    MyRoomFurnitureCategory
+  status      MyRoomFurnitureStatus   @default(DRAFT)
+  /// 購入に必要な Pui。0 なら無料配布の家具。
+  puiCost     Int                     @default(0) @map("pui_cost")
+  /// 部屋のグリッド上で占めるマス数 (配置判定は PR2 で実装)。
+  widthCells  Int                     @default(1) @map("width_cells")
+  heightCells Int                     @default(1) @map("height_cells")
+  /// 会員向けショップと管理画面一覧での並び順。
+  sortOrder   Int                     @default(0) @map("sort_order")
+
+  /// 家具画像の URL。未設定 (null) の家具は PUBLISHED でも会員に出さない
+  /// (透明な家具を買わせてしまうため。isMyRoomFurniturePurchasable 参照)。
+  imageUrl    String? @map("image_url")
+  contentType String? @map("content_type")
+  fileName    String? @map("file_name")
+  sizeBytes   Int?    @map("size_bytes")
+  /// S3 未設定時のフォールバック保存先 (画像バイト列)。
+  data        Bytes?
+
+  /// 追加した運営アカウント (退会しても家具は残すため SetNull)。
+  createdById String? @map("created_by_id") @db.Uuid
+  createdBy   User?   @relation("MyRoomFurnitureCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, sortOrder])
+  @@index([category, sortOrder])
+  @@map("myroom_furnitures")
 }

@@ -41,6 +41,18 @@ export const SiteSectionVisibilitySchema = z.object({
    * (canViewGameSection 参照)。
    */
   gamesVisible: z.boolean(),
+  /**
+   * MyRoom (家具の部屋) セクションを一般公開するか。
+   *
+   * 【既定は false = 非公開】ゲームと違い、MyRoom は既定で非公開にしている。
+   * MyRoom は 3 段階に分けて開発中で、まだ会員に見せられる状態ではないため。
+   * 「まだ公開しないでほしい・管理者だけ」という運営方針に合わせ、運営が
+   * 明示的に ON にするまで一般会員からは完全に隠れる。
+   *
+   * OFF の間もゲームと同じく管理者 (ADMIN 以上) はプレビューできる
+   * (canViewMyRoomSection 参照)。開発中の動作確認のため。
+   */
+  myRoomVisible: z.boolean(),
 });
 
 export type SiteSectionVisibility = z.infer<typeof SiteSectionVisibilitySchema>;
@@ -53,6 +65,10 @@ export const DEFAULT_SITE_SECTION_VISIBILITY: SiteSectionVisibility = {
   // 既存サイトではゲームは既に公開済みのため、既定は true。
   // (未設定の本番 DB に対して「勝手に非公開になる」事故を防ぐ)
   gamesVisible: true,
+  // MyRoom は開発中の新機能。他セクションと違い既定を false にしている。
+  // 未完成の機能が本番デプロイと同時に会員へ露出するのを防ぐためで、
+  // 公開は運営が管理画面で明示的に ON にしたときだけとする。
+  myRoomVisible: false,
 };
 
 /**
@@ -85,4 +101,36 @@ export function isGameSectionPreview(
   role: UserRoleLiteral | undefined | null,
 ): boolean {
   return !gamesVisible && isAdmin(role);
+}
+
+/**
+ * MyRoom セクションを閲覧できるか。
+ *
+ * ゲームと同じ「非公開でも管理者は見られる」方式にしている。MyRoom は
+ * 3 段階に分けて開発するため、非公開の期間が長く続く。その間ずっと
+ * 運営自身も触れないと、公開直前まで一度も動作確認できないことになる。
+ *
+ * 一般会員 / 未ログイン … 404
+ * 管理者 (ADMIN 以上)  … プレビュー表示
+ *
+ * @param myRoomVisible 公開設定 (AppSetting の値)
+ * @param role 閲覧者のロール (未ログインは undefined / null)
+ */
+export function canViewMyRoomSection(
+  myRoomVisible: boolean,
+  role: UserRoleLiteral | undefined | null,
+): boolean {
+  return myRoomVisible || isAdmin(role);
+}
+
+/**
+ * MyRoom セクションを「管理者プレビューとして」表示しているか。
+ * true のときは画面上に「非公開中」バナーを出し、運営が
+ * 「公開したつもりで非公開のまま」になる事故を防ぐ。
+ */
+export function isMyRoomSectionPreview(
+  myRoomVisible: boolean,
+  role: UserRoleLiteral | undefined | null,
+): boolean {
+  return !myRoomVisible && isAdmin(role);
 }

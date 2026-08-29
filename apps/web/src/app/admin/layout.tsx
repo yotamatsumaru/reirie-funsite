@@ -12,6 +12,7 @@ import {
   PhoneCall,
   Gift,
   Truck,
+  Sofa,
   type LucideIcon,
 } from 'lucide-react';
 import { auth } from '@/auth';
@@ -37,6 +38,9 @@ const NAV: NavItem[] = [
   { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },
   { href: '/admin/orders', label: '注文', icon: Receipt, capability: 'MERCH' },
   { href: '/admin/game', label: 'ゲーム', icon: Gamepad2, capability: 'GAME' },
+  // MyRoom は現在非公開 (site.sectionVisibility.myRoomVisible の既定が false) の
+  // 開発中機能。家具は会員に見せるサイト素材なので CONTENT 権限で扱う。
+  { href: '/admin/myroom/furnitures', label: 'MyRoom家具', icon: Sofa, capability: 'CONTENT' },
   { href: '/admin/rewards/catalog', label: '景品カタログ', icon: Gift, capability: 'MERCH' },
   { href: '/admin/rewards/redemptions', label: '発送管理', icon: Truck, capability: 'MERCH' },
   { href: '/admin/call', label: '1on1コール', icon: PhoneCall, capability: 'CALL' },

@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * コンテンツ / グッズ / DM / ゲーム セクションの公開設定 UI (SUPER_ADMIN)。
+ * コンテンツ / グッズ / DM / ゲーム / MyRoom セクションの公開設定 UI (SUPER_ADMIN)。
  *
  * - OFF にすると /contents, /products, /me/dm, /game (一覧・詳細ページ、および公開API) が
  *   一般ユーザーには 404 相当で非表示になる。管理画面 (/admin/*) は対象外。
- * - ゲームだけは例外で、OFF の間も管理者 (ADMIN 以上) はプレビューとして
- *   プレイできる (開発中の動作確認のため)。
+ * - ゲームと MyRoom は例外で、OFF の間も管理者 (ADMIN 以上) はプレビューとして
+ *   利用できる (開発中の動作確認のため)。
+ * - MyRoom (家具の部屋) は開発中の新機能のため、他セクションと違い
+ *   既定が「非公開」。運営がここで明示的に ON にするまで一般会員には出ない。
  * - GET/PATCH /api/super-admin/site-visibility で永続化 (AppSetting: site.sectionVisibility)。
  * - 切り替えは即時反映 (サーバ再起動不要)。
  */
@@ -41,6 +43,12 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
     description:
       'ミニゲーム・恋愛 ADV (/game, /me/games) をまとめて一般公開するか。OFF にすると個別設定に関わらず全ゲームが隠れます。ゲーム 1 本ごとの公開設定は「ゲーム設定」ページで行えます。OFF の間も管理者はプレイして動作確認できます（開発中の利用を想定）',
   },
+  {
+    key: 'myRoomVisible',
+    label: 'MyRoom（家具の部屋）',
+    description:
+      '会員が家具を購入して自分の部屋を飾る MyRoom 機能を一般公開するか。【現在は開発中の新機能のため、既定で非公開（管理者だけが利用できる状態）になっています】。OFF の間も管理者は動作確認でき、家具の登録・画像アップロードは管理画面「MyRoom家具」から行えます。会員に見せる準備ができてから ON にしてください',
+  },
 ];
 
 /**
@@ -48,7 +56,7 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
  * 「非公開にしたら自分も見られなくなるのでは」という不安をなくすため、
  * UI 上でも明示する。
  */
-const ADMIN_PREVIEWABLE_KEYS: ReadonlySet<string> = new Set(['gamesVisible']);
+const ADMIN_PREVIEWABLE_KEYS: ReadonlySet<string> = new Set(['gamesVisible', 'myRoomVisible']);
 
 export function SiteVisibilityClient({ initialVisibility }: Props) {
   const [visibility, setVisibility] = useState<SiteSectionVisibility>(initialVisibility);
@@ -92,7 +100,7 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">
-              コンテンツ / グッズ / DM / ゲーム の公開設定
+              コンテンツ / グッズ / DM / ゲーム / MyRoom の公開設定
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               OFF にすると該当セクションのページ・APIが一般ユーザーから見えなくなります
