@@ -439,6 +439,9 @@ model User {
   // 誕生日メールの配信記録 (年ごと。マイページで閲覧可能)
   birthdayMailDeliveries BirthdayMailDelivery[]
 
+  // ブログ本文に挿入した画像 (アップロード者としての履歴)
+  contentBodyImages ContentBodyImage[]
+
   @@index([email])
   @@map("users")
 }
@@ -1810,6 +1813,37 @@ model SiteImage {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("site_images")
+}
+
+/// ブログ記事・ギャラリー本文に挿入する画像。
+///
+/// SiteImage / ProductImage / VideoThumbnail と同じ二段構えで保存する:
+///   - S3 アセットバケット設定済み → S3 へ PUT し url は外部 URL (data は null)
+///   - 未設定 → data にバイト列を保存し /api/media/content-image/{id} 経由で配信
+///
+/// 特定の Content には紐付けない (contentId を持たない)。
+/// 記事を書き始める前 = Content レコードがまだ存在しない段階でも
+/// 本文に画像を挿し込めるようにするため。記事から画像を消しても
+/// レコードは残るが、アップロード者と日時を持たせて後から棚卸しできるようにしている。
+/// 注意: ギャラリー用の `ContentImage` (content_images) とは別物。
+/// あちらは Content に紐づく「ギャラリーの一覧画像」で、
+/// こちらは本文 HTML の <img src> から参照される「本文中に挿し込む画像」。
+model ContentBodyImage {
+  id          String   @id @default(uuid()) @db.Uuid
+  url         String
+  contentType String   @map("content_type")
+  /// 元ファイル名 (管理画面での一覧表示・検索用)
+  fileName    String?  @map("file_name")
+  sizeBytes   Int      @map("size_bytes")
+  data        Bytes?   @map("data")
+  /// アップロードした管理者。ユーザー削除時も画像自体は記事に残す必要があるため SetNull。
+  uploadedBy  String?  @map("uploaded_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  uploader User? @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("content_body_images")
 }
 
 /// あっち向いてホイのキャラクター画像 (ポーズごとの差し替え可能画像)。
