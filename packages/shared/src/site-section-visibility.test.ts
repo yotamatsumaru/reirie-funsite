@@ -13,6 +13,8 @@ import {
   DEFAULT_SITE_SECTION_VISIBILITY,
   canViewGameSection,
   isGameSectionPreview,
+  canViewMyRoomSection,
+  isMyRoomSectionPreview,
   type SiteSectionVisibility,
 } from './site-section-visibility';
 
@@ -21,12 +23,23 @@ describe('DEFAULT_SITE_SECTION_VISIBILITY', () => {
     expect(DEFAULT_SITE_SECTION_VISIBILITY.gamesVisible).toBe(true);
   });
 
-  it('すべてのセクションの既定は公開である', () => {
+  /**
+   * MyRoom だけ既定が false。開発中の新機能なので、デプロイした瞬間に
+   * 未完成の画面が会員へ露出しないようにするため。
+   * ここを true に変えてしまうと「まだ公開しないでほしい」という
+   * 運営方針に反するので、テストで固定する。
+   */
+  it('MyRoom の既定は「非公開」である（開発中の機能を会員に見せない）', () => {
+    expect(DEFAULT_SITE_SECTION_VISIBILITY.myRoomVisible).toBe(false);
+  });
+
+  it('既定値は MyRoom 以外すべて公開である', () => {
     expect(DEFAULT_SITE_SECTION_VISIBILITY).toEqual({
       contentsVisible: true,
       productsVisible: true,
       dmVisible: true,
       gamesVisible: true,
+      myRoomVisible: false,
     });
   });
 });
@@ -38,6 +51,7 @@ describe('SiteSectionVisibilitySchema', () => {
       productsVisible: false,
       dmVisible: true,
       gamesVisible: false,
+      myRoomVisible: false,
     });
     expect(parsed.gamesVisible).toBe(false);
   });
@@ -47,6 +61,17 @@ describe('SiteSectionVisibilitySchema', () => {
       contentsVisible: true,
       productsVisible: true,
       dmVisible: true,
+      myRoomVisible: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('myRoomVisible が欠けている場合も不正としてはじく', () => {
+    const result = SiteSectionVisibilitySchema.safeParse({
+      contentsVisible: true,
+      productsVisible: true,
+      dmVisible: true,
+      gamesVisible: true,
     });
     expect(result.success).toBe(false);
   });
@@ -71,6 +96,7 @@ describe('SiteSectionVisibilitySchema', () => {
       productsVisible: false,
       dmVisible: false,
       gamesVisible: true,
+      myRoomVisible: false,
     };
     const patch = SiteSectionVisibilitySchema.partial().parse({ gamesVisible: false });
     const after = SiteSectionVisibilitySchema.parse({ ...before, ...patch });
@@ -80,7 +106,25 @@ describe('SiteSectionVisibilitySchema', () => {
       productsVisible: false,
       dmVisible: false,
       gamesVisible: false,
+      myRoomVisible: false,
     });
+  });
+
+  /**
+   * MyRoom を公開したあとに他セクションをいじって、MyRoom が
+   * 勝手に非公開（既定値）へ戻らないことを確認する。
+   * 既定が false であるぶん、この巻き戻りは実害が大きい。
+   */
+  it('MyRoom を公開にしたあと他セクションを変更しても、公開状態が維持される', () => {
+    const before: SiteSectionVisibility = {
+      ...DEFAULT_SITE_SECTION_VISIBILITY,
+      myRoomVisible: true,
+    };
+    const patch = SiteSectionVisibilitySchema.partial().parse({ dmVisible: false });
+    const after = SiteSectionVisibilitySchema.parse({ ...before, ...patch });
+
+    expect(after.myRoomVisible).toBe(true);
+    expect(after.dmVisible).toBe(false);
   });
 
   it('部分更新で他セクションを変更しても、ゲームの非公開状態が維持される', () => {
@@ -161,6 +205,77 @@ describe('canViewGameSection (非公開中)', () => {
       for (const role of roles) {
         if (isGameSectionPreview(visible, role)) {
           expect(canViewGameSection(visible, role)).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+/**
+ * MyRoom の閲覧ゲート。
+ *
+ * 「家具の機能はまだ公開しないでほしい・管理者だけ」という要件そのものを
+ * 固定するテスト。既定値 (false) と組み合わせることで、
+ * デプロイ直後は管理者だけが触れる状態になることを保証する。
+ */
+describe('canViewMyRoomSection (非公開中 = 既定の状態)', () => {
+  it.each([
+    ['未ログイン', undefined],
+    ['null', null],
+    ['一般会員 (USER)', 'USER'],
+  ] as const)('非公開中は %s は閲覧できない', (_label, role) => {
+    expect(canViewMyRoomSection(false, role)).toBe(false);
+  });
+
+  it.each([
+    ['STAFF', 'STAFF'],
+    ['ADMIN', 'ADMIN'],
+    ['SUPER_ADMIN', 'SUPER_ADMIN'],
+  ] as const)('非公開中でも %s は閲覧できる（開発中の動作確認のため）', (_label, role) => {
+    expect(canViewMyRoomSection(false, role)).toBe(true);
+  });
+
+  it('既定値のままなら一般会員には見えず、管理者だけが見える', () => {
+    const { myRoomVisible } = DEFAULT_SITE_SECTION_VISIBILITY;
+    expect(canViewMyRoomSection(myRoomVisible, 'USER')).toBe(false);
+    expect(canViewMyRoomSection(myRoomVisible, undefined)).toBe(false);
+    expect(canViewMyRoomSection(myRoomVisible, 'ADMIN')).toBe(true);
+    expect(canViewMyRoomSection(myRoomVisible, 'SUPER_ADMIN')).toBe(true);
+  });
+
+  it('非公開中の管理者にはプレビュー警告を出す', () => {
+    expect(isMyRoomSectionPreview(false, 'ADMIN')).toBe(true);
+    expect(isMyRoomSectionPreview(false, 'SUPER_ADMIN')).toBe(true);
+  });
+
+  it('非公開中でも一般会員にはプレビュー扱いしない（そもそも 404 になる）', () => {
+    expect(isMyRoomSectionPreview(false, 'USER')).toBe(false);
+    expect(isMyRoomSectionPreview(false, undefined)).toBe(false);
+  });
+});
+
+describe('canViewMyRoomSection (公開後)', () => {
+  it.each([
+    ['未ログイン', undefined],
+    ['null', null],
+    ['USER', 'USER'],
+    ['ADMIN', 'ADMIN'],
+    ['SUPER_ADMIN', 'SUPER_ADMIN'],
+  ] as const)('公開したら %s でも閲覧できる', (_label, role) => {
+    expect(canViewMyRoomSection(true, role)).toBe(true);
+  });
+
+  it('公開中はプレビュー扱いにならない（警告バナーを出さない）', () => {
+    expect(isMyRoomSectionPreview(true, 'SUPER_ADMIN')).toBe(false);
+    expect(isMyRoomSectionPreview(true, 'USER')).toBe(false);
+  });
+
+  it('プレビュー表示は必ず「閲覧できる」場合に限られる', () => {
+    const roles = [undefined, null, 'USER', 'STAFF', 'ADMIN', 'SUPER_ADMIN'] as const;
+    for (const visible of [true, false]) {
+      for (const role of roles) {
+        if (isMyRoomSectionPreview(visible, role)) {
+          expect(canViewMyRoomSection(visible, role)).toBe(true);
         }
       }
     }
