@@ -6,6 +6,7 @@
  *  - 年セレクタ + テンプレート編集フォーム (件名・本文・画像・有効フラグ)。
  *  - 対象者 (今日 or 任意月日が誕生日) の一覧と送信状況。
  *  - 個別送信 / 未送信者への一斉送信。
+ *  - 強制送信 (ForcedSendPanel) … 誕生日を過ぎた方・対象外の方への救済送信。
  *
  * すべての読み書きは /api/super-admin/birthday/* を叩いて行う。
  */
@@ -27,6 +28,7 @@ import {
   type BirthdayMailRunState,
 } from '@idol/shared';
 import { Clock, CheckCircle2, CircleSlash, AlertTriangle } from 'lucide-react';
+import { ForcedSendPanel } from './forced-send-panel';
 
 type Today = { year: number; month: number; day: number };
 
@@ -846,6 +848,14 @@ export function BirthdayMailClient({
           )}
         </CardBody>
       </Card>
+
+      {/*
+        強制送信パネル。
+        通常の対象者一覧 (上) では「本日が誕生日 かつ 有料会員」しか出てこないため、
+        送信漏れに後から気づいた場合や、対象外の会員へ特例で送りたい場合の受け皿。
+        誤操作を避けるため、通常の導線より下に置いている。
+      */}
+      <ForcedSendPanel year={year} onSent={() => void loadRecipients(year, month, day)} />
     </div>
   );
 }

@@ -71,8 +71,76 @@ export const BirthdayMailSendSchema = z.object({
    *  - 省略 / 空配列: 「今日が誕生日で、その年に未送信」の会員全員に一斉送信。
    */
   userIds: z.array(z.uuid()).optional(),
+  /**
+   * 強制送信フラグ (運営の救済操作)。
+   *
+   * 通常送信は「本日が誕生日」かつ「有料プラン (STANDARD/PREMIUM)」の会員だけを
+   * 対象にする。しかし運用では、この条件から外れた会員へ運営判断で送りたい場面がある:
+   *   - 送信漏れに翌日以降に気づいた (誕生日を過ぎると対象一覧から消えてしまう)
+   *   - 障害・テンプレート未作成で当日に届かなかった
+   *   - 特例で無料会員にも送りたい
+   *
+   * force=true のときは日付・プランの条件を無視して、userIds に指定された会員へ
+   * 直接送信する。誤爆を防ぐため userIds は必須 (一斉送信との併用は不可)。
+   */
+  force: z.boolean().optional(),
 });
 export type BirthdayMailSendInput = z.infer<typeof BirthdayMailSendSchema>;
+
+/**
+ * 強制送信リクエストとして妥当かを判定する。
+ *
+ * 【なぜ userIds 必須なのか】
+ * force は「日付もプランも見ない」という強い権限なので、userIds を省略できると
+ * 「全会員へ誕生日メールを一斉送信」という取り返しのつかない事故が起こりうる。
+ * 対象を明示的に列挙させることで、誤操作の影響範囲を送信者が選んだ人だけに限定する。
+ */
+export function isValidForcedSendRequest(input: {
+  force?: boolean;
+  userIds?: string[];
+}): boolean {
+  if (!input.force) return true; // 通常送信は従来どおり userIds 省略可
+  return Array.isArray(input.userIds) && input.userIds.length > 0;
+}
+
+/** 一度の強制送信で指定できる会員数の上限 (誤操作時の被害を抑える)。 */
+export const BIRTHDAY_MAIL_FORCED_SEND_MAX = 50;
+
+/**
+ * 強制送信の対象人数が上限内かを判定する。
+ * 救済用途では数名〜が想定なので、上限を超える場合は一斉送信の誤用を疑う。
+ */
+export function isWithinForcedSendLimit(userIds: string[]): boolean {
+  return userIds.length > 0 && userIds.length <= BIRTHDAY_MAIL_FORCED_SEND_MAX;
+}
+
+/**
+ * その会員が「通常の自動送信では届かない」状態かを判定する (UI の注意表示用)。
+ *
+ * 強制送信パネルでは、なぜ届かなかったのかを運営に見せたい。
+ * 理由が分かれば「本当に強制送信すべきか」を判断でき、
+ * 根本原因 (誕生日未登録など) の修正にもつなげられる。
+ */
+export type BirthdayMailIneligibleReason =
+  | 'NO_BIRTHDATE'
+  | 'NOT_PAID_PLAN'
+  | 'NOT_TODAY'
+  | 'ALREADY_SENT';
+
+export function describeBirthdayMailIneligibleReason(
+  reason: BirthdayMailIneligibleReason,
+): string {
+  switch (reason) {
+    case 'NO_BIRTHDATE':
+      return '誕生日が未登録のため、自動送信の対象になりません';
+    case 'NOT_PAID_PLAN':
+      return '有料プラン (スタンダード / プレミアム) ではないため、自動送信の対象になりません';
+    case 'NOT_TODAY':
+      return '本日が誕生日ではないため、自動送信の対象になりません';
+    case 'ALREADY_SENT':
+      return 'この年は既に送信済みです（強制送信すると再送になります）';
+  }
+}
 
 /**
  * テスト送信リクエストのスキーマ。

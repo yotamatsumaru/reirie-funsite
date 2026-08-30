@@ -20,6 +20,7 @@ import {
   renderBirthdayMailText,
   isBirthdayMailScheduleDue,
   formatBirthdayMailTime,
+  type BirthdayMailIneligibleReason,
 } from '@idol/shared';
 import { isAssetStorageConfigured, putAsset } from './s3';
 import { sendEmail } from './email';
@@ -269,6 +270,173 @@ export async function listBirthdayRecipients(params: {
     .sort((a, b) => a.email.localeCompare(b.email));
 }
 
+/**
+ * userId を指定して送信対象を組み立てる (強制送信用)。
+ *
+ * listBirthdayRecipients() と違い、誕生日・プランの条件を一切見ない。
+ * ただし退会 (deletedAt) と利用停止 (bannedAt) だけは除外する。
+ * これらは「送ってはいけない相手」であり、運営の救済意図とは無関係に守るべき一線のため。
+ */
+async function loadRecipientsByIds(
+  userIds: string[],
+  year: number,
+): Promise<BirthdayRecipient[]> {
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, deletedAt: null, bannedAt: null },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      preferredName: true,
+      fullName: true,
+      birthDate: true,
+    },
+  });
+  if (users.length === 0) return [];
+
+  const deliveries = await prisma.birthdayMailDelivery.findMany({
+    where: { year, userId: { in: users.map((u) => u.id) } },
+    select: { userId: true, sentAt: true, emailSent: true },
+  });
+  const byUser = new Map(deliveries.map((d) => [d.userId, d]));
+
+  return users.map((u) => {
+    const d = byUser.get(u.id);
+    return {
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      preferredName: u.preferredName,
+      fullName: u.fullName,
+      // 誕生日未登録でも強制送信はできるようにする (型を満たすため現在日時を入れる)。
+      // birthDate はこの経路では送信内容に影響しない。
+      birthDate: u.birthDate ?? new Date(),
+      sent: Boolean(d),
+      sentAt: d?.sentAt ?? null,
+      emailSent: d?.emailSent ?? false,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 強制送信 (運営の救済操作) 用の会員検索
+// ---------------------------------------------------------------------------
+
+/** 強制送信パネルの検索結果 1 件。対象外の理由付きで返す。 */
+export type BirthdayMailCandidate = {
+  id: string;
+  email: string;
+  memberNumber: string | null;
+  displayName: string | null;
+  preferredName: string | null;
+  fullName: string | null;
+  birthDate: Date | null;
+  /** 有料プラン (STANDARD/PREMIUM) のアクティブな購読があるか。 */
+  paidPlan: boolean;
+  /** 対象年の配信記録があるか。 */
+  sent: boolean;
+  sentAt: Date | null;
+  emailSent: boolean;
+  /**
+   * 自動送信の対象外である理由 (複数該当しうる)。空配列 = 通常送信で届く会員。
+   * UI で「なぜ届かなかったか」を運営に見せ、強制送信の要否を判断させる。
+   */
+  ineligibleReasons: BirthdayMailIneligibleReason[];
+};
+
+/**
+ * 強制送信の対象候補を検索する (メール / 会員番号 / 氏名の部分一致)。
+ *
+ * 【通常の対象者一覧と何が違うか】
+ * listBirthdayRecipients() は「本日が誕生日 かつ 有料会員」しか返さない。
+ * 一方この関数は条件で絞らず、退会・BAN 以外の全会員から検索する。
+ * 「誕生日を過ぎてしまった人」「無料会員」を運営が探して救済できるようにするため。
+ *
+ * 対象外の理由は落とさず ineligibleReasons に載せて返す。
+ * 「なぜ届かなかったか」が分かれば、根本原因 (誕生日未登録など) の修正にもつながる。
+ */
+export async function searchBirthdayMailCandidates(params: {
+  year: number;
+  query: string;
+  limit?: number;
+}): Promise<BirthdayMailCandidate[]> {
+  const q = params.query.trim();
+  if (!q) return [];
+  const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
+
+  const users = await prisma.user.findMany({
+    where: {
+      deletedAt: null,
+      bannedAt: null,
+      OR: [
+        { email: { contains: q, mode: 'insensitive' } },
+        { memberNumber: { contains: q, mode: 'insensitive' } },
+        { fullName: { contains: q, mode: 'insensitive' } },
+        { displayName: { contains: q, mode: 'insensitive' } },
+        { preferredName: { contains: q, mode: 'insensitive' } },
+      ],
+    },
+    select: {
+      id: true,
+      email: true,
+      memberNumber: true,
+      displayName: true,
+      preferredName: true,
+      fullName: true,
+      birthDate: true,
+      subscriptions: {
+        where: {
+          planType: { in: ['STANDARD', 'PREMIUM'] },
+          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+        },
+        select: { id: true },
+        take: 1,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+
+  if (users.length === 0) return [];
+
+  const deliveries = await prisma.birthdayMailDelivery.findMany({
+    where: { year: params.year, userId: { in: users.map((u) => u.id) } },
+    select: { userId: true, sentAt: true, emailSent: true },
+  });
+  const byUser = new Map(deliveries.map((d) => [d.userId, d]));
+  const today = jstToday();
+
+  return users.map((u) => {
+    const d = byUser.get(u.id);
+    const paidPlan = u.subscriptions.length > 0;
+    const reasons: BirthdayMailIneligibleReason[] = [];
+
+    if (!u.birthDate) {
+      reasons.push('NO_BIRTHDATE');
+    } else {
+      const md = birthMonthDay(u.birthDate);
+      if (md.month !== today.month || md.day !== today.day) reasons.push('NOT_TODAY');
+    }
+    if (!paidPlan) reasons.push('NOT_PAID_PLAN');
+    if (d && d.emailSent) reasons.push('ALREADY_SENT');
+
+    return {
+      id: u.id,
+      email: u.email,
+      memberNumber: u.memberNumber,
+      displayName: u.displayName,
+      preferredName: u.preferredName,
+      fullName: u.fullName,
+      birthDate: u.birthDate,
+      paidPlan,
+      sent: Boolean(d),
+      sentAt: d?.sentAt ?? null,
+      emailSent: d?.emailSent ?? false,
+      ineligibleReasons: reasons,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // 送信
 // ---------------------------------------------------------------------------
@@ -287,12 +455,23 @@ export type SendResult = {
  *  - 既に配信記録がある会員 (emailSent=true) はスキップ (二重送信防止)。
  *    記録はあるが送信失敗 (emailSent=false) の会員は再送を試みる。
  *  - 送信の成否に関わらず、成功時は配信記録を upsert する。
+ *
+ * 【force = 強制送信 (運営の救済操作)】
+ * force=true のときは以下の 2 点が通常送信と異なる:
+ *   1. 対象の絞り込みを「本日が誕生日 かつ 有料会員」から行わず、
+ *      userIds の会員を直接引く。誕生日を過ぎた人・無料会員にも送れる。
+ *   2. 送信済みスキップを行わない (= 明示的な再送を許可する)。
+ *      運営が「届いていない」と判断して操作しているため、
+ *      記録上の送信済みよりも運営の意思を優先する。
+ * 誤爆防止のため userIds は必須 (呼び出し側でも検証すること)。
  */
 export async function sendBirthdayMails(params: {
   year: number;
   userIds?: string[];
+  force?: boolean;
 }): Promise<SendResult> {
   const { year } = params;
+  const force = params.force === true;
   const template = await getBirthdayTemplate(year);
   if (!template) {
     throw new Error(`${year} 年の誕生日メールテンプレートが未設定です。`);
@@ -302,12 +481,24 @@ export async function sendBirthdayMails(params: {
   }
 
   const today = jstToday();
-  const recipients = await listBirthdayRecipients({ year });
-  let targets = recipients;
+  let targets: BirthdayRecipient[];
 
-  if (params.userIds && params.userIds.length > 0) {
-    const set = new Set(params.userIds);
-    targets = recipients.filter((r) => set.has(r.id));
+  if (force) {
+    // 強制送信: 日付・プランの条件を無視して userIds の会員を直接引く。
+    if (!params.userIds || params.userIds.length === 0) {
+      throw new Error('強制送信では送信対象の会員を指定してください。');
+    }
+    targets = await loadRecipientsByIds(params.userIds, year);
+    if (targets.length === 0) {
+      throw new Error('指定された会員が見つかりませんでした (退会・利用停止の可能性があります)。');
+    }
+  } else {
+    const recipients = await listBirthdayRecipients({ year });
+    targets = recipients;
+    if (params.userIds && params.userIds.length > 0) {
+      const set = new Set(params.userIds);
+      targets = recipients.filter((r) => set.has(r.id));
+    }
   }
 
   const result: SendResult = {
@@ -320,7 +511,9 @@ export async function sendBirthdayMails(params: {
 
   for (const r of targets) {
     // 送信済み (実送信成功) はスキップ。失敗記録のみは再送を許可。
-    if (r.sent && r.emailSent) {
+    // 強制送信は「運営が届いていないと判断して操作している」ので、
+    // 記録上の送信済みよりも運営の意思を優先し、あえて再送する。
+    if (!force && r.sent && r.emailSent) {
       result.skipped++;
       continue;
     }
