@@ -56,6 +56,56 @@ export function isDigitalDelivery(kind: RewardCatalogItemKindLiteral): boolean {
   return kind === 'DIGITAL';
 }
 
+/**
+ * 同じ景品を 1 会員につき 1 回しか交換できない種別か。
+ *
+ * 【なぜ種別で分けるのか】
+ * 「2 回買えてしまうのはバグ」なのは DIGITAL (壁紙などのダウンロード配布) だけ。
+ * デジタル特典は一度交換すれば以後いつでも何度でもダウンロードできるので、
+ * 2 回目の交換は Pui を払っても新たに得るものが何もない = 会員の純損失になる。
+ * これが「Pui の重複使用」の実害である。
+ *
+ * 逆に GOODS (物品) と CALL_PRIORITY (特典会優先枠) は、
+ * 「同じグッズを 2 個ほしい」「次回の特典会でも優先枠を取りたい」が正当な要求なので、
+ * 一律に 1 回だけへ制限すると既存の運用を壊す。したがって制限しない。
+ *
+ * 在庫 (stock) で個数を絞りたい場合は従来どおりカタログ側の在庫設定で行う。
+ */
+export function isOncePerUserKind(kind: RewardCatalogItemKindLiteral): boolean {
+  return kind === 'DIGITAL';
+}
+
+/**
+ * すでに交換済みの景品を、もう一度交換しようとしていないかを判定する。
+ *
+ * @param kind 景品の種別
+ * @param existingActiveRedemptions その会員がこの景品について持っている
+ *        「有効な」交換の件数 (CANCELED は Pui が返還済みなので数に入れない)
+ * @returns true = 交換を拒否すべき (すでに持っている)
+ *
+ * キャンセル済みを除外しているのは、運営がキャンセル (= Pui 返還) した後は
+ * 会員がもう一度交換できないと詰んでしまうため。
+ */
+export function isDuplicateRedemption(
+  kind: RewardCatalogItemKindLiteral,
+  existingActiveRedemptions: number,
+): boolean {
+  if (!isOncePerUserKind(kind)) return false;
+  return existingActiveRedemptions > 0;
+}
+
+/**
+ * 交換済みのデジタル特典を「もう一度ダウンロードする」ことは常に許可される。
+ *
+ * ダウンロード回数に上限を設けない方針を、判定関数として明示しておく
+ * (将来 uploader 都合で上限を入れたくなったとき、変更点が 1 箇所で済むように)。
+ * 交換済み = 買い切りなので、機種変更・PC 買い替え・保存ミスでも
+ * 会員が Pui を再度払う必要はない。
+ */
+export function canRedownloadDigitalAsset(hasActiveRedemption: boolean): boolean {
+  return hasActiveRedemption;
+}
+
 export const REWARD_CATALOG_ITEM_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const;
 export type RewardCatalogItemStatusLiteral = (typeof REWARD_CATALOG_ITEM_STATUSES)[number];
 

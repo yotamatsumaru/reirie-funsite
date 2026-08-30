@@ -1579,7 +1579,23 @@ model RewardRedemption {
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  // 重複交換の検出を高速化する (userId + catalogItemId での存在確認に使う)
+  @@index([userId, catalogItemId, status])
   @@map("reward_redemptions")
+
+  /// 【重要 / Prisma では表現できない制約がある】
+  /// デジタル特典 (DIGITAL) の重複交換を防ぐため、DB 側に
+  /// 部分ユニークインデックス reward_redemptions_unique_active_digital を張っている:
+  ///
+  ///   UNIQUE (user_id, catalog_item_id)
+  ///     WHERE item_kind = 'DIGITAL' AND status <> 'CANCELED'
+  ///
+  /// 定義箇所: migrations/20260830000000_prevent_duplicate_digital_redemption
+  ///
+  /// GOODS / CALL_PRIORITY を除外しているのは複数回の交換が正当だから、
+  /// CANCELED を除外しているのはキャンセル (Pui 返還) 後に再交換できないと
+  /// 会員が詰んでしまうから。この 2 つの除外条件は @@unique では書けないため
+  /// SQL で直接定義している。schema.prisma からは見えないので注意。
 }
 
 /// 毎日のログインボーナス受領記録。
