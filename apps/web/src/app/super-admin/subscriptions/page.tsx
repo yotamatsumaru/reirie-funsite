@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { PLAN_LABELS, PLAN_PRICES, type PlanTypeLiteral } from '@idol/shared';
 import { SubRowActions } from './sub-row-actions';
 import { ReconcileButton } from './reconcile-button';
+import { SubscriptionHealthPanel } from './health-panel';
 
 export const metadata: Metadata = { title: 'サブスク分析 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -238,6 +239,16 @@ export default async function SuperAdminSubscriptionsPage({
         </div>
         {!readOnly && <ReconcileButton />}
       </header>
+
+      {/*
+        プラン反映の不整合チェック
+          「決済は成功しているのにプランが反映されていない会員」を、
+          会員からの申告を待たずに運営側から発見するためのパネル。
+          最優先で気づくべき事象のため、分析KPIより前に置く。
+      */}
+      <div className="mb-6">
+        <SubscriptionHealthPanel />
+      </div>
 
       {/* 二重契約の警告バナー */}
       {duplicateUsers.length > 0 && (

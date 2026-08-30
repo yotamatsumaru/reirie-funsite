@@ -29,3 +29,4 @@ export * from './schemas/call';
 export * from './schemas/reward';
 export * from './schemas/contact';
 export * from './schemas/birthday-mail';
+export * from './schemas/subscription-health';
