@@ -29,6 +29,8 @@ import {
   EXTRA_PLAY_COST_PUI,
   MAX_EXTRA_PLAYS_PER_DAY,
   requiresShipping,
+  isDuplicateRedemption,
+  isOncePerUserKind,
   canTransitionRedemptionStatus,
   isPromoActive,
   SOCIAL_SHARE_MIN_DWELL_SEC,
@@ -1465,7 +1467,12 @@ export type RedeemCatalogItemResult =
   | { ok: true; redemptionId: string; balance: number }
   | {
       ok: false;
-      reason: 'NOT_FOUND' | 'NOT_AVAILABLE' | 'OUT_OF_STOCK' | 'SHIPPING_REQUIRED';
+      reason:
+        | 'NOT_FOUND'
+        | 'NOT_AVAILABLE'
+        | 'OUT_OF_STOCK'
+        | 'SHIPPING_REQUIRED'
+        | 'ALREADY_REDEEMED';
     };
 
 /**
@@ -1474,6 +1481,15 @@ export type RedeemCatalogItemResult =
  *  - GOODS (発送必要) は配送先情報が必須。
  *  - Pui 残高不足時は applyPui が PuiIntegrityError を投げ、
  *    トランザクション全体 (在庫デクリメント・交換記録を含む) がロールバックされる。
+ *
+ * 【重複交換の防止 (2026-08 修正)】
+ * デジタル特典 (DIGITAL) は一度交換すれば何度でもダウンロードできるため、
+ * 2 回目の交換は Pui を払っても得るものがなく、会員の純損失になる。
+ * そのため 1 会員 1 回に限定する。防御は 2 重にしている:
+ *   1. ここでの事前チェック … 分かりやすいメッセージを返すため
+ *   2. DB の部分ユニーク制約 … ボタン連打・複数タブの同時実行で
+ *      「両方が未交換と判定してから両方が INSERT する」競合を防ぐため
+ * 1 だけでは競合を防げないし、2 だけではユーザーに伝わるメッセージにならない。
  */
 export async function redeemRewardCatalogItem(
   userId: string,
@@ -1487,52 +1503,77 @@ export async function redeemRewardCatalogItem(
     shippingAddress2?: string;
   },
 ): Promise<RedeemCatalogItemResult> {
-  return prisma.$transaction(async (tx) => {
-    const item = await tx.rewardCatalogItem.findUnique({ where: { id: catalogItemId } });
-    if (!item) return { ok: false, reason: 'NOT_FOUND' };
-    if (item.status !== 'PUBLISHED') return { ok: false, reason: 'NOT_AVAILABLE' };
-    if (item.stock !== null && item.stock <= 0) return { ok: false, reason: 'OUT_OF_STOCK' };
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const item = await tx.rewardCatalogItem.findUnique({ where: { id: catalogItemId } });
+      if (!item) return { ok: false, reason: 'NOT_FOUND' };
+      if (item.status !== 'PUBLISHED') return { ok: false, reason: 'NOT_AVAILABLE' };
+      if (item.stock !== null && item.stock <= 0) return { ok: false, reason: 'OUT_OF_STOCK' };
 
-    const needsShipping = requiresShipping(item.kind as RewardCatalogItemKindLiteral);
-    if (needsShipping && (!shipping?.shippingName || !shipping?.shippingAddress1)) {
-      return { ok: false, reason: 'SHIPPING_REQUIRED' };
-    }
+      const kind = item.kind as RewardCatalogItemKindLiteral;
 
-    // 在庫があれば原子的にデクリメント (競合時は WHERE 条件で 0 件更新 = 品切れ扱い)
-    if (item.stock !== null) {
-      const updated = await tx.rewardCatalogItem.updateMany({
-        where: { id: item.id, stock: { gt: 0 } },
-        data: { stock: { decrement: 1 } },
-      });
-      if (updated.count === 0) return { ok: false, reason: 'OUT_OF_STOCK' };
-    }
+      // 【重複交換チェック】DIGITAL のみ 1 会員 1 回。
+      // CANCELED (= Pui 返還済み) は数えない。返還後に再交換できないと会員が詰むため。
+      if (isOncePerUserKind(kind)) {
+        const activeCount = await tx.rewardRedemption.count({
+          where: { userId, catalogItemId: item.id, status: { not: 'CANCELED' } },
+        });
+        if (isDuplicateRedemption(kind, activeCount)) {
+          // 在庫デクリメントも Pui 消費もまだ行っていないので、ここで抜ければ副作用なし。
+          return { ok: false, reason: 'ALREADY_REDEEMED' };
+        }
+      }
 
-    const balance = await applyPui(tx, {
-      userId,
-      amount: -item.puiCost,
-      reason: 'REDEMPTION',
-      note: `${item.name} と交換`,
-    });
+      const needsShipping = requiresShipping(kind);
+      if (needsShipping && (!shipping?.shippingName || !shipping?.shippingAddress1)) {
+        return { ok: false, reason: 'SHIPPING_REQUIRED' };
+      }
 
-    const redemption = await tx.rewardRedemption.create({
-      data: {
+      // 在庫があれば原子的にデクリメント (競合時は WHERE 条件で 0 件更新 = 品切れ扱い)
+      if (item.stock !== null) {
+        const updated = await tx.rewardCatalogItem.updateMany({
+          where: { id: item.id, stock: { gt: 0 } },
+          data: { stock: { decrement: 1 } },
+        });
+        if (updated.count === 0) return { ok: false, reason: 'OUT_OF_STOCK' };
+      }
+
+      const balance = await applyPui(tx, {
         userId,
-        catalogItemId: item.id,
-        itemName: item.name,
-        itemKind: item.kind,
-        puiCost: item.puiCost,
-        status: 'PENDING',
-        shippingName: needsShipping ? shipping?.shippingName : undefined,
-        shippingPhone: needsShipping ? shipping?.shippingPhone : undefined,
-        shippingPostalCode: needsShipping ? shipping?.shippingPostalCode : undefined,
-        shippingPrefecture: needsShipping ? shipping?.shippingPrefecture : undefined,
-        shippingAddress1: needsShipping ? shipping?.shippingAddress1 : undefined,
-        shippingAddress2: needsShipping ? shipping?.shippingAddress2 : undefined,
-      },
-    });
+        amount: -item.puiCost,
+        reason: 'REDEMPTION',
+        note: `${item.name} と交換`,
+      });
 
-    return { ok: true, redemptionId: redemption.id, balance };
-  });
+      const redemption = await tx.rewardRedemption.create({
+        data: {
+          userId,
+          catalogItemId: item.id,
+          itemName: item.name,
+          itemKind: item.kind,
+          puiCost: item.puiCost,
+          status: 'PENDING',
+          shippingName: needsShipping ? shipping?.shippingName : undefined,
+          shippingPhone: needsShipping ? shipping?.shippingPhone : undefined,
+          shippingPostalCode: needsShipping ? shipping?.shippingPostalCode : undefined,
+          shippingPrefecture: needsShipping ? shipping?.shippingPrefecture : undefined,
+          shippingAddress1: needsShipping ? shipping?.shippingAddress1 : undefined,
+          shippingAddress2: needsShipping ? shipping?.shippingAddress2 : undefined,
+        },
+      });
+
+      return { ok: true, redemptionId: redemption.id, balance };
+    });
+  } catch (e) {
+    // 上のカウントチェックをすり抜けた同時実行 (ボタン連打・複数タブ) は
+    // DB の部分ユニークインデックス reward_redemptions_unique_active_digital が弾く。
+    // その場合トランザクション全体がロールバックされるので Pui も在庫も減っていない。
+    // 500 ではなく「すでに交換済み」として扱う。
+    if (isUniqueViolation(e)) {
+      return { ok: false, reason: 'ALREADY_REDEEMED' };
+    }
+    throw e;
+  }
 }
 
 export type UpdateRedemptionStatusResult =

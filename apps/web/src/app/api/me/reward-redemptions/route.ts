@@ -17,6 +17,10 @@ const REDEEM_ERROR_MESSAGES: Record<string, string> = {
   NOT_AVAILABLE: 'この景品は現在交換できません',
   OUT_OF_STOCK: '在庫切れです',
   SHIPPING_REQUIRED: '発送先情報を入力してください',
+  // 「もう交換できません」で終わると会員が損したように感じるので、
+  // 「ポイントを使わずに何度でもダウンロードできる」ことを必ず添える。
+  ALREADY_REDEEMED:
+    'この特典はすでに交換済みです。ポイントを使わずに「交換済みのデジタル特典」から何度でもダウンロードできます。',
 };
 
 export const GET = handle(async (req: Request) => {

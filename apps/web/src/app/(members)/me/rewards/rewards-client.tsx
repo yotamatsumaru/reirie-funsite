@@ -4,11 +4,19 @@
  * 景品カタログの閲覧・交換申請 UI
  *  - GOODS (発送必要) は発送先フォームを表示 (デフォルトは会員登録住所)
  *  - CALL_PRIORITY / DIGITAL は確認のみで即時交換
+ *
+ * 【重複交換の防止 (2026-08)】
+ * デジタル特典 (壁紙など) は一度交換すれば何度でもダウンロードできるので、
+ * 2 回目の交換は Pui を払っても得るものがない = 会員の純損失。
+ * ここでは交換済みのものをボタンごと無効化し、代わりに
+ * 「再ダウンロードは無料・何度でも可能」という導線を見せる。
+ * (サーバ側・DB の部分ユニーク制約でも弾いているので、ここは UX 層)
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   REWARD_CATALOG_ITEM_KIND_LABELS,
+  isOncePerUserKind,
   requiresShipping,
   type RewardCatalogItemKindLiteral,
 } from '@idol/shared';
@@ -41,14 +49,21 @@ export function RewardsClient({
   items,
   balance,
   defaultShipping,
+  redeemedCatalogItemIds = [],
+  downloadsAnchorId,
   onRedeemed,
 }: {
   items: CatalogItem[];
   balance: number;
   defaultShipping: ShippingInfo;
-  onRedeemed?: (kind: string) => void;
+  /** すでに交換済み (CANCELED でない) の catalogItemId 一覧 */
+  redeemedCatalogItemIds?: string[];
+  /** 「再ダウンロードへ」リンクの飛び先アンカー id */
+  downloadsAnchorId?: string;
+  onRedeemed?: (kind: string, catalogItemId: string) => void;
 }) {
   const router = useRouter();
+  const redeemedSet = new Set(redeemedCatalogItemIds);
   const [selected, setSelected] = useState<CatalogItem | null>(null);
   const [shipping, setShipping] = useState<ShippingInfo>(defaultShipping);
   const [busy, setBusy] = useState(false);
@@ -93,7 +108,7 @@ export function RewardsClient({
           ? `${selected.name} と交換しました！下の「交換済みデジタル特典」からダウンロードできます。`
           : `${selected.name} との交換を受け付けました！`,
       );
-      onRedeemed?.(selected.kind);
+      onRedeemed?.(selected.kind, selected.id);
       setSelected(null);
       router.refresh();
     } catch (e) {
@@ -122,6 +137,10 @@ export function RewardsClient({
           {items.map((item) => {
             const outOfStock = item.stock !== null && item.stock <= 0;
             const affordable = balance >= item.puiCost;
+            // 1 会員 1 回限定の種別 (現在は DIGITAL) ですでに交換済みか
+            const alreadyRedeemed =
+              isOncePerUserKind(item.kind as RewardCatalogItemKindLiteral) &&
+              redeemedSet.has(item.id);
             return (
               <Card key={item.id} className="flex h-full flex-col overflow-hidden">
                 {item.imageUrl && (
@@ -137,7 +156,8 @@ export function RewardsClient({
                     <Badge tone="info">
                       {REWARD_CATALOG_ITEM_KIND_LABELS[item.kind as RewardCatalogItemKindLiteral]}
                     </Badge>
-                    {outOfStock && <Badge tone="danger">在庫切れ</Badge>}
+                    {outOfStock && !alreadyRedeemed && <Badge tone="danger">在庫切れ</Badge>}
+                    {alreadyRedeemed && <Badge tone="success">交換済み</Badge>}
                   </div>
                   <p className="font-semibold text-slate-800">{item.name}</p>
                   {item.description && (
@@ -151,14 +171,41 @@ export function RewardsClient({
                     </p>
                     <Button
                       size="sm"
-                      disabled={outOfStock || !affordable}
+                      disabled={alreadyRedeemed || outOfStock || !affordable}
                       onClick={() => openRedeem(item)}
                     >
-                      {outOfStock ? '在庫切れ' : affordable ? '交換する' : 'Pui 不足'}
+                      {alreadyRedeemed
+                        ? '交換済み'
+                        : outOfStock
+                          ? '在庫切れ'
+                          : affordable
+                            ? '交換する'
+                            : 'Pui 不足'}
                     </Button>
                   </div>
-                  {item.stock !== null && !outOfStock && (
-                    <p className="text-right text-[11px] text-slate-400">残り {item.stock} 点</p>
+                  {alreadyRedeemed ? (
+                    // この 2 行が今回の修正の要点。
+                    // 「もう交換できない」だけでは会員は損したと感じるので、
+                    // 「Pui 不要で何度でもダウンロードできる」ことを同じ場所で伝える。
+                    <p className="text-right text-[11px] text-slate-500">
+                      Pui を使わずに何度でも再ダウンロードできます。
+                      {downloadsAnchorId && (
+                        <>
+                          {' '}
+                          <a
+                            href={`#${downloadsAnchorId}`}
+                            className="font-semibold text-brand-600 hover:underline"
+                          >
+                            再ダウンロードへ
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  ) : (
+                    item.stock !== null &&
+                    !outOfStock && (
+                      <p className="text-right text-[11px] text-slate-400">残り {item.stock} 点</p>
+                    )
                   )}
                 </CardBody>
               </Card>

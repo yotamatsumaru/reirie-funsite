@@ -22,7 +22,13 @@ export default async function MeRewardsPage() {
   // カタログ取得はテーブル未整備 (マイグレーション未適用) 等で失敗しうる。
   // その場合でもページ全体をクラッシュ (真っ黒画面) させず、
   // 「交換できる景品はありません」表示にフォールバックする。
-  const [user, items] = await Promise.all([
+  //
+  // 【2026-08 追加】重複交換の防止。
+  // すでに交換済みのデジタル特典は「交換する」ボタンを押せないようにするため、
+  // 有効な (CANCELED でない) 交換の catalogItemId を先に取得しておく。
+  // サーバ側 (redeemRewardCatalogItem) と DB の部分ユニーク制約でも弾いているので、
+  // ここは「押せてしまってエラーになる」体験を避けるための UI ヒント。
+  const [user, items, activeRedemptions] = await Promise.all([
     prisma.user
       .findUnique({
         where: { id: session.user.id },
@@ -59,9 +65,20 @@ export default async function MeRewardsPage() {
         console.error('[me/rewards] failed to load catalog', e);
         return [] as Awaited<ReturnType<typeof prisma.rewardCatalogItem.findMany>>;
       }),
+    prisma.rewardRedemption
+      .findMany({
+        where: { userId: session.user.id, status: { not: 'CANCELED' } },
+        select: { catalogItemId: true },
+        distinct: ['catalogItemId'],
+      })
+      .catch((e) => {
+        console.error('[me/rewards] failed to load redemptions', e);
+        return [] as { catalogItemId: string }[];
+      }),
   ]);
 
   const balance = user?.pui ?? 0;
+  const redeemedCatalogItemIds = activeRedemptions.map((r) => r.catalogItemId);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-10">
@@ -97,6 +114,7 @@ export default async function MeRewardsPage() {
       <RewardsSection
         items={items}
         balance={balance}
+        redeemedCatalogItemIds={redeemedCatalogItemIds}
         defaultShipping={{
           shippingName: user?.fullName ?? '',
           shippingPhone: user?.phone ?? '',

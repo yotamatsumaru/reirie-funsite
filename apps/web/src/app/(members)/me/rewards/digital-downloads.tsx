@@ -2,6 +2,11 @@
  * 交換済みデジタル特典のダウンロードセクション (Client Component)。
  *  - マウント時に /api/me/reward-downloads を取得。
  *  - 交換直後に再取得できるよう refreshKey を props で受け取る。
+ *
+ * 【再ダウンロードについて】
+ * ダウンロード回数に上限はない (機種変更・PC 買い換え・ファイル紛失に備える)。
+ * 交換は 1 回だけだがダウンロードは何度でも無料 — この 2 つはセットの仕様なので、
+ * 画面にもはっきり書いておく (書かないと「交換済み」が損に見える)。
  */
 'use client';
 
@@ -29,7 +34,14 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function DigitalDownloads({ refreshKey = 0 }: { refreshKey?: number }) {
+export function DigitalDownloads({
+  refreshKey = 0,
+  anchorId,
+}: {
+  refreshKey?: number;
+  /** カタログ側の「再ダウンロードへ」リンクから飛んでくるための id */
+  anchorId?: string;
+}) {
   const [items, setItems] = useState<DownloadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +69,15 @@ export function DigitalDownloads({ refreshKey = 0 }: { refreshKey?: number }) {
   if (!loading && !error && items.length === 0) return null;
 
   return (
-    <section className="space-y-3">
+    <section id={anchorId} className="scroll-mt-20 space-y-3">
       <div>
         <h2 className="text-lg font-bold text-slate-800">交換済みデジタル特典</h2>
         <p className="mt-0.5 text-sm text-slate-500">
           交換したデジタル特典（壁紙など）をダウンロードできます。
+        </p>
+        <p className="mt-1 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          一度交換した特典は、<strong>Pui を使わずに何度でも再ダウンロードできます</strong>。
+          機種変更やファイルをなくしてしまった場合でも、もう一度交換する必要はありません。
         </p>
       </div>
 
@@ -110,6 +126,7 @@ export function DigitalDownloads({ refreshKey = 0 }: { refreshKey?: number }) {
                         href={`/api/me/reward-downloads/${f.id}`}
                         download={f.fileName}
                         className="shrink-0 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+                        title="何度でも無料でダウンロードできます"
                       >
                         ダウンロード
                       </a>
