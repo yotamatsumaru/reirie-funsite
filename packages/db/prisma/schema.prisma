@@ -350,6 +350,20 @@ model User {
   verificationCodeExpires DateTime? @map("verification_code_expires")
   // コード入力の失敗回数 (一定回数を超えたら再送を要求する)
   verificationAttempts    Int       @default(0) @map("verification_attempts")
+  // --- 登録メールアドレスの変更フロー (保留状態) ---
+  // メールアドレスはログイン ID 兼パスワードリセットの送信先のため、
+  // 打ち間違いのまま確定させると本人がログイン不能になり復旧できない。
+  // そこで確認コードの入力に成功するまでは email を書き換えず、
+  // 新アドレスをここに退避しておく。確定時に email へ昇格させてクリアする。
+  // 【@unique を付けない理由】
+  //   保留は「まだ本人のものと確認できていない」状態。ここに一意制約を付けると、
+  //   第三者が他人のアドレスを保留に入れておくだけで、そのアドレスの持ち主が
+  //   変更申請できなくなる (妨害が可能になる)。実際の重複防止は確定時に
+  //   email の @unique (citext) で担保する。
+  pendingEmail            String?   @map("pending_email") @db.Citext
+  pendingEmailCode        String?   @map("pending_email_code")
+  pendingEmailExpires     DateTime? @map("pending_email_expires")
+  pendingEmailAttempts    Int       @default(0) @map("pending_email_attempts")
   passwordResetToken      String?   @unique @map("password_reset_token")
   passwordResetExpires    DateTime? @map("password_reset_expires")
   // ログイン試行のブルートフォース対策 (アカウントロック方式)。

@@ -361,3 +361,147 @@ export async function sendWarningEmail(params: {
     html,
   });
 }
+
+/**
+ * 【メールアドレス変更】新しいアドレス宛に確認コードを送る。
+ *
+ * このメールが届くこと自体が「そのアドレスを本人が受信できる」証明になる。
+ * 打ち間違いのまま確定させるとログイン不能 (=復旧不可) になるため、
+ * このステップは省略できない。
+ */
+export async function sendEmailChangeCodeEmail(params: {
+  to: string;
+  displayName: string;
+  code: string;
+  expiresInMinutes: number;
+  siteName?: string;
+}): Promise<void> {
+  const siteName = params.siteName ?? 'ReiRieRoom';
+  const name = params.displayName?.trim() || 'お客';
+
+  const text =
+    `${name} さん\n\n` +
+    `${siteName} の登録メールアドレス変更のお手続きを受け付けました。\n\n` +
+    `以下の確認コードを画面に入力して、変更を完了してください。\n\n` +
+    `確認コード: ${params.code}\n\n` +
+    `※ 有効期限は発行から${params.expiresInMinutes}分間です。\n` +
+    `※ コードを入力するまで、登録メールアドレスは変更されません。\n` +
+    `※ このメールに心当たりがない場合は、お手数ですが破棄してください。\n` +
+    `   (この時点ではまだ何も変更されていません)\n\n` +
+    `――――――――――\n${siteName} 運営事務局`;
+
+  const safeName = escapeHtml(name);
+  const safeCode = escapeHtml(params.code);
+  const safeSite = escapeHtml(siteName);
+
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f1f7;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#2d2235;">
+  <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+    <div style="background:linear-gradient(135deg,#4a2d5c,#7c5295);border-radius:16px 16px 0 0;padding:28px 24px;text-align:center;">
+      <h1 style="margin:0;color:#fdf8ff;font-size:20px;letter-spacing:.05em;">${safeSite}</h1>
+      <p style="margin:6px 0 0;color:#e9d8f5;font-size:12px;">メールアドレス変更の確認</p>
+    </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:28px 24px;box-shadow:0 4px 20px rgba(74,45,92,.08);">
+      <p style="margin:0 0 16px;font-size:15px;">${safeName} さん</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#5a4d66;">
+        登録メールアドレス変更のお手続きを受け付けました。<br>
+        以下の確認コードを画面に入力して、変更を完了してください。
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <div style="display:inline-block;background:#f4eef8;border:2px solid #7c5295;color:#4a2d5c;font-weight:bold;font-size:32px;letter-spacing:.25em;padding:16px 32px;border-radius:12px;">
+          ${safeCode}
+        </div>
+      </div>
+      <p style="margin:0 0 8px;font-size:12px;color:#8a7d96;text-align:center;">有効期限: 発行から${params.expiresInMinutes}分間</p>
+      <p style="margin:0 0 20px;font-size:12px;color:#8a7d96;text-align:center;">
+        コードを入力するまで、登録メールアドレスは変更されません。
+      </p>
+      <hr style="border:none;border-top:1px solid #efeaf4;margin:20px 0;">
+      <p style="margin:0;font-size:11px;color:#a99fb3;line-height:1.6;">
+        心当たりがない場合は、このメールを破棄してください。この時点ではまだ何も変更されていません。<br>
+        ${safeSite} 運営事務局
+      </p>
+    </div>
+  </div>
+</body></html>`;
+
+  await sendEmail({
+    to: params.to,
+    subject: `【${siteName}】メールアドレス変更の確認コード: ${params.code}`,
+    text,
+    html,
+  });
+}
+
+/**
+ * 【メールアドレス変更】変更完了を "旧アドレス" 宛に通知する。
+ *
+ * これは利便性ではなく **セキュリティのための通知**。
+ * 万一アカウントが乗っ取られてアドレスを書き換えられた場合、
+ * 旧アドレスの持ち主が異変に気づける最後の手段になる。
+ * 新アドレスは maskEmail() で伏せた状態で渡すこと
+ * (通知メールが第三者に見られても新アドレスまでは漏らさないため)。
+ */
+export async function sendEmailChangedNoticeEmail(params: {
+  to: string;
+  displayName: string;
+  maskedNewEmail: string;
+  siteName?: string;
+}): Promise<void> {
+  const siteName = params.siteName ?? 'ReiRieRoom';
+  const name = params.displayName?.trim() || 'お客';
+
+  const text =
+    `${name} さん\n\n` +
+    `${siteName} の登録メールアドレスが変更されました。\n\n` +
+    `新しいメールアドレス: ${params.maskedNewEmail}\n\n` +
+    `今後のログインおよび各種お知らせは、新しいメールアドレス宛にお送りします。\n\n` +
+    `※ このお手続きに心当たりがない場合は、第三者による操作の可能性があります。\n` +
+    `   お手数ですが、至急サポート窓口までご連絡ください。\n\n` +
+    `――――――――――\n${siteName} 運営事務局`;
+
+  const safeName = escapeHtml(name);
+  const safeMasked = escapeHtml(params.maskedNewEmail);
+  const safeSite = escapeHtml(siteName);
+
+  const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f1f7;font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#2d2235;">
+  <div style="max-width:560px;margin:0 auto;padding:24px 16px;">
+    <div style="background:linear-gradient(135deg,#4a2d5c,#7c5295);border-radius:16px 16px 0 0;padding:28px 24px;text-align:center;">
+      <h1 style="margin:0;color:#fdf8ff;font-size:20px;letter-spacing:.05em;">${safeSite}</h1>
+      <p style="margin:6px 0 0;color:#e9d8f5;font-size:12px;">メールアドレス変更完了のお知らせ</p>
+    </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:28px 24px;box-shadow:0 4px 20px rgba(74,45,92,.08);">
+      <p style="margin:0 0 16px;font-size:15px;">${safeName} さん</p>
+      <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#5a4d66;">
+        登録メールアドレスが変更されました。<br>
+        今後のログインおよび各種お知らせは、新しいメールアドレス宛にお送りします。
+      </p>
+      <div style="background:#f8f5fb;border-radius:10px;padding:16px 18px;margin:0 0 20px;">
+        <p style="margin:0;font-size:12px;color:#8a7d96;">新しいメールアドレス</p>
+        <p style="margin:6px 0 0;font-size:15px;font-weight:bold;color:#4a2d5c;">${safeMasked}</p>
+      </div>
+      <div style="background:#fff5f5;border:1px solid #f5d3d3;border-radius:10px;padding:14px 16px;">
+        <p style="margin:0;font-size:13px;line-height:1.8;color:#8a3a3a;">
+          このお手続きに<strong>心当たりがない場合</strong>は、第三者による操作の可能性があります。<br>
+          お手数ですが、至急サポート窓口までご連絡ください。
+        </p>
+      </div>
+      <hr style="border:none;border-top:1px solid #efeaf4;margin:20px 0;">
+      <p style="margin:0;font-size:11px;color:#a99fb3;line-height:1.6;">
+        本メールは変更前のメールアドレス宛にお送りしています。<br>
+        ${safeSite} 運営事務局
+      </p>
+    </div>
+  </div>
+</body></html>`;
+
+  await sendEmail({
+    to: params.to,
+    subject: `【${siteName}】登録メールアドレスが変更されました`,
+    text,
+    html,
+  });
+}

@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { RankBadge } from '@/components/membership/RankBadge';
 import { UserRowActions } from '../user-row-actions';
 import { WarningPanel, type WarningItem } from './warning-panel';
+import { EmailChangePanel } from './email-change-panel';
 import { PromoPanel } from './promo-panel';
 import { SubscriptionPanel } from './subscription-panel';
 import { getMemberRank } from '@/lib/membership-rank';
@@ -290,6 +291,27 @@ export default async function SuperAdminUserDetailPage({
           <PromoPanel
             userId={user.id}
             initialPromoUntil={promoUntil ? promoUntil.toISOString() : null}
+            readOnly={readOnly}
+          />
+        </CardBody>
+      </Card>
+
+      {/*
+        登録メールアドレスの変更 (運営代行)。
+        本来は会員本人がマイページから変更するが、旧アドレスが使えず
+        ログインも確認コード受信もできない場合の受け皿として用意している。
+      */}
+      <Card className="mt-4">
+        <CardHeader>
+          <h2 className="text-sm font-semibold text-slate-800">登録メールアドレス</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            ログイン ID を兼ねています。変更すると、以後は新しいアドレスでのみログインできます。
+          </p>
+        </CardHeader>
+        <CardBody>
+          <EmailChangePanel
+            userId={user.id}
+            currentEmail={user.email}
             readOnly={readOnly}
           />
         </CardBody>

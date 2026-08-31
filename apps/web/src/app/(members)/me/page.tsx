@@ -12,6 +12,7 @@ import {
   canUseShop,
   formatJstDate,
   formatJstDateTime,
+  isEmailChangePending,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -22,6 +23,7 @@ import { ManageSubscriptionButtons } from '@/components/auth/ManageSubscriptionB
 import { WithdrawSection } from './withdraw-section';
 import { SubscribedRefresh } from './subscribed-refresh';
 import { ProfileSection } from './profile-section';
+import { EmailSection } from './email-section';
 import { BirthdayMailSection } from './birthday-mail-section';
 import { listUserBirthdayMails } from '@/lib/birthday-mail';
 import { ContactReplySection } from './contact-reply-section';
@@ -65,6 +67,16 @@ export default async function MePage() {
 
   // 登録情報 (お届け先) セクション用。birthDate は <input type="date"> と
   // 揃えるため YYYY-MM-DD の文字列に正規化する。
+  // 登録メールアドレスの変更手続きが進行中かどうか。
+  // 期限切れの申請を「手続き中」と表示し続けると、利用者が次の申請を
+  // してよいのか分からなくなるため、期限内のものだけを引き渡す。
+  const emailChangePending = isEmailChangePending({
+    pendingEmail: user?.pendingEmail ?? null,
+    expiresAt: user?.pendingEmailExpires ?? null,
+  })
+    ? (user?.pendingEmail ?? null)
+    : null;
+
   const profileInfo = {
     fullName: user?.fullName ?? null,
     furigana: user?.furigana ?? null,
@@ -309,6 +321,23 @@ export default async function MePage() {
               })}
             </ul>
           )}
+        </CardBody>
+      </Card>
+
+      {/*
+        登録メールアドレス。
+        ログイン ID を兼ねるため、住所などの一般的な登録情報とは分けて
+        独立したカードにし、変更が重い操作であることが伝わるようにしている。
+      */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">登録メールアドレス</h2>
+        </CardHeader>
+        <CardBody>
+          <EmailSection
+            currentEmail={user?.email ?? ''}
+            initialPendingEmail={emailChangePending}
+          />
         </CardBody>
       </Card>
 
