@@ -995,7 +995,26 @@ model StripeWebhookEvent {
   payload     Json
   processedAt DateTime @default(now()) @map("processed_at")
 
+  // --- 処理結果の記録 ---
+  // 【なぜ必要か】
+  //   これまで Webhook ハンドラが { ok: false, reason: 'user_not_found' } を
+  //   返しても、console.warn に出るだけで Stripe には 200 を返していた。
+  //   Stripe は 200 を受け取ると再送しないため、「決済されたのに誰のものか
+  //   分からず捨てられた」イベントの記録がどこにも残らず、会員から
+  //   「支払ったのに無料プランのまま」と申告されるまで誰も気づけなかった。
+  //   ここに結果を残すことで、管理画面から能動的に検知できるようにする。
+  //
+  //   outcome: 'SUCCESS' | 'SKIPPED'  (失敗して 5xx を返す場合は行自体を作らない)
+  outcome     String?  @map("outcome")
+  // SKIPPED の理由 (user_not_found / no_items / no_invoice_id など)
+  skipReason  String?  @map("skip_reason")
+  // 対象を特定するための Stripe ID (顧客の照合に使う)
+  stripeCustomerId String? @map("stripe_customer_id")
+
   @@index([type])
+  // 未対応の取りこぼしを素早く引くための部分インデックス相当。
+  // outcome が SKIPPED の行だけを新しい順に取り出す用途。
+  @@index([outcome, processedAt])
   @@map("stripe_webhook_events")
 }
 

@@ -33,6 +33,23 @@ import {
   handlePaymentIntentFailed,
   handlePaymentIntentSucceeded,
 } from './handlers/payment-intent';
+import { isActionableWebhookReason, resolveWebhookOutcome } from '@idol/shared';
+
+/**
+ * イベントの payload から Stripe の顧客 ID を取り出す。
+ *
+ * 取りこぼし (user_not_found) が起きたとき、あとから
+ * 「どの顧客の決済が宙に浮いているか」を管理画面で追跡するために保存する。
+ * これが無いと、記録が残っても復旧対象を特定できない。
+ */
+function extractCustomerId(event: Stripe.Event): string | null {
+  const obj = event.data.object as unknown as {
+    customer?: string | { id?: string } | null;
+  };
+  const c = obj?.customer;
+  if (!c) return null;
+  return typeof c === 'string' ? c : (c.id ?? null);
+}
 
 type Result = APIGatewayProxyStructuredResultV2;
 
@@ -261,7 +278,18 @@ export const handler = async (
     return jsonResponse(500, { error: 'handler_error', type: stripeEvent.type });
   }
 
-  // 処理成功時に受信記録を残す (再リトライ防止)
+  // ---------------------------------------------------------------------
+  // 受信記録を残す (再リトライ防止 + 取りこぼしの追跡)
+  //
+  // 【重要】ここで処理結果 (outcome / skipReason) も併せて保存する。
+  //   従来は payload だけを保存していたため、ハンドラが
+  //   { ok: false, reason: 'user_not_found' } を返しても
+  //   「Stripe に 200 を返す → Stripe は再送しない → 記録も残らない」
+  //   となり、会員が「支払ったのにプランが反映されない」と申告してくるまで
+  //   運営が気づく手段が一切無かった。
+  //   結果を残すことで、管理画面から能動的に取りこぼしを検知できる。
+  // ---------------------------------------------------------------------
+  const { outcome, reason: skipReason } = resolveWebhookOutcome(result);
   try {
     await prisma.stripeWebhookEvent.upsert({
       where: { id: stripeEvent.id },
@@ -269,6 +297,9 @@ export const handler = async (
         id: stripeEvent.id,
         type: stripeEvent.type,
         payload: stripeEvent as unknown as object,
+        outcome,
+        skipReason,
+        stripeCustomerId: extractCustomerId(stripeEvent),
       },
       update: {},
     });
@@ -276,6 +307,22 @@ export const handler = async (
     // 冪等記録失敗は致命ではない (次回の重複検知が効かなくなる程度) のでログのみ
     // eslint-disable-next-line no-console
     console.error('[stripe-webhook] failed to record event', err);
+  }
+
+  // 会員に実害が出るスキップ (user_not_found) は、ログでも一目で分かるよう
+  // error レベルで出す。CloudWatch のメトリクスフィルタで拾えるようにするため
+  // 固定の目印 (SUBSCRIPTION_MISMATCH) を付ける。
+  if (isActionableWebhookReason(skipReason)) {
+    // eslint-disable-next-line no-console
+    console.error(
+      '[stripe-webhook] SUBSCRIPTION_MISMATCH 決済を会員に紐付けられませんでした',
+      JSON.stringify({
+        eventId: stripeEvent.id,
+        type: stripeEvent.type,
+        reason: skipReason,
+        customerId: extractCustomerId(stripeEvent),
+      }),
+    );
   }
 
   const elapsed = Date.now() - start;
