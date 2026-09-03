@@ -56,6 +56,11 @@ import {
   BirthdayMailRunStateSchema,
   type BirthdayMailRunState,
   formatBirthdayMailDate,
+  CONTACT_NOTIFICATION_SETTING_KEY,
+  DEFAULT_CONTACT_NOTIFICATION_SETTINGS,
+  ContactNotificationSettingsSchema,
+  normalizeAdminEmails,
+  type ContactNotificationSettings,
 } from '@idol/shared';
 
 /**
@@ -785,4 +790,86 @@ export async function releaseBirthdayMailRun(): Promise<void> {
   } catch {
     // 巻き戻し失敗は握りつぶす (最悪その日は送信されないが、翌日以降は正常)。
   }
+}
+
+// ---------------------------------------------------------------------------
+// お問い合わせ通知設定 (控えメール / 運営通知)
+// ---------------------------------------------------------------------------
+
+/**
+ * お問い合わせ通知設定を取得する。
+ * 未設定 / 破損時は既定値 (控えメール ON・運営通知 ON・宛先なし) を返す。
+ *
+ * 【安全側の考え方】
+ * 控えメールは「本人が入力したアドレスへ本人の入力内容を返す」だけなので
+ * 既定 ON でも情報漏洩にならない。一方、運営通知は宛先が空なら送信自体が
+ * スキップされるため、設定が読めなくても誤送信は起こらない。
+ */
+export async function getContactNotificationSettings(): Promise<ContactNotificationSettings> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: CONTACT_NOTIFICATION_SETTING_KEY },
+    });
+    if (!row) return ContactNotificationSettingsSchema.parse(DEFAULT_CONTACT_NOTIFICATION_SETTINGS);
+    const raw = JSON.parse(row.value) as Record<string, unknown>;
+    // 欠損フィールドは既定値で補完 (旧バージョンの部分保存対策)。
+    const parsed = ContactNotificationSettingsSchema.safeParse({
+      ...DEFAULT_CONTACT_NOTIFICATION_SETTINGS,
+      ...raw,
+    });
+    return parsed.success
+      ? parsed.data
+      : ContactNotificationSettingsSchema.parse(DEFAULT_CONTACT_NOTIFICATION_SETTINGS);
+  } catch {
+    return ContactNotificationSettingsSchema.parse(DEFAULT_CONTACT_NOTIFICATION_SETTINGS);
+  }
+}
+
+/**
+ * お問い合わせ通知設定を「部分更新」する (SUPER_ADMIN 限定)。
+ *
+ * 【競合対策】setBirthdayMailSchedule と同じく advisory lock を取った
+ * 1 トランザクション内で read → merge → write する。管理画面でトグルと
+ * 宛先を続けて変更した場合の取りこぼしを防ぐ。
+ */
+export async function setContactNotificationSettings(
+  patch: Partial<ContactNotificationSettings>,
+): Promise<{ before: ContactNotificationSettings; after: ContactNotificationSettings }> {
+  return prisma.$transaction(async (tx) => {
+    await acquireAppSettingLock(tx, CONTACT_NOTIFICATION_SETTING_KEY);
+
+    const row = await tx.appSetting.findUnique({
+      where: { key: CONTACT_NOTIFICATION_SETTING_KEY },
+    });
+    let before: ContactNotificationSettings = ContactNotificationSettingsSchema.parse(
+      DEFAULT_CONTACT_NOTIFICATION_SETTINGS,
+    );
+    if (row) {
+      try {
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = ContactNotificationSettingsSchema.safeParse({
+          ...DEFAULT_CONTACT_NOTIFICATION_SETTINGS,
+          ...raw,
+        });
+        if (parsed.success) before = parsed.data;
+      } catch {
+        // 破損データは既定値扱い
+      }
+    }
+
+    // 宛先は保存前に必ず正規化する (小文字化・重複除去)。
+    // 「同じアドレスを 2 回登録して通知が 2 通届く」事故を DB 到達前に防ぐ。
+    const merged = { ...before, ...patch };
+    const after = ContactNotificationSettingsSchema.parse({
+      ...merged,
+      adminEmails: normalizeAdminEmails(merged.adminEmails ?? []),
+    });
+    const value = JSON.stringify(after);
+    await tx.appSetting.upsert({
+      where: { key: CONTACT_NOTIFICATION_SETTING_KEY },
+      create: { key: CONTACT_NOTIFICATION_SETTING_KEY, value },
+      update: { value },
+    });
+    return { before, after };
+  });
 }
