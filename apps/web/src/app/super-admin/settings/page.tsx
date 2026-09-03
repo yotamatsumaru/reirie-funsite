@@ -16,6 +16,7 @@ import {
   getStripeTestCredentials,
   getSiteSectionVisibility,
   getMaintenanceSetting,
+  getContactNotificationSettings,
 } from '@/lib/app-setting';
 import { isStripeTestCredentialsUsable } from '@idol/shared';
 import { SettingRow } from './setting-row';
@@ -25,6 +26,7 @@ import { TotpSetupClient } from './totp-setup-client';
 import { SiteVisibilityClient } from './site-visibility-client';
 import { MaintenanceClient } from './maintenance-client';
 import { MemberNumberClient } from './member-number-client';
+import { ContactNotificationClient } from './contact-notification-client';
 import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'システム設定 | Super Admin' };
@@ -61,6 +63,7 @@ export default async function SuperAdminSettingsPage() {
   const stripeTestCredentialsUsable = isStripeTestCredentialsUsable(stripeTestCredentials);
   const siteSectionVisibility = await getSiteSectionVisibility();
   const maintenanceSetting = await getMaintenanceSetting();
+  const contactNotificationSettings = await getContactNotificationSettings();
 
   // 会員番号の採番状況 (一括採番パネル用)
   const [memberTotal, memberWithNumber] = await Promise.all([
@@ -153,6 +156,11 @@ export default async function SuperAdminSettingsPage() {
       <SuperAdminWriteGate label="公開設定の変更はスーパー管理者のみ実行できます">
         {/* コンテンツ / グッズ の公開設定 (オープン日調整などで一時的に非公開にする) */}
         <SiteVisibilityClient initialVisibility={siteSectionVisibility} />
+      </SuperAdminWriteGate>
+
+      <SuperAdminWriteGate label="お問い合わせ通知の変更はスーパー管理者のみ実行できます">
+        {/* お問い合わせの控えメール (会員向け) / 新規受信通知 (運営向け) の設定 */}
+        <ContactNotificationClient initialSettings={contactNotificationSettings} />
       </SuperAdminWriteGate>
 
       <SuperAdminWriteGate silent>

@@ -1998,6 +1998,13 @@ model Announcement {
 /// - 管理画面 (/super-admin/contact) で一覧・対応状況の更新を行う。
 model ContactMessage {
   id        String          @id @default(uuid()) @db.Uuid
+  /// 受付番号 (例: CT-20260902-7K3QF)。控えメール・運営通知・管理画面で共通に使う
+  /// 「会員と運営が同じ問い合わせを指せる」短い識別子。
+  /// 【なぜ null 許容か】この機能を追加する前に届いた既存の問い合わせには
+  /// 番号が存在しない。マイグレーションで機械的に埋めると「実際には控えメールを
+  /// 送っていないのに番号がある」状態になり、問い合わせ照合時に混乱するため
+  /// 既存行は null のまま残す (管理画面では「—」と表示する)。
+  ticketNumber String?      @unique @map("ticket_number")
   // 送信者情報 (フォーム入力値。ログイン中でもフォーム値を保存する)
   name      String
   email     String
@@ -2014,6 +2021,21 @@ model ContactMessage {
   // ログイン中に送信した場合の紐づけ (ゲストは null)
   userId    String?         @map("user_id") @db.Uuid
   user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // --- 控えメール (送信者本人宛) の送信結果 ---
+  /// 送信者へ控えメールを送れたか。false のまま残っていれば
+  /// 「問い合わせは受け付けたが控えが届いていない」ことが管理画面から分かる。
+  ackMailSent  Boolean   @default(false) @map("ack_mail_sent")
+  /// 控えメールの送信時刻 (成功時のみ)。
+  ackMailSentAt DateTime? @map("ack_mail_sent_at")
+  /// 控えメールの送信失敗理由。運営が再送判断に使う。
+  ackMailError String?   @map("ack_mail_error") @db.Text
+
+  // --- 運営への新規受信通知の送信結果 ---
+  /// 運営通知を送れたか。宛先未設定 / 通知OFF のときは false のまま。
+  adminNotifiedAt DateTime? @map("admin_notified_at")
+  /// 運営通知の送信失敗理由。
+  adminNotifyError String?  @map("admin_notify_error") @db.Text
 
   // 運営からの返信 (1 問い合わせに複数返信可能。履歴として保持)
   replies   ContactReply[]

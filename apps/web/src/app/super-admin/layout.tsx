@@ -12,6 +12,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { prisma } from '@idol/db';
 import {
   LayoutDashboard,
   Users,
@@ -47,6 +48,12 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  /**
+   * 未対応件数バッジを出すナビ項目の識別子。
+   * お問い合わせが 2 週間気づかれず放置された事例があったため、
+   * 管理画面を開いた時点で「未対応が何件あるか」が目に入るようにする。
+   */
+  badge?: 'contact';
 };
 
 const NAV: NavItem[] = [
@@ -66,7 +73,7 @@ const NAV: NavItem[] = [
   { href: '/super-admin/announcements', label: 'お知らせ', icon: Megaphone },
   { href: '/super-admin/birthday', label: '誕生日メール', icon: Cake },
   { href: '/super-admin/dm', label: 'DM 管理', icon: MessageCircle },
-  { href: '/super-admin/contact', label: 'お問い合わせ', icon: Mail },
+  { href: '/super-admin/contact', label: 'お問い合わせ', icon: Mail, badge: 'contact' },
   { href: '/super-admin/settings', label: 'システム設定', icon: Settings },
   { href: '/super-admin/audit', label: '監査ログ', icon: ScrollText },
   { href: '/super-admin/admins', label: '管理者', icon: ShieldCheck },
@@ -79,6 +86,21 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
   const role = session.user.role;
   if (role !== 'SUPER_ADMIN' && role !== 'STAFF') redirect('/');
   const isStaffViewer = role === 'STAFF';
+
+  /*
+   * 未対応のお問い合わせ件数 (サイドナビのバッジ用)。
+   * レイアウトは全 /super-admin パスで共通なので、どの管理画面を開いても
+   * 未対応の存在に気づける。dynamic = 'force-dynamic' なので常に最新値。
+   * 集計に失敗しても管理画面自体は使えるよう 0 にフォールバックする。
+   */
+  let pendingContactCount = 0;
+  try {
+    pendingContactCount = await prisma.contactMessage.count({
+      where: { status: { in: ['NEW', 'IN_PROGRESS'] } },
+    });
+  } catch {
+    pendingContactCount = 0;
+  }
 
   return (
     <AdminThemeProvider>
@@ -124,6 +146,7 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
           <nav className="-mx-3 mb-4 flex gap-1.5 overflow-x-auto px-3 pb-2 text-sm lg:hidden">
             {NAV.map((item) => {
               const Icon = item.icon;
+              const badgeCount = item.badge === 'contact' ? pendingContactCount : 0;
               return (
                 <Link
                   key={item.href}
@@ -132,6 +155,14 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
                 >
                   <Icon className="h-4 w-4" aria-hidden />
                   {item.label}
+                  {badgeCount > 0 && (
+                    <span
+                      className="ml-0.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+                      aria-label={`未対応 ${badgeCount} 件`}
+                    >
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -146,6 +177,7 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
               <ul className="space-y-0.5">
                 {NAV.map((item) => {
                   const Icon = item.icon;
+                  const badgeCount = item.badge === 'contact' ? pendingContactCount : 0;
                   return (
                     <li key={item.href}>
                       <Link
@@ -157,6 +189,14 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
                           aria-hidden
                         />
                         <span className="truncate">{item.label}</span>
+                        {badgeCount > 0 && (
+                          <span
+                            className="ml-auto inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white"
+                            aria-label={`未対応 ${badgeCount} 件`}
+                          >
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );

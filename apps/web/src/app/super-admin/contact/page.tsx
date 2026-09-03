@@ -14,6 +14,7 @@ import {
   CONTACT_STATUSES,
   CONTACT_STATUS_LABELS,
   CONTACT_CATEGORY_LABELS,
+  formatContactTicketNumber,
   type ContactStatusLiteral,
   type ContactCategoryLiteral,
 } from '@idol/shared';
@@ -41,6 +42,7 @@ type ContactReplyRow = {
 
 type ContactRow = {
   id: string;
+  ticketNumber: string | null;
   name: string;
   email: string;
   category: ContactCategoryLiteral;
@@ -49,6 +51,10 @@ type ContactRow = {
   status: ContactStatusLiteral;
   adminNote: string | null;
   createdAt: Date;
+  ackMailSent: boolean;
+  ackMailError: string | null;
+  adminNotifiedAt: Date | null;
+  adminNotifyError: string | null;
   user: { id: string; memberNumber: string | null } | null;
   replies: ContactReplyRow[];
 };
@@ -73,7 +79,7 @@ export default async function SuperAdminContactPage({
     ? (sp.status as ContactStatusLiteral)
     : '';
 
-  const [messages, newCount, totalCount] = await Promise.all([
+  const [messages, newCount, totalCount, ackFailedCount] = await Promise.all([
     prisma.contactMessage.findMany({
       where: statusFilter ? { status: statusFilter } : {},
       include: {
@@ -95,6 +101,11 @@ export default async function SuperAdminContactPage({
     }) as unknown as Promise<ContactRow[]>,
     prisma.contactMessage.count({ where: { status: 'NEW' } }),
     prisma.contactMessage.count(),
+    // 控えメールの送信に失敗した件数 (受付番号あり = 控えメール機能導入後の問い合わせのうち
+    // 送信できていないもの)。導入前の旧レコードは ticketNumber が null なので除外する。
+    prisma.contactMessage.count({
+      where: { ticketNumber: { not: null }, ackMailSent: false },
+    }),
   ]);
 
   return (
@@ -107,7 +118,7 @@ export default async function SuperAdminContactPage({
       </header>
 
       {/* KPI */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card>
           <CardBody>
             <p className="text-xs font-medium text-slate-500">未対応（NEW）</p>
@@ -120,6 +131,28 @@ export default async function SuperAdminContactPage({
           <CardBody>
             <p className="text-xs font-medium text-slate-500">総件数</p>
             <p className="mt-1 text-2xl font-bold text-slate-800">{totalCount}</p>
+          </CardBody>
+        </Card>
+        {/*
+          控えメールが送れていない件数。会員には「届いているか分からない」
+          状態のままなので、運営が気づけるよう KPI として常時表示する。
+          0 件のときは目立たせない。
+        */}
+        <Card>
+          <CardBody>
+            <p className="text-xs font-medium text-slate-500">控えメール未送信</p>
+            <p
+              className={`mt-1 text-2xl font-bold ${
+                ackFailedCount > 0 ? 'text-amber-600' : 'text-slate-800'
+              }`}
+            >
+              {ackFailedCount}
+            </p>
+            {ackFailedCount > 0 && (
+              <p className="mt-1 text-xs text-amber-700">
+                送信者に控えが届いていません。各件の理由をご確認ください。
+              </p>
+            )}
           </CardBody>
         </Card>
       </div>
@@ -168,6 +201,10 @@ export default async function SuperAdminContactPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={STATUS_TONE[m.status]}>{CONTACT_STATUS_LABELS[m.status]}</Badge>
                       <Badge tone="gray">{CONTACT_CATEGORY_LABELS[m.category]}</Badge>
+                      {/* 受付番号。会員が控えメールの番号を伝えてきたときに紐づけるためのキー。 */}
+                      <span className="font-mono text-xs font-semibold text-slate-500">
+                        {formatContactTicketNumber(m.ticketNumber)}
+                      </span>
                       <span className="text-xs text-slate-400">{formatDateTime(m.createdAt)}</span>
                     </div>
                     <h3 className="mt-2 font-semibold text-slate-800">{m.subject}</h3>
@@ -190,6 +227,28 @@ export default async function SuperAdminContactPage({
                 <div className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                   {m.message}
                 </div>
+
+                {/*
+                  控えメール / 運営通知の送信結果。
+                  すでに両方送れている場合は何も出していない (正常時にノイズを増やさない)。
+                  導入前の旧レコード (ticketNumber が null) はそもそも対象外なので表示しない。
+                */}
+                {m.ticketNumber && !m.ackMailSent && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    <p className="font-semibold">送信者への控えメールを送信できていません</p>
+                    {m.ackMailError && (
+                      <p className="mt-1 break-all text-amber-700">理由: {m.ackMailError}</p>
+                    )}
+                    <p className="mt-1 text-amber-700">
+                      お問い合わせ自体は正しく保存されています。必要に応じて下の「返信」からご連絡ください。
+                    </p>
+                  </div>
+                )}
+                {m.ticketNumber && !m.adminNotifiedAt && m.adminNotifyError && (
+                  <p className="text-xs text-slate-400">
+                    運営への受信通知: {m.adminNotifyError}
+                  </p>
+                )}
 
                 <SuperAdminWriteGate silent>
                   <ContactRowActions

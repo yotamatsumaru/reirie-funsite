@@ -42,7 +42,15 @@ export async function createContactReply(params: {
 
   const contact = await prisma.contactMessage.findUnique({
     where: { id: contactMessageId },
-    select: { id: true, name: true, email: true, subject: true, message: true, userId: true },
+    select: {
+      id: true,
+      ticketNumber: true,
+      name: true,
+      email: true,
+      subject: true,
+      message: true,
+      userId: true,
+    },
   });
   if (!contact) {
     throw new Error('お問い合わせが見つかりません');
@@ -65,9 +73,14 @@ export async function createContactReply(params: {
   let emailSent = false;
   let emailError: string | null = null;
   try {
-    const subject = `Re: ${contact.subject}`;
+    // 件名にも受付番号を入れる。控えメールと同じ番号になるので、
+    // 会員の受信箱で控えと回答がひとつのスレッドとして辽れる。
+    const subject = contact.ticketNumber
+      ? `Re: ${contact.subject}（${contact.ticketNumber}）`
+      : `Re: ${contact.subject}`;
     const text = buildReplyMailText({
       name: contact.name,
+      ticketNumber: contact.ticketNumber,
       originalSubject: contact.subject,
       originalMessage: contact.message,
       body,
@@ -75,6 +88,7 @@ export async function createContactReply(params: {
     });
     const html = buildReplyMailHtml({
       name: contact.name,
+      ticketNumber: contact.ticketNumber,
       originalSubject: contact.subject,
       originalMessage: contact.message,
       body,
@@ -178,6 +192,8 @@ function mypageNoticeText(isMember: boolean): string {
 /** お問い合わせ返信メールのプレーンテキスト版。 */
 export function buildReplyMailText(params: {
   name: string;
+  /** 受付番号 (控えメール機能導入前の問い合わせは null)。 */
+  ticketNumber?: string | null;
   originalSubject: string;
   originalMessage: string;
   body: string;
@@ -192,6 +208,7 @@ export function buildReplyMailText(params: {
     `━━━━━━━━━━━━━━━━━━\n\n` +
     mypageNoticeText(params.isMember) +
     `＜お問い合わせ内容＞\n` +
+    (params.ticketNumber ? `受付番号: ${params.ticketNumber}\n` : '') +
     `件名: ${params.originalSubject}\n` +
     `${params.originalMessage}\n\n` +
     `――――――――――\n` +
@@ -206,6 +223,8 @@ export function buildReplyMailText(params: {
  */
 export function buildReplyMailHtml(params: {
   name: string;
+  /** 受付番号 (控えメール機能導入前の問い合わせは null)。 */
+  ticketNumber?: string | null;
   originalSubject: string;
   originalMessage: string;
   body: string;
@@ -247,6 +266,11 @@ export function buildReplyMailHtml(params: {
           ${mypageBlock}
           <div style="margin:0 0 6px;font-size:12px;color:#9ca3af;">＜お問い合わせ内容＞</div>
           <div style="padding:14px 16px;background:#f8fafc;border:1px solid #eef2f7;border-radius:8px;font-size:13px;line-height:1.8;color:#6b7280;">
+            ${
+              params.ticketNumber
+                ? `<div style="font-family:'SFMono-Regular',Consolas,monospace;color:#9ca3af;">受付番号: ${escapeHtml(params.ticketNumber)}</div>`
+                : ''
+            }
             <div style="font-weight:600;color:#4b5563;">件名: ${safeSubject}</div>
             <div style="margin-top:6px;">${safeOriginal}</div>
           </div>
