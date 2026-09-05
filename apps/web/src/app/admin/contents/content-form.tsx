@@ -27,6 +27,15 @@ import { validateContentBodyImage } from '@/lib/content-body-image';
 /** 本文画像・カバー画像の共通アップロード先 (CONTENT 権限)。 */
 const IMAGE_UPLOAD_URL = '/api/admin/contents/images';
 
+/**
+ * 本文に挿入する短い動画のアップロード先 (CONTENT 権限)。
+ *
+ * VOD (動画管理 / POST /api/admin/videos) とは別系統。
+ * 本文クリップは HLS エンコード待ちが不要で、動画一覧にも出さないため。
+ * 詳細は lib/content-body-video.ts のコメント参照。
+ */
+const VIDEO_UPLOAD_URL = '/api/admin/contents/videos';
+
 export type ContentType = 'BLOG' | 'GALLERY';
 export type ContentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 // 公開範囲の値は共有定義（Prisma enum と同期済み）をそのまま使う。
@@ -338,7 +347,8 @@ export function ContentForm({
                       value={form.body}
                       onChange={(html) => set('body', html)}
                       uploadUrl={IMAGE_UPLOAD_URL}
-                      placeholder="ここに記事本文を入力してください。ツールバーで見出し・太字・リスト・画像などを挿入できます。画像はドラッグ&ドロップや貼り付けでも入ります。"
+                      videoUploadUrl={VIDEO_UPLOAD_URL}
+                      placeholder="ここに記事本文を入力してください。ツールバーで見出し・太字・リスト・画像・短い動画などを挿入できます。画像や動画はドラッグ&ドロップや貼り付けでも入ります。"
                     />
                   )}
 
@@ -362,11 +372,19 @@ export function ContentForm({
                   )}
 
                   <p className="text-xs text-slate-500">
-                    見出し・強調・リスト・リンク・画像を挿入できます。画像は
-                    <span className="font-medium">ツールバーの画像ボタン</span>、
+                    見出し・強調・リスト・リンク・画像・短い動画を挿入できます。画像と動画は
+                    <span className="font-medium">ツールバーのボタン</span>、
                     <span className="font-medium">ドラッグ&amp;ドロップ</span>、
                     <span className="font-medium">貼り付け (Ctrl/Cmd+V)</span>
                     のいずれでも入り、挿入後にクリックすると幅と配置を変更できます。保存時に安全なHTMLのみに整形されます。
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    動画は
+                    <span className="font-medium">MP4 推奨・1本 32MB / 1分以内</span>
+                    の短いクリップ向けです。最初のフレームからサムネイルを自動生成し、
+                    自動再生はしません。長い動画は
+                    <span className="font-medium">「動画管理」</span>
+                    からアップロードしてください。
                   </p>
                 </div>
               ) : (

@@ -459,6 +459,9 @@ model User {
   // ブログ本文に挿入した画像 (アップロード者としての履歴)
   contentBodyImages ContentBodyImage[]
 
+  // ブログ本文に挿入した短い動画 (アップロード者としての履歴)
+  contentBodyVideos ContentBodyVideo[]
+
   @@index([email])
   @@map("users")
 }
@@ -1896,6 +1899,43 @@ model ContentBodyImage {
 
   @@index([createdAt])
   @@map("content_body_images")
+}
+
+/// ブログ記事本文に挿入する「短い動画」(数秒〜1分程度のクリップ)。
+///
+/// VOD の Video テーブルと分けている理由:
+///   - Video は MediaConvert の HLS エンコード待ち (UPLOADING → READY) が入るため、
+///     「記事を書きながらその場で貼る」という用途には待ち時間が長すぎる。
+///   - Video は accessLevel / isPublished を自分で持ち動画一覧にも並ぶが、
+///     本文クリップは記事の一部であって単独コンテンツではない。
+///   - Video を消すと記事本文の <video> が壊れるが、その依存を追う仕組みがない。
+///
+/// 保存方針は content_body_images と全く同じ二段構え:
+///   1. S3 アセットバケット設定済み → S3 に置き url は外部 URL / data は NULL
+///   2. 未設定 → data にバイト列を保存し /api/media/content-body-video/{id} 経由で配信
+model ContentBodyVideo {
+  id          String   @id @default(uuid()) @db.Uuid
+  url         String
+  contentType String   @map("content_type")
+  /// 元ファイル名 (管理画面での一覧表示・検索用)
+  fileName    String?  @map("file_name")
+  sizeBytes   Int      @map("size_bytes")
+  /// ポスター画像 (最初のフレーム) の URL。ブラウザ側で canvas から生成して
+  /// 別途アップロードしたものを紐付ける。未生成なら NULL。
+  /// これが無いと、再生前の <video> が真っ黒の矩形として記事に並んでしまう。
+  posterUrl   String?  @map("poster_url")
+  /// ブラウザが測った尺 (秒)。測定できない動画もあるので NULL 可。
+  /// 一覧での目安表示と、長すぎるクリップの棚卸しに使う。
+  durationSeconds Int? @map("duration_seconds")
+  data        Bytes?   @map("data")
+  /// アップロードした管理者。ユーザー削除時も動画自体は記事に残す必要があるため SetNull。
+  uploadedBy  String?  @map("uploaded_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  uploader User? @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("content_body_videos")
 }
 
 /// あっち向いてホイのキャラクター画像 (ポーズごとの差し替え可能画像)。

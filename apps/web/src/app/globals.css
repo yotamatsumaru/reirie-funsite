@@ -439,3 +439,35 @@ button {
   padding-left: 1rem;
   color: #475569; /* slate-600 */
 }
+
+/* ===== 本文中の短い動画クリップ =====
+ * Tailwind Typography (.prose) は <video> にスタイルを当てないため、
+ * 何もしないと記事に貼った動画が幅の指定なしで表示され、
+ * 縦動画では画面をはみ出す / 横動画では余白が崩れる。
+ * 画像 (.prose img) と同じ扱いに揃える。
+ *
+ * エディタ側 (.ProseMirror video) と公開ページ側 (.prose video) の
+ * 両方に当てないと «編集画面と実際の記事で見え方が違う» ことになる。 */
+.prose video,
+.ProseMirror video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  /* ポスターが無い動画でも «そこに何かある» と分かるように。
+   * 透明のままだと読み込み失敗と区別がつかない。 */
+  background-color: #000;
+  /* 段落と同じ上下マージン (.prose img と揃える) */
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+/* エディタ内で動画を選択したときの枠。画像と同じ見た目にする。 */
+.ProseMirror video.ProseMirror-selectednode {
+  outline: 2px solid var(--color-brand-500);
+}
+/* 動画ノードはクリックで «選択» したいので、
+ * エディタ内では再生コントロールよりノード選択を優先する。
+ * これが無いと再生ボタンを押すたびに再生が始まり、
+ * 幅・配置バーを出すことができない。 */
+.ProseMirror video {
+  cursor: pointer;
+}
