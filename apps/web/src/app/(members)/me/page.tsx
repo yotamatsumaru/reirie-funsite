@@ -359,8 +359,14 @@ export default async function MePage() {
           <Link href="/me/card" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
             会員カード・Pui
           </Link>
-          <Link href="/contents" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
-            限定コンテンツ
+          {/* ナビの構成 (ブログ / 動画が並列) に合わせて 2 つに分ける。
+              以前の «限定コンテンツ» (/contents) はナビから外したページなので、
+              ここから送ると戻る導線を見失う。 */}
+          <Link href="/blog" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
+            ブログ
+          </Link>
+          <Link href="/me/videos" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
+            動画
           </Link>
           <Link href="/products" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
             グッズショップ

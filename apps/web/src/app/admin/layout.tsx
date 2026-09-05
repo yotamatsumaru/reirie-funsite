@@ -30,9 +30,26 @@ type NavItem = {
   capability: AdminCapabilityLiteral | null;
 };
 
+/**
+ * 管理画面のサイドメニュー。
+ *
+ * ## 「コンテンツ」を「ブログ」に改称した理由
+ *
+ * 会員側のナビで「コンテンツ」という親項目を廃止し、
+ * ブログ / 動画を並列にしたのに合わせている。
+ * 管理画面だけ「コンテンツ」のままだと、
+ *   - 会員側の「ブログ」を編集したいのに管理側にその名前が無い
+ *   - 「コンテンツ」を開くと動画が無い (動画は別メニュー)
+ * となり、運営が探す場所を間違える。
+ *
+ * ルート (/admin/contents) は変更していない。
+ * 管理者がブックマークしている可能性があり、URL を変えると
+ * リダイレクトを用意しない限り 404 になるため。
+ * 表示名だけを実態 (= ブログ記事の管理) に合わせる。
+ */
 const NAV: NavItem[] = [
   { href: '/admin', label: 'ダッシュボード', icon: LayoutDashboard, capability: null },
-  { href: '/admin/contents', label: 'コンテンツ', icon: FileText, capability: 'CONTENT' },
+  { href: '/admin/contents', label: 'ブログ', icon: FileText, capability: 'CONTENT' },
   { href: '/admin/videos', label: '動画', icon: Video, capability: 'CONTENT' },
   { href: '/admin/live', label: 'ライブ', icon: Radio, capability: 'CONTENT' },
   { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },
