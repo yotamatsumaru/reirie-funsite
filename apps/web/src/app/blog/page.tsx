@@ -1,15 +1,21 @@
 /**
  * ブログ一覧（記事のみ）
  *
- * ## なぜ /contents とは別ページなのか
+ * ## メニュー構成
  *
- * サイドバーで「動画」「ブログ」を「コンテンツ」の子として入れ子にしたため、
- * 「記事だけを見る」導線が必要になった。/contents は記事 + 動画をマージした
- * 混合一覧なので、記事だけを見たい人には使えない。
+ * かつてサイドバーは「コンテンツ」を親とし、その下にブログ / 動画を
+ * 入れ子にしていたが、以下の理由で親を廃止して並列にした。
  *
- *   コンテンツ (/contents)   … 記事 + 動画（新着順の混合）
- *     ├ ブログ (/blog)        … 記事のみ  ← このページ
- *     └ 動画   (/me/videos)   … 動画のみ
+ *   - ブログを開くのに「コンテンツを展開 → ブログ」の 2 クリックが必要だった
+ *   - 親の /contents は記事 + 動画の混合一覧で、子と内容が重複していた
+ *
+ * 現在の構成:
+ *
+ *   ブログ (/blog)      … 記事のみ  ← このページ
+ *   動画   (/me/videos) … 動画のみ
+ *
+ * /contents （記事 + 動画の混合一覧）はナビから外したが、ルートは残している。
+ * 記事詳細が /contents/[slug] であり、共有済み URL を壊せないため。
  *
  * `/contents?type=blog` というクエリ方式は採らなかった。アクティブ判定のために
  * サイドバー（= ルートレイアウト）で useSearchParams() を呼ぶ必要が生じ、
@@ -65,9 +71,12 @@ export default async function BlogPage() {
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-800">ブログ</h1>
-        {/* コンテンツ全体（動画も含む）に戻る導線 */}
-        <Link href="/contents" className="text-sm font-semibold text-brand-600 hover:underline">
-          コンテンツをすべて見る →
+        {/* 「コンテンツをすべて見る」(/contents) は廃止し、もう一方の
+            並列メニューである動画へ渡す導線にした。
+            ナビから外したページへ本文から誘導すると、
+            サイドバーに無いページに迷い込むことになるため。 */}
+        <Link href="/me/videos" className="text-sm font-semibold text-brand-600 hover:underline">
+          動画を見る →
         </Link>
       </div>
 

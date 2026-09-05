@@ -235,12 +235,16 @@ function HeroCopy({
         >
           {isAuthenticated ? 'マイページへ' : '入室する（無料会員登録）'}
         </Link>
+        {/* サイドバーから「コンテンツ」を廃止しブログ / 動画を並列にしたので、
+            トップの CTA もナビに存在する具体的なページ (ブログ) へ送る。
+            ナビに無い /contents へ誘導すると、戻る導線がサイドバーに
+            見当たらない状態になってしまう。 */}
         {contentsVisible && (
           <Link
-            href="/contents"
+            href="/blog"
             className="rounded-full border-2 border-white bg-white/10 px-7 py-3.5 text-center text-sm font-bold uppercase tracking-wide text-white shadow-[0_4px_16px_rgba(0,0,0,0.3)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white hover:text-black"
           >
-            コンテンツを見る
+            ブログを見る
           </Link>
         )}
       </div>

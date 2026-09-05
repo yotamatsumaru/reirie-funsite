@@ -6,7 +6,7 @@ import { requireCapabilityPage } from '@/auth';
 import { ContentForm, type ContentInitial } from '../content-form';
 import { formatJstDateTime } from '@idol/shared';
 
-export const metadata: Metadata = { title: 'コンテンツ編集' };
+export const metadata: Metadata = { title: 'ブログ編集' };
 export const dynamic = 'force-dynamic';
 
 export default async function EditContentPage({
@@ -41,10 +41,10 @@ export default async function EditContentPage({
           href="/admin/contents"
           className="text-sm text-slate-500 hover:text-slate-700"
         >
-          ← コンテンツ管理へ戻る
+          ← ブログ管理へ戻る
         </Link>
         <h1 className="mt-2 text-xl font-bold text-slate-800 sm:text-2xl">
-          コンテンツ編集
+          ブログ編集
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           閲覧数 {content.viewCount.toLocaleString()} 回 ・ 最終更新{' '}

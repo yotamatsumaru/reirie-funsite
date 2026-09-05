@@ -6,10 +6,17 @@ import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
 import { accessLevelLabel, formatJstDateTime } from '@idol/shared';
 
-export const metadata: Metadata = { title: 'コンテンツ管理' };
+export const metadata: Metadata = { title: 'ブログ管理' };
 export const dynamic = 'force-dynamic';
 
-/** ContentType を日本語ラベルに変換 */
+/**
+ * ContentType を日本語ラベルに変換。
+ *
+ * GALLERY を残しているのは、過去に作られたギャラリー記事が
+ * DB に存在しうるため。ラベルを消すと一覧に生の "GALLERY" が出てしまう。
+ * (新規作成フォームでは引き続き選べる。この PR はメニュー構成の変更で、
+ *  コンテンツ種別そのものを廃止する変更ではない)
+ */
 const TYPE_LABEL: Record<string, string> = { BLOG: 'ブログ', GALLERY: 'ギャラリー' };
 function typeLabel(t: string): string {
   return TYPE_LABEL[t] ?? t;
@@ -36,7 +43,7 @@ export default async function AdminContentsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">コンテンツ管理</h1>
+        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">ブログ管理</h1>
         <Link
           href="/admin/contents/new"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
@@ -50,7 +57,7 @@ export default async function AdminContentsPage() {
         {items.length === 0 ? (
           <Card>
             <CardBody className="text-center text-sm text-slate-500">
-              コンテンツはありません
+              記事はありません
             </CardBody>
           </Card>
         ) : (
@@ -116,7 +123,7 @@ export default async function AdminContentsPage() {
               {items.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    コンテンツはありません
+                    記事はありません
                   </td>
                 </tr>
               )}

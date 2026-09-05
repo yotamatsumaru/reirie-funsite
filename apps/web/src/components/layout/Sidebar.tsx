@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   Home,
-  Image as ImageIcon,
   PlayCircle,
   FileText,
   ShoppingBag,
@@ -51,7 +50,6 @@ import {
  */
 const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   home: Home,
-  contents: ImageIcon,
   blog: FileText,
   video: PlayCircle,
   game: Gamepad2,
@@ -97,9 +95,13 @@ export function Sidebar({
   const navGroups = useMemo(
     () =>
       filterNavGroups(NAV_GROUPS, (item) => {
-        // 「コンテンツ」を隠すと配下のブログ / 動画も丸ごと落ちる
-        // (filterNavGroups が再帰的に子を処理する)。
-        if (item.href === '/contents') return contentsVisible;
+        // contentsVisible は「記事・動画セクション全体」のマスタースイッチ。
+        // 以前は親の /contents 1 つを落とせば配下のブログ / 動画も
+        // まとめて消えたが、親を廃止して並列にしたので
+        // ブログ・動画それぞれに同じ判定を掛ける必要がある。
+        // (ここを片方だけにすると、OFF なのに一方だけナビに残り、
+        //  クリックすると 404 になる)
+        if (item.href === '/blog') return contentsVisible;
         if (item.href === '/me/videos') return contentsVisible;
         if (item.href === '/products') return productsVisible;
         // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
