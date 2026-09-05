@@ -14,6 +14,7 @@
  *   - 左揃え / 中央揃え / 右揃え
  *   - リンク挿入・解除 (インラインパネル)
  *   - 画像挿入 (アップロード / URL / ドラッグ&ドロップ / 貼り付け)
+ *   - 短い動画の挿入 (アップロード。最初のフレームから poster を自動生成)
  *   - 元に戻す / やり直し
  *
  * 画像の入れ方は 4 通り用意している。編集者がどれか 1 つでも
@@ -25,6 +26,12 @@
  *
  * 画像を選択すると、幅 (25/50/75/100%) と配置 (左/中央/右) を
  * 変更するバーが出る。指定は style 属性に畳まれ、サニタイズ後も残る。
+ * 動画 (bodyVideo ノード) も同じ仕組みで幅・配置を変えられる。
+ *
+ * 動画は VOD (動画管理) とは別物として扱う。本文クリップは記事の一部であり、
+ * HLS エンコード待ちも動画一覧への露出も不要なため、
+ * 画像と同じ「その場で貼れる」体験に揃えている。
+ * 詳細は lib/content-body-video.ts のコメントを参照。
  *
  * 使い方:
  *   <RichTextEditor value={html} onChange={setHtml} />
@@ -50,6 +57,7 @@ import {
   Link as LinkIcon,
   Unlink,
   Image as ImageIcon,
+  Film,
   Link2,
   Undo2,
   Redo2,
@@ -61,6 +69,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/stores/ui-store';
 import { StyledImage } from './StyledImage';
+import { BodyVideo } from './BodyVideo';
 import { EditorPopover } from './EditorPopover';
 import {
   IMAGE_ALIGN_LABELS,
@@ -73,6 +82,14 @@ import {
   formatBytes,
   validateContentBodyImage,
 } from '@/lib/content-body-image';
+import {
+  MAX_CONTENT_BODY_VIDEO_BYTES,
+  ALLOWED_CONTENT_BODY_VIDEO_TYPES,
+  CONTENT_BODY_VIDEO_SOFT_MAX_SECONDS,
+  formatSeconds,
+  validateContentBodyVideo,
+} from '@/lib/content-body-video';
+import { probeVideoFile } from '@/lib/video-poster';
 
 export interface RichTextEditorProps {
   value: string;
@@ -80,6 +97,13 @@ export interface RichTextEditorProps {
   placeholder?: string;
   /** 画像アップロード先 API。未指定時は記事本文用エンドポイント。 */
   uploadUrl?: string;
+  /** 動画アップロード先 API。未指定時は記事本文用エンドポイント。 */
+  videoUploadUrl?: string;
+  /**
+   * 動画挿入ボタンを出すか。
+   * ギャラリーなど動画を想定しない用途では false にできるようにしている。
+   */
+  enableVideo?: boolean;
 }
 
 /** 開いているインラインパネル。null は閉じている状態。 */
@@ -93,13 +117,18 @@ export function RichTextEditor({
   // 旧既定の /api/admin/uploads/image は MERCH (物販) 権限必須かつ
   // S3 未設定だと失敗するため、記事担当者が画像を入れられなかった。
   uploadUrl = '/api/admin/contents/images',
+  videoUploadUrl = '/api/admin/contents/videos',
+  enableVideo = true,
 }: RichTextEditorProps) {
   const [uploading, setUploading] = useState(false);
+  // 動画は画像より重く時間がかかるので、進捗の文言を分けて出す。
+  const [videoUploading, setVideoUploading] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [linkDraft, setLinkDraft] = useState('');
   const [imageUrlDraft, setImageUrlDraft] = useState('');
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   // ドラッグは子要素に入るたび leave が飛ぶので、深さを数えて枠の点滅を防ぐ
   const dragDepth = useRef(0);
   /**
@@ -109,6 +138,8 @@ export function RichTextEditor({
    * 実際に呼ばれるのはユーザー操作時なので安全。
    */
   const uploadFilesRef = useRef<(files: File[]) => void>(() => {});
+  /** 同上。動画をドロップ / 貼り付けしたとき用。 */
+  const uploadVideoRef = useRef<(file: File) => void>(() => {});
 
   const editor = useEditor({
     // Next.js SSR ハイドレーション不一致を防ぐ (v3 推奨)
@@ -127,6 +158,9 @@ export function RichTextEditor({
         inline: false,
         HTMLAttributes: { class: 'rounded-lg' },
       }),
+      BodyVideo.configure({
+        HTMLAttributes: { class: 'rounded-lg w-full bg-black' },
+      }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder }),
       // 文字数の目安表示用。SNS シェアや一覧の見え方を意識して書けるように。
@@ -142,9 +176,13 @@ export function RichTextEditor({
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []);
         const images = files.filter((f) => f.type.startsWith('image/'));
-        if (images.length === 0) return false;
+        const videos = files.filter((f) => f.type.startsWith('video/'));
+        if (images.length === 0 && videos.length === 0) return false;
         event.preventDefault();
-        uploadFilesRef.current(images);
+        if (images.length > 0) uploadFilesRef.current(images);
+        // 動画は 1 本ずつ。複数同時だと 32MB×N の送信が並走して
+        // 回線を占有し、どれが失敗したか分からなくなる。
+        if (videos[0]) uploadVideoRef.current(videos[0]);
         return true;
       },
       // 本文へのファイルドロップ。ProseMirror 側で拾って既定動作
@@ -153,9 +191,11 @@ export function RichTextEditor({
         const dt = (event as DragEvent).dataTransfer;
         const files = Array.from(dt?.files ?? []);
         const images = files.filter((f) => f.type.startsWith('image/'));
-        if (images.length === 0) return false;
+        const videos = files.filter((f) => f.type.startsWith('video/'));
+        if (images.length === 0 && videos.length === 0) return false;
         event.preventDefault();
-        uploadFilesRef.current(images);
+        if (images.length > 0) uploadFilesRef.current(images);
+        if (videos[0]) uploadVideoRef.current(videos[0]);
         return true;
       },
     },
@@ -228,12 +268,120 @@ export function RichTextEditor({
     [editor, uploadUrl],
   );
 
+  /**
+   * 短い動画を 1 本アップロードして本文に差し込む。
+   *
+   * 画像 (uploadFiles) と分けている理由:
+   *   - ポスター画像の生成という前処理が要る
+   *   - 1 本あたり最大 32MB と重く、複数同時送信を避けたい
+   *   - 尺の警告など、動画固有のフィードバックがある
+   */
+  const uploadVideo = useCallback(
+    async (file: File) => {
+      if (!editor) return;
+
+      // サーバに送る前に同じルールで弾く。
+      // 32MB を送りきってから «形式が違う» と言われるのは待ち時間の無駄。
+      const check = validateContentBodyVideo({
+        contentType: file.type,
+        sizeBytes: file.size,
+      });
+      if (!check.ok) {
+        toast.error(
+          check.error.kind === 'missing'
+            ? '動画ファイルを選択してください'
+            : check.error.message,
+        );
+        return;
+      }
+
+      setVideoUploading(true);
+      try {
+        // 最初のフレームからポスターを作る。
+        // 失敗しても null が返るだけで、アップロードは続行する
+        // (ポスターは «あると綺麗» なだけで必須ではない)。
+        const probe = await probeVideoFile(file);
+
+        if (
+          probe.durationSeconds !== null &&
+          probe.durationSeconds > CONTENT_BODY_VIDEO_SOFT_MAX_SECONDS
+        ) {
+          // 弾かずに知らせるだけ。尺はブラウザ側の推定値なので、
+          // これを理由に投稿を止めると誤判定のときに困る。
+          toast.error(
+            `動画が ${formatSeconds(probe.durationSeconds)} あります。本文には ${formatSeconds(
+              CONTENT_BODY_VIDEO_SOFT_MAX_SECONDS,
+            )} 以内のクリップを推奨します（このまま投稿はできます）。`,
+          );
+        }
+
+        const fd = new FormData();
+        fd.append('file', file);
+        if (probe.poster) fd.append('poster', probe.poster, 'poster.jpg');
+        if (probe.durationSeconds !== null) {
+          fd.append('duration', String(probe.durationSeconds));
+        }
+
+        const res = await fetch(videoUploadUrl, { method: 'POST', body: fd });
+
+        // nginx の client_max_body_size を超えると Next.js に届く前に
+        // 413 が返り、本文が HTML なので json() が失敗する。
+        // 「失敗しました」だけだと原因が分からないので個別に案内する。
+        if (res.status === 413) {
+          throw new Error(
+            '動画のサイズが大きすぎて送信できませんでした。' +
+              `${formatBytes(MAX_CONTENT_BODY_VIDEO_BYTES)} 以内に圧縮するか、長い動画は「動画管理」からアップロードしてください。`,
+          );
+        }
+
+        const json = (await res.json().catch(() => ({}))) as {
+          url?: string;
+          posterUrl?: string | null;
+          warnings?: string[];
+          error?: { message?: string };
+        };
+        if (!res.ok || !json.url) {
+          throw new Error(json.error?.message ?? '動画のアップロードに失敗しました。');
+        }
+
+        // title はファイル名を初期値にしておく (後から直せる)。
+        const title = file.name.replace(/\.[^.]+$/, '');
+        editor
+          .chain()
+          .focus()
+          .setBodyVideo({ src: json.url, poster: json.posterUrl ?? null, title })
+          .run();
+
+        // サーバ側が返す注意 (WebM/MOV の互換性など) をそのまま見せる。
+        for (const w of json.warnings ?? []) toast.error(w);
+
+        toast.success(
+          json.posterUrl
+            ? '動画を挿入しました'
+            : '動画を挿入しました（サムネイルは生成できませんでした）',
+        );
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        setVideoUploading(false);
+        if (videoInputRef.current) videoInputRef.current.value = '';
+      }
+    },
+    [editor, videoUploadUrl],
+  );
+
   // editorProps から呼べるように最新版を ref に載せ替える
   useEffect(() => {
     uploadFilesRef.current = (files: File[]) => {
       void uploadFiles(files);
     };
   }, [uploadFiles]);
+
+  useEffect(() => {
+    uploadVideoRef.current = (file: File) => {
+      void uploadVideo(file);
+    };
+  }, [uploadVideo]);
 
   /* ===== リンクパネル ===== */
   const openLinkPanel = useCallback(() => {
@@ -279,9 +427,13 @@ export function RichTextEditor({
   }
 
   const imageSelected = editor.isActive('image');
+  const videoSelected = editor.isActive('bodyVideo');
   const characters = editor.storage.characterCount?.characters?.() ?? 0;
   const words = editor.storage.characterCount?.words?.() ?? 0;
   const acceptTypes = Object.keys(ALLOWED_CONTENT_BODY_IMAGE_TYPES).join(',');
+  const acceptVideoTypes = Object.keys(ALLOWED_CONTENT_BODY_VIDEO_TYPES).join(',');
+  // 画像・動画どちらかの送信中は編集を止める (二重送信と誤操作の防止)。
+  const busy = uploading || videoUploading;
 
   return (
     <div
@@ -449,6 +601,14 @@ export function RichTextEditor({
           active={panel === 'imageUrl'}
           onClick={openImageUrlPanel}
         />
+        {enableVideo && (
+          <ToolButton
+            icon={Film}
+            label={videoUploading ? 'アップロード中…' : '短い動画をアップロード'}
+            disabled={busy}
+            onClick={() => videoInputRef.current?.click()}
+          />
+        )}
 
         <Divider />
 
@@ -578,6 +738,59 @@ export function RichTextEditor({
         </div>
       )}
 
+      {/* ===== 動画選択時のサイズ・配置バー =====
+          画像バーと同じ構造。動画も «半分の幅で中央» のような
+          調整ができないと、縦動画が記事幅いっぱいに広がって読みづらい。 */}
+      {videoSelected && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-sky-50/70 px-3 py-2">
+          <span className="text-[11px] font-semibold text-slate-600">選択中の動画</span>
+
+          <span className="ml-1 text-[11px] text-slate-500">幅</span>
+          {IMAGE_WIDTH_PRESETS.map((w) => (
+            <ChipButton
+              key={w}
+              active={editor.getAttributes('bodyVideo').width === w}
+              onClick={() =>
+                editor.chain().focus().updateAttributes('bodyVideo', { width: w }).run()
+              }
+            >
+              {w}%
+            </ChipButton>
+          ))}
+          <ChipButton
+            active={editor.getAttributes('bodyVideo').width == null}
+            onClick={() =>
+              editor.chain().focus().updateAttributes('bodyVideo', { width: null }).run()
+            }
+          >
+            自動
+          </ChipButton>
+
+          <span className="ml-2 text-[11px] text-slate-500">配置</span>
+          {(['left', 'center', 'right'] as ImageAlign[]).map((a) => (
+            <ChipButton
+              key={a}
+              active={editor.getAttributes('bodyVideo').align === a}
+              onClick={() =>
+                editor.chain().focus().updateAttributes('bodyVideo', { align: a }).run()
+              }
+            >
+              {IMAGE_ALIGN_LABELS[a]}
+            </ChipButton>
+          ))}
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().deleteSelection().run()}
+            className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            動画を削除
+          </button>
+        </div>
+      )}
+
       {/* ===== 本文編集エリア ===== */}
       <div className="relative">
         <EditorContent editor={editor} />
@@ -586,16 +799,18 @@ export function RichTextEditor({
         {dragging && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-brand-50/80">
             <p className="rounded-md border-2 border-dashed border-brand-400 bg-white px-4 py-3 text-sm font-semibold text-brand-700">
-              ここにドロップして画像を挿入
+              ここにドロップして{enableVideo ? '画像・動画' : '画像'}を挿入
             </p>
           </div>
         )}
 
         {/* アップロード中の目隠し。二重送信と誤操作を防ぐ。 */}
-        {uploading && (
+        {busy && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70">
             <p className="rounded-md bg-slate-800/90 px-3 py-1.5 text-xs font-semibold text-white">
-              画像をアップロード中…
+              {videoUploading
+                ? '動画をアップロード中… (サイズによっては時間がかかります)'
+                : '画像をアップロード中…'}
             </p>
           </div>
         )}
@@ -614,11 +829,34 @@ export function RichTextEditor({
         }}
       />
 
+      {/* 動画ファイル入力 (非表示)。multiple にしないのは、
+          32MB×N の同時送信で回線を占有し、どれが失敗したか
+          分からなくなるのを避けるため。 */}
+      {enableVideo && (
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept={acceptVideoTypes}
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void uploadVideo(file);
+          }}
+        />
+      )}
+
       {/* ===== ステータスバー ===== */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
         <span>
-          画像はドラッグ&amp;ドロップ / 貼り付け (Ctrl+V) でも挿入できます・1枚
-          {formatBytes(MAX_CONTENT_BODY_IMAGE_BYTES)} まで
+          画像・動画はドラッグ&amp;ドロップ / 貼り付け (Ctrl+V) でも挿入できます・画像1枚
+          {formatBytes(MAX_CONTENT_BODY_IMAGE_BYTES)}
+          {enableVideo && (
+            <>
+              ・動画1本{formatBytes(MAX_CONTENT_BODY_VIDEO_BYTES)} (
+              {formatSeconds(CONTENT_BODY_VIDEO_SOFT_MAX_SECONDS)}以内・MP4推奨)
+            </>
+          )}
+          まで
         </span>
         <span className="tabular-nums" aria-live="polite">
           {characters.toLocaleString()} 文字 / {words.toLocaleString()} 語

@@ -53,4 +53,63 @@ describe('sanitizeContentBody', () => {
     const clean = sanitizeContentBody('<img src="https://example.com/a.png" class="rounded-lg" alt="" />');
     expect(clean).toContain('class="rounded-lg"');
   });
+
+  // ===== 本文動画 (短いクリップ) =====
+  it('video タグと必要な属性を保持する', () => {
+    const html =
+      '<video src="/api/media/content-body-video/abc" controls preload="metadata" ' +
+      'playsinline poster="/api/media/content-body-image/def" class="rounded-lg"></video>';
+    const clean = sanitizeContentBody(html);
+    expect(clean).toContain('<video');
+    expect(clean).toContain('src="/api/media/content-body-video/abc"');
+    expect(clean).toContain('controls');
+    expect(clean).toContain('preload="metadata"');
+    expect(clean).toContain('playsinline');
+    expect(clean).toContain('poster="/api/media/content-body-image/def"');
+    expect(clean).toContain('class="rounded-lg"');
+  });
+
+  it('video の autoplay を除去する (記事を開いた瞬間に音が鳴る事故を防ぐ)', () => {
+    const clean = sanitizeContentBody('<video src="/a.mp4" controls autoplay></video>');
+    expect(clean).not.toContain('autoplay');
+    expect(clean).toContain('controls');
+  });
+
+  it('video の on* イベント属性を除去する', () => {
+    const clean = sanitizeContentBody(
+      '<video src="/a.mp4" onerror="alert(1)" onplay="alert(2)"></video>',
+    );
+    expect(clean).not.toContain('onerror');
+    expect(clean).not.toContain('onplay');
+  });
+
+  it('video の javascript: な src / poster を除去する', () => {
+    const clean = sanitizeContentBody(
+      '<video src="javascript:alert(1)" poster="javascript:alert(2)"></video>',
+    );
+    expect(clean).not.toContain('javascript:');
+  });
+
+  it('video の crossorigin を除去する', () => {
+    const clean = sanitizeContentBody('<video src="/a.mp4" crossorigin="use-credentials"></video>');
+    expect(clean).not.toContain('crossorigin');
+  });
+
+  it('source / track など許可していない子要素は除去する', () => {
+    const clean = sanitizeContentBody(
+      '<video controls><source src="/a.mp4" type="video/mp4"><track src="/a.vtt"></video>',
+    );
+    expect(clean).not.toContain('<source');
+    expect(clean).not.toContain('<track');
+  });
+
+  it('iframe (外部埋め込み) は引き続き除去する', () => {
+    const clean = sanitizeContentBody('<iframe src="https://evil.example.com"></iframe>');
+    expect(clean).not.toContain('<iframe');
+  });
+
+  it('audio は許可していないので除去する', () => {
+    const clean = sanitizeContentBody('<audio src="/a.mp3" controls></audio>');
+    expect(clean).not.toContain('<audio');
+  });
 });
