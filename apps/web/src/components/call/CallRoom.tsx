@@ -27,8 +27,21 @@ import {
   PhoneOff,
   Loader2,
   ShieldAlert,
+  Settings,
+  Volume2,
+  RefreshCw,
 } from 'lucide-react';
 import type { SignalMessage } from '@/lib/call-types';
+import { DeviceSelect } from '@/components/call/DeviceSelect';
+import {
+  buildMediaConstraints,
+  needsPermissionForLabels,
+  pickDeviceId,
+  readStoredDeviceId,
+  toDeviceOptions,
+  writeStoredDeviceId,
+  type DeviceOption,
+} from '@/lib/call-devices';
 
 type Role = 'performer' | 'fan';
 
@@ -86,6 +99,18 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   const [camOn, setCamOn] = useState(true);
   const [peerCount, setPeerCount] = useState(0);
 
+  // --- デバイス選択 ---
+  const [cameras, setCameras] = useState<DeviceOption[]>([]);
+  const [mics, setMics] = useState<DeviceOption[]>([]);
+  const [speakers, setSpeakers] = useState<DeviceOption[]>([]);
+  const [cameraId, setCameraId] = useState<string | null>(null);
+  const [micId, setMicId] = useState<string | null>(null);
+  const [speakerId, setSpeakerId] = useState<string | null>(null);
+  const [showDevices, setShowDevices] = useState(false);
+  const [labelsHidden, setLabelsHidden] = useState(false);
+  const [switching, setSwitching] = useState<null | 'camera' | 'mic' | 'speaker'>(null);
+  const [deviceNote, setDeviceNote] = useState<string | null>(null);
+
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -102,6 +127,63 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
     statusRef.current = s;
     setStatus(s);
   }, []);
+
+  // 現在選択中の deviceId を同期的に読みたい箇所があるので ref でも保持
+  const cameraIdRef = useRef<string | null>(null);
+  const micIdRef = useRef<string | null>(null);
+
+  // ---------------------------------------------------------------
+  // デバイス一覧の取得
+  //
+  // ⚠️ enumerateDevices() は許可前だと label が空文字で返る (ブラウザ仕様)。
+  //    その場合は「カメラ 1」等の代替名になるので、UI で案内を出す。
+  // ---------------------------------------------------------------
+  const refreshDevices = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+      return;
+    }
+    let devices: MediaDeviceInfo[];
+    try {
+      devices = await navigator.mediaDevices.enumerateDevices();
+    } catch (err) {
+      console.warn('[call] enumerateDevices failed', err);
+      return;
+    }
+
+    const nextCameras = toDeviceOptions(devices, 'videoinput');
+    const nextMics = toDeviceOptions(devices, 'audioinput');
+    const nextSpeakers = toDeviceOptions(devices, 'audiooutput');
+
+    setCameras(nextCameras);
+    setMics(nextMics);
+    setSpeakers(nextSpeakers);
+    setLabelsHidden(
+      needsPermissionForLabels(nextCameras) && needsPermissionForLabels(nextMics),
+    );
+
+    // 保存済みの選択を復元 (無ければ先頭)
+    setCameraId((prev) => {
+      const next = pickDeviceId(nextCameras, prev ?? readStoredDeviceId('videoinput'));
+      cameraIdRef.current = next;
+      return next;
+    });
+    setMicId((prev) => {
+      const next = pickDeviceId(nextMics, prev ?? readStoredDeviceId('audioinput'));
+      micIdRef.current = next;
+      return next;
+    });
+    setSpeakerId((prev) => pickDeviceId(nextSpeakers, prev ?? readStoredDeviceId('audiooutput')));
+  }, []);
+
+  // 初回マウント時 + デバイスの抜き差し時に一覧を更新
+  useEffect(() => {
+    void refreshDevices();
+    const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : undefined;
+    if (!md?.addEventListener) return;
+    const onChange = () => void refreshDevices();
+    md.addEventListener('devicechange', onChange);
+    return () => md.removeEventListener('devicechange', onChange);
+  }, [refreshDevices]);
 
   // ---------------------------------------------------------------
   // POST /api/call/[roomId]/signal にメッセージを送る
@@ -212,16 +294,39 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   // ---------------------------------------------------------------
   const start = useCallback(async () => {
     setErrorMsg(null);
+    setDeviceNote(null);
     updateStatus('requesting-media');
+
+    const selection = {
+      videoDeviceId: cameraIdRef.current,
+      audioDeviceId: micIdRef.current,
+    };
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
-        audio: true,
-      });
+      let stream: MediaStream;
+      try {
+        // 選択されたデバイスを exact で要求
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildMediaConstraints(selection, { exact: true }),
+        );
+      } catch (exactErr) {
+        // 指定デバイスが使えない (OverconstrainedError / NotFoundError) 場合は
+        // ブラウザ既定にフォールバックして通話自体は成立させる
+        console.warn('[call] exact device failed, retrying with ideal', exactErr);
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildMediaConstraints(selection, { exact: false }),
+        );
+        setDeviceNote(
+          '選択したカメラ／マイクが使用できなかったため、既定のデバイスで接続しました。',
+        );
+      }
+
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
+      // 許可が下りた後は label が取れるようになるので一覧を再取得
+      void refreshDevices();
     } catch (err) {
       console.error('[call] getUserMedia failed', err);
       setErrorMsg('カメラ・マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。');
@@ -292,7 +397,7 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
         console.warn('[call] SSE error / closed');
       }
     };
-  }, [createPeerConnection, handleSignal, makeOffer, role, roomId, updateStatus]);
+  }, [createPeerConnection, handleSignal, makeOffer, refreshDevices, role, roomId, updateStatus]);
 
   // ---------------------------------------------------------------
   // 終了処理
@@ -357,6 +462,140 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   }, [camOn]);
 
   // ---------------------------------------------------------------
+  // デバイス切り替え
+  //
+  // 通話中でも RTCRtpSender.replaceTrack() を使えば
+  // 再ネゴシエーション (offer/answer のやり直し) なしで差し替えられる。
+  // 未入室のときは選択を保存するだけ。
+  // ---------------------------------------------------------------
+  const switchTrack = useCallback(
+    async (kind: 'camera' | 'mic', deviceId: string) => {
+      const stream = localStreamRef.current;
+      const pc = pcRef.current;
+
+      // 未入室 → 選択を覚えるだけ (次に「通話を開始」したときに反映)
+      if (!stream) return;
+
+      setSwitching(kind);
+      setDeviceNote(null);
+      try {
+        const constraints =
+          kind === 'camera'
+            ? buildMediaConstraints({ videoDeviceId: deviceId }, { audio: false })
+            : buildMediaConstraints({ audioDeviceId: deviceId }, { video: false });
+
+        const fresh = await navigator.mediaDevices.getUserMedia(constraints);
+        const newTrack =
+          kind === 'camera' ? fresh.getVideoTracks()[0] : fresh.getAudioTracks()[0];
+
+        if (!newTrack) {
+          for (const t of fresh.getTracks()) t.stop();
+          throw new Error('no track returned');
+        }
+
+        // ミュート／カメラOFF の状態は引き継ぐ
+        newTrack.enabled = kind === 'camera' ? camOn : micOn;
+
+        // 送信中のトラックを差し替え (再ネゴシエーション不要)
+        const sender = pc
+          ?.getSenders()
+          .find((s) => s.track?.kind === (kind === 'camera' ? 'video' : 'audio'));
+        if (sender) {
+          await sender.replaceTrack(newTrack);
+        }
+
+        // ローカル stream の古いトラックを停止して差し替え
+        const oldTracks = kind === 'camera' ? stream.getVideoTracks() : stream.getAudioTracks();
+        for (const t of oldTracks) {
+          stream.removeTrack(t);
+          t.stop();
+        }
+        stream.addTrack(newTrack);
+
+        // 自分のプレビューを貼り直す (Safari は再代入しないと更新されない)
+        if (kind === 'camera' && localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error(`[call] switch ${kind} failed`, err);
+        setDeviceNote(
+          kind === 'camera'
+            ? 'カメラを切り替えられませんでした。他のアプリが使用中でないか確認してください。'
+            : 'マイクを切り替えられませんでした。他のアプリが使用中でないか確認してください。',
+        );
+      } finally {
+        setSwitching(null);
+      }
+    },
+    [camOn, micOn],
+  );
+
+  const handleCameraChange = useCallback(
+    (deviceId: string) => {
+      setCameraId(deviceId);
+      cameraIdRef.current = deviceId;
+      writeStoredDeviceId('videoinput', deviceId);
+      void switchTrack('camera', deviceId);
+    },
+    [switchTrack],
+  );
+
+  const handleMicChange = useCallback(
+    (deviceId: string) => {
+      setMicId(deviceId);
+      micIdRef.current = deviceId;
+      writeStoredDeviceId('audioinput', deviceId);
+      void switchTrack('mic', deviceId);
+    },
+    [switchTrack],
+  );
+
+  /**
+   * スピーカー (音声出力) の切り替え。
+   * HTMLMediaElement.setSinkId() は Chrome / Edge のみ対応。
+   * Safari / Firefox では非対応なので UI 自体を出さない。
+   */
+  const handleSpeakerChange = useCallback((deviceId: string) => {
+    setSpeakerId(deviceId);
+    writeStoredDeviceId('audiooutput', deviceId);
+
+    const el = remoteVideoRef.current as
+      | (HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> })
+      | null;
+    if (!el?.setSinkId) return;
+
+    setSwitching('speaker');
+    el.setSinkId(deviceId)
+      .catch((err) => {
+        console.warn('[call] setSinkId failed', err);
+        setDeviceNote('スピーカーを切り替えられませんでした。');
+      })
+      .finally(() => setSwitching(null));
+  }, []);
+
+  // 相手の映像要素が生成された後にも保存済みスピーカーを適用する
+  useEffect(() => {
+    if (!speakerId) return;
+    const el = remoteVideoRef.current as
+      | (HTMLVideoElement & { setSinkId?: (id: string) => Promise<void> })
+      | null;
+    if (!el?.setSinkId) return;
+    el.setSinkId(speakerId).catch(() => {
+      // 非対応 / 権限なしは無視
+    });
+  }, [speakerId, status]);
+
+  /** setSinkId 対応ブラウザかどうか (Chrome / Edge のみ) */
+  const [speakerSupported, setSpeakerSupported] = useState(false);
+  useEffect(() => {
+    setSpeakerSupported(
+      typeof window !== 'undefined' &&
+        typeof HTMLMediaElement !== 'undefined' &&
+        'setSinkId' in HTMLMediaElement.prototype,
+    );
+  }, []);
+
+  // ---------------------------------------------------------------
   // 描画
   // ---------------------------------------------------------------
   const inSession = status === 'in-call' || status === 'waiting' || status === 'connecting';
@@ -376,6 +615,97 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
           <p>{errorMsg}</p>
         </div>
       )}
+
+      {/* --- カメラ / マイク / スピーカーの選択 --- */}
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <button
+          type="button"
+          onClick={() => setShowDevices((v) => !v)}
+          aria-expanded={showDevices}
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <Settings className="h-4 w-4 text-slate-500" aria-hidden />
+            カメラ・マイクの設定
+          </span>
+          <span className="text-xs text-slate-500">{showDevices ? '閉じる' : '開く'}</span>
+        </button>
+
+        {showDevices && (
+          <div className="space-y-3 border-t border-slate-100 px-4 py-4">
+            {labelsHidden && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                デバイス名を表示するには、一度「通話を開始」してカメラ・マイクの使用を許可してください。
+                （ブラウザの仕様で、許可前は機器名を取得できません）
+              </p>
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DeviceSelect
+                id="call-camera"
+                label="カメラ"
+                icon={<VideoIcon className="h-3.5 w-3.5 text-slate-400" aria-hidden />}
+                options={cameras}
+                value={cameraId}
+                onChange={handleCameraChange}
+                disabled={switching === 'camera'}
+                emptyLabel="カメラが見つかりません"
+              />
+              <DeviceSelect
+                id="call-mic"
+                label="マイク"
+                icon={<Mic className="h-3.5 w-3.5 text-slate-400" aria-hidden />}
+                options={mics}
+                value={micId}
+                onChange={handleMicChange}
+                disabled={switching === 'mic'}
+                emptyLabel="マイクが見つかりません"
+              />
+              {speakerSupported && (
+                <DeviceSelect
+                  id="call-speaker"
+                  label="スピーカー（音声の出力先）"
+                  icon={<Volume2 className="h-3.5 w-3.5 text-slate-400" aria-hidden />}
+                  options={speakers}
+                  value={speakerId}
+                  onChange={handleSpeakerChange}
+                  disabled={switching === 'speaker'}
+                  emptyLabel="スピーカーが見つかりません"
+                />
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void refreshDevices()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                デバイスを再検出
+              </button>
+              {switching && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  切り替え中…
+                </span>
+              )}
+            </div>
+
+            {deviceNote && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                {deviceNote}
+              </p>
+            )}
+
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              {inSession
+                ? '通話中でも切り替えられます。選択した機器は次回も自動で使われます。'
+                : '選択した機器は次回も自動で使われます。通話中でも切り替えられます。'}
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-900 aspect-video">
         {/* 相手の映像 (大) */}
