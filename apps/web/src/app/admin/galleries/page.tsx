@@ -33,7 +33,15 @@ export default async function AdminGalleriesPage() {
 
   const items = await prisma.content.findMany({
     where: { type: 'GALLERY' },
-    orderBy: { updatedAt: 'desc' },
+    /**
+     * アルバムごとにまとめてから更新日順に並べる。
+     *
+     * 更新日だけで並べると、同じアルバムのギャラリーが
+     * 一覧のあちこちに散り、「このアルバムに何が入っているか」を
+     * 確認しにくい。nulls last にするのは未設定を末尾に寄せるためで、
+     * 会員側の一覧 (「その他」が末尾) と順番を揃える意図もある。
+     */
+    orderBy: [{ album: { sort: 'asc', nulls: 'last' } }, { updatedAt: 'desc' }],
     take: 50,
     select: {
       id: true,
@@ -43,6 +51,7 @@ export default async function AdminGalleriesPage() {
       publishedAt: true,
       updatedAt: true,
       viewCount: true,
+      album: true,
       // 一覧に「写真 N 枚」を出すため。
       // images を実体で取ると 50 件 × 最大 60 枚を読むことになるので
       // 件数だけ数える。
@@ -59,6 +68,7 @@ export default async function AdminGalleriesPage() {
     updatedAt: c.updatedAt,
     viewCount: c.viewCount,
     imageCount: c._count.images,
+    album: c.album,
   }));
 
   return (

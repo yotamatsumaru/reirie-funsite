@@ -39,6 +39,8 @@ export type AdminContentRow = {
   viewCount: number;
   /** ギャラリーのときだけ渡す写真枚数。 */
   imageCount?: number;
+  /** ギャラリーのときだけ渡すアルバム名 (未設定なら null)。 */
+  album?: string | null;
 };
 
 /** 状態バッジの色。予約中は「まだ出ていない」ことが分かる色にする。 */
@@ -85,6 +87,7 @@ export function AdminContentList({
                       </span>
                     </Badge>
                   )}
+                  {isGallery && c.album && <Badge tone="gray">{c.album}</Badge>}
                   <Badge
                     tone={
                       c.accessLevel === 'PREMIUM'
@@ -123,6 +126,7 @@ export function AdminContentList({
               <tr>
                 <th className="px-4 py-3">タイトル</th>
                 {isGallery && <th className="px-4 py-3">写真</th>}
+                {isGallery && <th className="px-4 py-3">アルバム</th>}
                 <th className="px-4 py-3">アクセス</th>
                 <th className="px-4 py-3">状態</th>
                 <th className="px-4 py-3">公開日時</th>
@@ -144,6 +148,13 @@ export function AdminContentList({
                   {isGallery && (
                     <td className="px-4 py-3 tabular-nums">{c.imageCount ?? 0} 枚</td>
                   )}
+                  {isGallery && (
+                    <td className="px-4 py-3 text-slate-500">
+                      {/* 未設定を空欄にすると «取得失敗» と見分けがつかないので
+                          明示的にダッシを出す。 */}
+                      {c.album ?? '—'}
+                    </td>
+                  )}
                   <td className="px-4 py-3">{accessLevelLabel(c.accessLevel)}</td>
                   <td className="px-4 py-3">
                     <Badge tone={statusTone(c)}>{contentStatusLabel(c)}</Badge>
@@ -160,7 +171,7 @@ export function AdminContentList({
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isGallery ? 7 : 6}
+                    colSpan={isGallery ? 8 : 6}
                     className="px-4 py-8 text-center text-slate-500"
                   >
                     {emptyText}

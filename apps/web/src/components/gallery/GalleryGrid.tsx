@@ -26,9 +26,38 @@
  * - role="dialog" + aria-modal で支援技術に «別レイヤー» と伝える
  * - 閉じたときフォーカスを元のサムネイルに戻す
  *   (これが無いとキーボード操作でページ先頭に飛ばされる)
+ *
+ * ## 写真の持ち出し対策について（重要・限界を含む）
+ *
+ * 「できる限りコピーされないようにしたい」というご要望に対して、
+ * ここでは **手軽な保存操作を防ぐ** 対策を入れている:
+ *
+ *   - 右クリック / 長押しメニューの抑制 (onContextMenu)
+ *   - ドラッグでの画像抜き出しの禁止 (draggable={false} / onDragStart)
+ *   - 長押ししたときの iOS の「画像を保存」シートの抑制
+ *     (-webkit-touch-callout: none)
+ *   - テキスト/画像の選択無効化 (select-none)
+ *
+ * ### できないことをはっきり書いておく
+ *
+ * これらはいずれも **完全な防止にはならない**。
+ * ブラウザが表示している画像は必ず端末に届いているため、
+ *
+ *   - スクリーンショット / 画面収録
+ *   - 開発者ツールや 「フレームを保存」
+ *   - 画像 URL を直接開く
+ *
+ * は防げない。JavaScript を切られればこの対策自体が無効になる。
+ * したがってこれは「悪意のある転載を止める仕組み」ではなく、
+ * 「なんとなく保存してしまう」を減らし、
+ * 合わせて «保存・転載は禁止» という意思表示を会員に伝えるものである。
+ *
+ * 実質的な保護はサーバー側の公開範囲チェック
+ * (lib/media-access.ts と画像配信エンドポイント) が担っている。
+ * 限定公開の写真はプランを満たさない限り URL を知っていても取得できない。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, X, ZoomIn } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShieldAlert, X, ZoomIn } from 'lucide-react';
 import { formatImageCounter, stepIndex } from '@/lib/gallery';
 
 export type GalleryPhoto = {
@@ -100,10 +129,27 @@ export function GalleryGrid({ photos, title }: { photos: GalleryPhoto[]; title: 
   return (
     <>
       {/*
+        写真の扱いについての注意書き。
+        技術的な対策だけでは防げないため、
+        「保存・転載はご遠慮ください」という意思表示を明示する。
+      */}
+      <p className="mt-6 flex items-start gap-1.5 text-xs text-slate-400">
+        <ShieldAlert className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden />
+        <span>
+          写真の保存・転載・SNS への再アップロードはご遠慮ください。
+        </span>
+      </p>
+      {/*
         グリッドは正方形タイル。写真の縦横比がまちまち (縦写真・横写真が混在)
         でも隙間なく並ぶため。元の比率は拡大時に見せる。
       */}
-      <ul className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+      <ul
+        className="mt-3 grid select-none grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3"
+        // 長押しで出る iOS の「画像を保存」シートを抑える。
+        // Tailwind に相当クラスが無いので直接指定する。
+        style={{ WebkitTouchCallout: 'none' }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
         {photos.map((photo, i) => (
           <li key={`${photo.url}-${i}`}>
             <button
@@ -126,7 +172,12 @@ export function GalleryGrid({ photos, title }: { photos: GalleryPhoto[]; title: 
                 // 全部即座に読むとモバイル回線で表示が止まる。
                 loading="lazy"
                 decoding="async"
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                // ドラッグでデスクトップや他タブへ抜き出すのを防ぐ。
+                // 属性と onDragStart の両方を入れているのは、
+                // draggable="false" を無視するブラウザがあるため。
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
+                className="pointer-events-none h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
               {/* ホバー時に «拡大できる» ことを示す */}
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/25">
@@ -197,6 +248,12 @@ export function GalleryGrid({ photos, title }: { photos: GalleryPhoto[]; title: 
               src={current.url}
               alt={current.caption || `${title} の写真 ${openIndex + 1}`}
               onClick={(e) => e.stopPropagation()}
+              // 拡大表示は «持ち出されやすい» 場所なので、
+              // グリッドと同じ対策を個別にも掛ける。
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              onContextMenu={(e) => e.preventDefault()}
+              style={{ WebkitTouchCallout: 'none' }}
               className="max-h-full max-w-full select-none object-contain"
             />
 

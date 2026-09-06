@@ -43,6 +43,9 @@ export default async function EditContentPage({
     status: content.status as ContentInitial['status'],
     authorName: content.authorName ?? '',
     tags: content.tags,
+    // 未設定 (null) は空文字にする。フォームの value に null を渡すと
+    // React が制御コンポーネントとして扱わず警告を出す。
+    album: content.album ?? '',
     // 既存の公開日時を datetime-local 用の JST 文字列に変換して渡す。
     // これが無いと編集画面を開くたびに «未設定» になり、
     // 保存すると公開日時が今に上書きされてしまう。
