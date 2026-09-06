@@ -33,10 +33,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { accessLevelLabel, accessibleLevels, formatJstDate, type PlanTypeLiteral } from '@idol/shared';
-import { Card, CardBody } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { accessibleLevels, type PlanTypeLiteral } from '@idol/shared';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
+import { BlogCard } from '@/components/blog/BlogCard';
 
 export const metadata: Metadata = { title: 'ブログ' };
 export const dynamic = 'force-dynamic';
@@ -64,6 +63,10 @@ export default async function BlogPage() {
       coverImageUrl: true,
       accessLevel: true,
       publishedAt: true,
+      // サムネイルが無い記事は抜粋も空のことが多い。
+      // その場合カードが「タイトルだけの空白」になってしまうため、
+      // 本文の冒頭からテキストを起こすのに使う (lib/blog-card.ts)。
+      body: true,
     },
   });
 
@@ -83,52 +86,11 @@ export default async function BlogPage() {
       {posts.length === 0 ? (
         <p className="text-sm text-slate-500">公開されているブログはありません</p>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        // items-stretch にしないと、テキストカード (画像枠なし) と
+        // 画像ありカードが混在したときに高さが揃わず段差になる。
+        <div className="grid items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {posts.map((p) => (
-            <Link key={p.id} href={`/contents/${p.slug}`}>
-              <Card className="transition-shadow hover:shadow-md">
-                <div className="relative aspect-video w-full overflow-hidden rounded-t-lg bg-slate-100">
-                  {p.coverImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.coverImageUrl}
-                      alt={p.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-100 to-brand-50 text-brand-400">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden>
-                        <path
-                          d="M6 4h9l5 5v11a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-                <CardBody>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Badge tone="gray">ブログ</Badge>
-                    {/* 生の enum 名 (PREMIUM/MEMBERS) をそのまま出していたため、
-                        公開範囲を増やしても新しい段階のバッジが出なかった。
-                        PUBLIC 以外は共通ラベルでバッジを出す。 */}
-                    {p.accessLevel !== 'PUBLIC' && (
-                      <Badge tone={p.accessLevel === 'PREMIUM' ? 'brand' : 'info'}>
-                        {accessLevelLabel(p.accessLevel)}
-                      </Badge>
-                    )}
-                  </div>
-                  <h2 className="mb-1 line-clamp-2 text-base font-semibold text-slate-800">
-                    {p.title}
-                  </h2>
-                  {p.excerpt && <p className="line-clamp-2 text-sm text-slate-500">{p.excerpt}</p>}
-                  {p.publishedAt && (
-                    <p className="mt-2 text-xs text-slate-400">{formatJstDate(p.publishedAt)}</p>
-                  )}
-                </CardBody>
-              </Card>
-            </Link>
+            <BlogCard key={p.id} post={p} />
           ))}
         </div>
       )}
