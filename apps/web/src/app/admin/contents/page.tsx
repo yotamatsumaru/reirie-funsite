@@ -6,16 +6,15 @@ import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
 import { accessLevelLabel, formatJstDateTime } from '@idol/shared';
 
-export const metadata: Metadata = { title: 'ブログ管理' };
+export const metadata: Metadata = { title: 'ブログ・ギャラリー管理' };
 export const dynamic = 'force-dynamic';
 
 /**
  * ContentType を日本語ラベルに変換。
  *
- * GALLERY を残しているのは、過去に作られたギャラリー記事が
- * DB に存在しうるため。ラベルを消すと一覧に生の "GALLERY" が出てしまう。
- * (新規作成フォームでは引き続き選べる。この PR はメニュー構成の変更で、
- *  コンテンツ種別そのものを廃止する変更ではない)
+ * GALLERY はライブ写真などの写真まとめ。
+ * 会員側では /gallery に一覧、詳細は /contents/[slug] で
+ * 写真グリッド + 拡大表示として描画される。
  */
 const TYPE_LABEL: Record<string, string> = { BLOG: 'ブログ', GALLERY: 'ギャラリー' };
 function typeLabel(t: string): string {
@@ -43,7 +42,7 @@ export default async function AdminContentsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">ブログ管理</h1>
+        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">ブログ・ギャラリー管理</h1>
         <Link
           href="/admin/contents/new"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"

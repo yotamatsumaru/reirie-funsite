@@ -7,6 +7,7 @@ import { accessLevelLabel, canAccess, formatJstDate } from '@idol/shared';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
+import { GalleryGrid } from '@/components/gallery/GalleryGrid';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,9 +42,27 @@ export default async function ContentDetailPage({
   if (!content || content.status !== 'PUBLISHED') notFound();
 
   const canView = canAccess(session?.user?.plan, content.accessLevel);
+  const isGallery = content.type === 'GALLERY';
+
+  /**
+   * ギャラリー写真。
+   *
+   * ここが今回の修正の中心。`include: { images }` で取得はしていたのに
+   * 一切描画していなかったため、ギャラリーを作っても写真が出なかった。
+   */
+  const photos = content.images.map((img) => ({
+    url: img.url,
+    caption: img.caption,
+  }));
 
   return (
-    <article className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
+    <article
+      className={`mx-auto px-4 py-6 sm:py-10 ${
+        // ギャラリーは写真を大きく見せたいので本文より広い幅を使う。
+        // ブログは «読み物» なので 1 行の文字数が増えすぎない max-w-3xl を維持する。
+        isGallery ? 'max-w-5xl' : 'max-w-3xl'
+      }`}
+    >
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge tone="gray">{content.type === 'BLOG' ? 'ブログ' : 'ギャラリー'}</Badge>
         {/* 生の enum 名 (PREMIUM/MEMBERS) をそのまま出していたため、
@@ -96,12 +115,32 @@ export default async function ContentDetailPage({
               {content.excerpt}
             </p>
           )}
-          <div
-            className="prose prose-slate mt-8 max-w-none text-slate-800"
-            // 管理API (POST/PATCH /api/admin/contents) の書き込み時に
-            // sanitizeContentBody() でサニタイズ済みの HTML (RBAC + サニタイズの多層防御)
-            dangerouslySetInnerHTML={{ __html: content.body ?? '' }}
-          />
+          {/* 説明文。ギャラリーでは «いつ・どこの写真か» の説明にあたる。 */}
+          {content.body?.trim() ? (
+            <div
+              className="prose prose-slate mt-8 max-w-none text-slate-800"
+              // 管理API (POST/PATCH /api/admin/contents) の書き込み時に
+              // sanitizeContentBody() でサニタイズ済みの HTML (RBAC + サニタイズの多層防御)
+              dangerouslySetInnerHTML={{ __html: content.body }}
+            />
+          ) : null}
+
+          {/*
+            ギャラリー写真。
+            ブログ記事にも content_images を紐づけることは技術的に可能だが、
+            ブログの画像は本文 HTML の中に入るので、ここで二重に出さない。
+          */}
+          {isGallery && photos.length > 0 && (
+            <GalleryGrid photos={photos} title={content.title} />
+          )}
+
+          {/* 写真が 0 枚のギャラリー。
+              «壊れている» のか «まだ準備中» なのか読者に分からないので明示する。 */}
+          {isGallery && photos.length === 0 && (
+            <p className="mt-8 rounded-md bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              写真がまだ登録されていません。
+            </p>
+          )}
         </>
       )}
     </article>

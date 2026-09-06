@@ -30,8 +30,9 @@
  *
  * そこで **ブログと動画をトップレベルに並列で置く** 構成に変更した。
  *
- *   ブログ (/blog)      … 記事のみ
- *   動画   (/me/videos) … 動画のみ
+ *   ブログ     (/blog)      … 記事のみ
+ *   動画       (/me/videos) … 動画のみ
+ *   ギャラリー (/gallery)   … ライブ写真などの写真まとめ
  *
  * ## /contents ページを削除していない理由（重要）
  *
@@ -76,6 +77,7 @@ export type NavIconKey =
   // 使われないアイコンが残り続けるのを防ぐ (Record<NavIconKey,...> が型エラーになる)。
   | 'blog'
   | 'video'
+  | 'gallery'
   | 'game'
   | 'notice'
   | 'goods'
@@ -110,6 +112,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // 動画は video テーブルなので専用ページ。
       // 尺・鍵表示など動画向けの一覧はこちらが本体。
       { href: '/me/videos', label: '動画', iconKey: 'video' },
+      // ライブ写真などの写真まとめ。Content(type=GALLERY) + content_images。
+      { href: '/gallery', label: 'ギャラリー', iconKey: 'gallery' },
       { href: '/game', label: 'ゲーム', iconKey: 'game' },
       { href: '/notices', label: 'お知らせ', iconKey: 'notice' },
     ],

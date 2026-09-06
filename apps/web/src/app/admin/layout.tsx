@@ -45,11 +45,19 @@ type NavItem = {
  * ルート (/admin/contents) は変更していない。
  * 管理者がブックマークしている可能性があり、URL を変えると
  * リダイレクトを用意しない限り 404 になるため。
- * 表示名だけを実態 (= ブログ記事の管理) に合わせる。
+ *
+ * ## ギャラリーを別メニューにしなかった理由
+ *
+ * ブログとギャラリーは同じ `contents` テーブルの `type` 違いで、
+ * 同じフォーム (content-form.tsx) で編集する。
+ * メニューを 2 つに分けると «同じ一覧が 2 か所に出る» か
+ * «type で絞った一覧を 2 本用意する» ことになり、
+ * 「種別を変えて保存したら別のメニューに移動した」という
+ * 分かりにくさが生まれる。1 本にまとめて一覧で種別バッジを見せる。
  */
 const NAV: NavItem[] = [
   { href: '/admin', label: 'ダッシュボード', icon: LayoutDashboard, capability: null },
-  { href: '/admin/contents', label: 'ブログ', icon: FileText, capability: 'CONTENT' },
+  { href: '/admin/contents', label: 'ブログ・ギャラリー', icon: FileText, capability: 'CONTENT' },
   { href: '/admin/videos', label: '動画', icon: Video, capability: 'CONTENT' },
   { href: '/admin/live', label: 'ライブ', icon: Radio, capability: 'CONTENT' },
   { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },

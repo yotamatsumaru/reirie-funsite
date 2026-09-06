@@ -10,6 +10,7 @@ import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sanitizeContentBody } from '@/lib/sanitize-html';
+import { buildGalleryImages } from '@/lib/gallery-images';
 
 export const runtime = 'nodejs';
 
@@ -66,12 +67,30 @@ export const PATCH = handle(
       },
     });
 
-    // imageUrls が指定された場合は画像を入れ替え
-    if (body.imageUrls) {
+    /**
+     * imageUrls が指定された場合はギャラリー画像を入れ替える。
+     *
+     * 「差分更新」ではなく「全消し → 再作成」にしているのは、
+     * 並び替え・削除・追加が同時に起きるため。
+     * 画像 URL は ContentBodyImage / S3 側に実体があり、
+     * この行は参照でしかないので消しても写真自体は失われない。
+     *
+     * `body.imageUrls` が undefined のとき (= 送られていない) は
+     * 何もしない。空配列のときは「全部消す」意思表示として扱う。
+     * この区別が無いと、ギャラリー以外の項目だけを更新した PATCH で
+     * 写真が全部消える。
+     */
+    if (body.imageUrls !== undefined) {
+      const galleryImages = buildGalleryImages(body.imageUrls, body.imageCaptions);
       await prisma.contentImage.deleteMany({ where: { contentId: id } });
-      if (body.imageUrls.length > 0) {
+      if (galleryImages.length > 0) {
         await prisma.contentImage.createMany({
-          data: body.imageUrls.map((url, i) => ({ contentId: id, url, sortOrder: i })),
+          data: galleryImages.map((img, i) => ({
+            contentId: id,
+            url: img.url,
+            caption: img.caption,
+            sortOrder: i,
+          })),
         });
       }
     }

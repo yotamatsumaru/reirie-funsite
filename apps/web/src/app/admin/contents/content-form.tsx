@@ -23,6 +23,7 @@ import { toast } from '@/stores/ui-store';
 import type { AccessLevelLiteral } from '@idol/shared';
 import { slugifyTitle, suggestSlug, validateSlug } from '@/lib/content-slug';
 import { validateContentBodyImage } from '@/lib/content-body-image';
+import { GalleryImagesEditor, type GalleryImageDraft } from './gallery-images-editor';
 
 /** 本文画像・カバー画像の共通アップロード先 (CONTENT 権限)。 */
 const IMAGE_UPLOAD_URL = '/api/admin/contents/images';
@@ -54,6 +55,11 @@ export interface ContentInitial {
   status: ContentStatus;
   authorName: string;
   tags: string[];
+  /**
+   * ギャラリー写真 (種別 = GALLERY のときのみ使用)。
+   * 並び順がそのまま表示順になる。
+   */
+  galleryImages: GalleryImageDraft[];
 }
 
 const EMPTY: ContentInitial = {
@@ -67,6 +73,7 @@ const EMPTY: ContentInitial = {
   status: 'DRAFT',
   authorName: '',
   tags: [],
+  galleryImages: [],
 };
 
 export function ContentForm({
@@ -203,6 +210,19 @@ export function ContentForm({
         status: form.status,
         authorName: form.authorName || undefined,
         tags,
+        /**
+         * ギャラリー写真。
+         *
+         * 種別がギャラリーのときだけ送る。ブログのときに空配列を送ると
+         * 「全部消す」と解釈され、種別を切り替えて保存し直したときに
+         * 写真が失われる (API 側は undefined = 変更なし / [] = 全削除)。
+         */
+        ...(form.type === 'GALLERY'
+          ? {
+              imageUrls: form.galleryImages.map((g) => g.url),
+              imageCaptions: form.galleryImages.map((g) => g.caption),
+            }
+          : {}),
       };
 
       const url =
@@ -221,7 +241,8 @@ export function ContentForm({
 
       // 保存できたので離脱ガードを解除する (これが無いと遷移時に警告が出る)
       setSaved(JSON.stringify({ ...form, slug }));
-      toast.success(mode === 'create' ? 'コンテンツを作成しました' : '変更を保存しました');
+      const kind = form.type === 'GALLERY' ? 'ギャラリー' : '記事';
+      toast.success(mode === 'create' ? `${kind}を作成しました` : '変更を保存しました');
       router.push('/admin/contents');
       router.refresh();
     } catch (e) {
@@ -393,12 +414,23 @@ export function ContentForm({
                   value={form.body}
                   onChange={(e) => set('body', e.target.value)}
                   rows={6}
-                  placeholder="ギャラリーの説明文"
-                  hint="安全なHTMLタグのみ許可されます（危険なタグ/属性は自動除去）。"
+                  placeholder="例: 2026/09/05 ワンマンライブのオフショットです"
+                  hint="安全なHTMLタグのみ許可されます（危険なタグ/属性は自動除去）。写真の上に表示されます。"
                 />
               )}
             </CardBody>
           </Card>
+
+          {/* ギャラリーのときだけ写真の管理 UI を出す。
+              ブログでは content_images を使わないので表示しない
+              (出すと «本文画像とは別にここにも入れるのか?» と混乱する)。 */}
+          {!isBlog && (
+            <GalleryImagesEditor
+              images={form.galleryImages}
+              onChange={(next) => set('galleryImages', next)}
+              uploadUrl={IMAGE_UPLOAD_URL}
+            />
+          )}
         </div>
 
         {/* サイド: 公開設定・種別・カバー画像 */}

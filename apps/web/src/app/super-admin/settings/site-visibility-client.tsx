@@ -28,9 +28,9 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
     // このトグルは両方をまとめて制御する 1 つのスイッチのまま。
     // ラベルを «コンテンツ» のままにすると、ナビに存在しない名前を指すことになり
     // 「どれが消えるのか」が分からないので、対象を明示する。
-    label: 'ブログ・動画',
+    label: 'ブログ・動画・ギャラリー',
     description:
-      'ブログ (/blog)・動画 (/me/videos)・記事詳細 (/contents) をまとめて一般公開するか。OFF にするとサイドバーからブログと動画の両方が消えます',
+      'ブログ (/blog)・動画 (/me/videos)・ギャラリー (/gallery)・記事詳細 (/contents) をまとめて一般公開するか。OFF にするとサイドバーからこの 3 つが消えます',
   },
   {
     key: 'productsVisible',
