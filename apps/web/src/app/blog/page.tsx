@@ -35,6 +35,7 @@ import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { accessibleLevels, type PlanTypeLiteral } from '@idol/shared';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
+import { publishedContentWhere } from '@/lib/content-visibility';
 import { BlogCard } from '@/components/blog/BlogCard';
 
 export const metadata: Metadata = { title: 'ブログ' };
@@ -52,7 +53,11 @@ export default async function BlogPage() {
   const allowed = accessibleLevels(plan);
 
   const posts = await prisma.content.findMany({
-    where: { status: 'PUBLISHED', type: 'BLOG', accessLevel: { in: allowed } },
+    // publishedContentWhere は status=PUBLISHED に加えて
+    // 「publishedAt が未来のものを除く」条件を足す。
+    // 以前は status だけで絞っていたため、公開予約した記事が
+    // 予約時刻を待たずに一覧へ出ていた。
+    where: { ...publishedContentWhere(), type: 'BLOG', accessLevel: { in: allowed } },
     orderBy: { publishedAt: 'desc' },
     take: 48,
     select: {

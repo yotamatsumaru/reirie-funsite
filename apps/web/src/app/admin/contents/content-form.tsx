@@ -20,10 +20,14 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { RichTextEditor } from '@/components/editor/RichTextEditor';
 import { AccessLevelSelect } from '@/components/admin/AccessLevelSelect';
 import { toast } from '@/stores/ui-store';
-import type { AccessLevelLiteral } from '@idol/shared';
+import { formatJstDateTime, type AccessLevelLiteral } from '@idol/shared';
 import { slugifyTitle, suggestSlug, validateSlug } from '@/lib/content-slug';
 import { validateContentBodyImage } from '@/lib/content-body-image';
 import { GalleryImagesEditor, type GalleryImageDraft } from './gallery-images-editor';
+// 動画フォームと同じ JST 変換を再利用する。
+// 独自に実装すると «動画は 9 時間ずれないのに記事はずれる» という
+// 不整合が生まれるため。
+import { toDatetimeLocalJst, fromDatetimeLocalJst } from '@/lib/video-edit';
 
 /** 本文画像・カバー画像の共通アップロード先 (CONTENT 権限)。 */
 const IMAGE_UPLOAD_URL = '/api/admin/contents/images';
@@ -56,6 +60,11 @@ export interface ContentInitial {
   authorName: string;
   tags: string[];
   /**
+   * 公開日時。`<input type="datetime-local">` の値 (JST として解釈)。
+   * 空文字は「未設定」= 公開にした時点で即公開。
+   */
+  publishedAt: string;
+  /**
    * ギャラリー写真 (種別 = GALLERY のときのみ使用)。
    * 並び順がそのまま表示順になる。
    */
@@ -73,18 +82,26 @@ const EMPTY: ContentInitial = {
   status: 'DRAFT',
   authorName: '',
   tags: [],
+  publishedAt: '',
   galleryImages: [],
 };
 
 export function ContentForm({
   mode,
   initial,
+  initialType,
 }: {
   mode: 'create' | 'edit';
   initial?: ContentInitial;
+  /**
+   * 新規作成時の初期種別。
+   * 一覧をブログ / ギャラリーに分けたため、どちらから来たかで
+   * 初期値を合わせる (ギャラリー管理から作ったのにブログで開くのを防ぐ)。
+   */
+  initialType?: ContentType;
 }) {
   const router = useRouter();
-  const base = initial ?? EMPTY;
+  const base = initial ?? (initialType ? { ...EMPTY, type: initialType } : EMPTY);
   const [form, setForm] = useState<ContentInitial>(base);
   const [tagsInput, setTagsInput] = useState(base.tags.join(', '));
   const [busy, setBusy] = useState(false);
@@ -199,6 +216,22 @@ export function ContentForm({
         .map((t) => t.trim())
         .filter(Boolean);
 
+      // datetime-local の値は JST として解釈して ISO へ変換する。
+      // ブラウザの TZ 設定に依存させないため専用ヘルパーを使う。
+      const publishedIso = form.publishedAt.trim()
+        ? fromDatetimeLocalJst(form.publishedAt)
+        : null;
+
+      // 日時を入れたのに «下書き» のままだと予約が効かない
+      // (公開判定は status=PUBLISHED を必須にしている)。
+      // 保存を止めるほどではないが、黙って無視すると
+      // 「予約したのに出ない」と誤解されるので警告する。
+      if (publishedIso && form.status !== 'PUBLISHED') {
+        toast.error(
+          '公開日時を指定しましたが、公開状態が「公開」ではありません。予約公開するには「公開」を選んでください。',
+        );
+      }
+
       const payload = {
         type: form.type,
         slug,
@@ -210,6 +243,15 @@ export function ContentForm({
         status: form.status,
         authorName: form.authorName || undefined,
         tags,
+        /**
+         * 公開日時。
+         *
+         * 空のときは undefined を送る (キーを送らない)。
+         * null や空文字を送ると API 側で «日時をクリアする» のか
+         * «変更しない» のか区別できない。未指定なら API が
+         * 従来どおり «公開にした時点で今» を入れる。
+         */
+        ...(publishedIso ? { publishedAt: publishedIso } : {}),
         /**
          * ギャラリー写真。
          *
@@ -243,7 +285,10 @@ export function ContentForm({
       setSaved(JSON.stringify({ ...form, slug }));
       const kind = form.type === 'GALLERY' ? 'ギャラリー' : '記事';
       toast.success(mode === 'create' ? `${kind}を作成しました` : '変更を保存しました');
-      router.push('/admin/contents');
+      // 一覧はブログ / ギャラリーで分かれているので、保存した種別に応じて戻す。
+      // 常に /admin/contents に戻すと、ギャラリーを保存したのに
+      // ブログ一覧が出て «保存できていない» と誤解される。
+      router.push(form.type === 'GALLERY' ? '/admin/galleries' : '/admin/contents');
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -266,7 +311,10 @@ export function ContentForm({
       // 削除後の遷移で離脱ガードが発火しないようにする
       setSaved(JSON.stringify(form));
       toast.success('コンテンツを削除しました');
-      router.push('/admin/contents');
+      // 一覧はブログ / ギャラリーで分かれているので、保存した種別に応じて戻す。
+      // 常に /admin/contents に戻すと、ギャラリーを保存したのに
+      // ブログ一覧が出て «保存できていない» と誤解される。
+      router.push(form.type === 'GALLERY' ? '/admin/galleries' : '/admin/contents');
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -275,6 +323,28 @@ export function ContentForm({
   }
 
   const isBlog = form.type === 'BLOG';
+
+  /**
+   * 公開日時のヒント文。
+   *
+   * 「未来なら予約」という仕様は文字で説明しても伝わりにくいので、
+   * 入力された値に応じて «今どうなるか» を返す。
+   */
+  const publishedHint = (() => {
+    const raw = form.publishedAt.trim();
+    if (!raw) {
+      return '空のままにすると、公開状態を「公開」にした時点で公開されます。日本時間で指定します。';
+    }
+    const iso = fromDatetimeLocalJst(raw);
+    if (!iso) return '日時の形式が正しくありません。';
+    const at = new Date(iso);
+    if (at.getTime() > Date.now()) {
+      return form.status === 'PUBLISHED'
+        ? `公開予約：${formatJstDateTime(at)} まで会員側には表示されません。`
+        : `${formatJstDateTime(at)} を指定していますが、予約公開するには公開状態を「公開」にしてください。`;
+    }
+    return `${formatJstDateTime(at)}（過去の日時）。保存すると即時公開されます。`;
+  })();
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -457,6 +527,20 @@ export function ContentForm({
                 <option value="PUBLISHED">公開</option>
                 <option value="ARCHIVED">アーカイブ</option>
               </Select>
+              {/*
+                公開日時。
+                動画側と同じ datetime-local + JST 解釈で揃えている。
+                未来の日時を入れると、その時刻まで会員側の一覧・詳細に
+                出なくなる (公開予約)。
+              */}
+              <Input
+                label="公開日時 (任意)"
+                type="datetime-local"
+                value={form.publishedAt}
+                onChange={(e) => set('publishedAt', e.target.value)}
+                hint={publishedHint}
+              />
+
               <AccessLevelSelect
                 value={form.accessLevel}
                 onChange={(v) => set('accessLevel', v)}

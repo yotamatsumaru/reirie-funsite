@@ -46,6 +46,7 @@ import {
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
+import { publishedContentWhere } from '@/lib/content-visibility';
 import {
   GALLERY_PREVIEW_COUNT,
   galleryPreviewImages,
@@ -68,7 +69,8 @@ export default async function GalleryListPage() {
   const allowed = accessibleLevels(plan);
 
   const galleries = await prisma.content.findMany({
-    where: { status: 'PUBLISHED', type: 'GALLERY', accessLevel: { in: allowed } },
+    // 公開予約を尊重する (詳細は lib/content-visibility.ts)。
+    where: { ...publishedContentWhere(), type: 'GALLERY', accessLevel: { in: allowed } },
     orderBy: { publishedAt: 'desc' },
     take: 48,
     select: {

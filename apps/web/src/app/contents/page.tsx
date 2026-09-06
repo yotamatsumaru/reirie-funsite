@@ -26,6 +26,7 @@ import { accessLevelLabel, accessibleLevels, formatJstDate, type PlanTypeLiteral
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
+import { publishedContentWhere } from '@/lib/content-visibility';
 import { resolveThumbnailUrls } from '@/lib/video-delivery';
 import { listableVideoWhere, isVideoPlayable } from '@/lib/video-visibility';
 
@@ -69,7 +70,8 @@ export default async function ContentsPage() {
 
   const [contents, videos] = await Promise.all([
     prisma.content.findMany({
-      where: { status: 'PUBLISHED', accessLevel: { in: allowed } },
+      // 公開予約を尊重する (詳細は lib/content-visibility.ts)。
+      where: { ...publishedContentWhere(), accessLevel: { in: allowed } },
       orderBy: { publishedAt: 'desc' },
       take: 24,
       select: {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { publishedContentWhere } from '@/lib/content-visibility';
 import { prisma } from '@idol/db';
 import { ListContentsQuerySchema, accessibleLevels } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
@@ -25,7 +26,8 @@ export const GET = handle(async (req: Request) => {
   const allowed = accessibleLevels(session?.user?.plan);
 
   const where = {
-    status: 'PUBLISHED' as const,
+    // 公開予約を尊重する (詳細は lib/content-visibility.ts)。
+    ...publishedContentWhere(),
     ...(query.type ? { type: query.type } : {}),
     ...(query.tag ? { tags: { has: query.tag } } : {}),
     accessLevel: { in: allowed },

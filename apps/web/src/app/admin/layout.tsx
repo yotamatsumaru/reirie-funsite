@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import {
   LayoutDashboard,
   FileText,
+  Images,
   ShoppingBag,
   Receipt,
   Video,
@@ -46,18 +47,24 @@ type NavItem = {
  * 管理者がブックマークしている可能性があり、URL を変えると
  * リダイレクトを用意しない限り 404 になるため。
  *
- * ## ギャラリーを別メニューにしなかった理由
+ * ## ギャラリーを独立したタブにした
  *
- * ブログとギャラリーは同じ `contents` テーブルの `type` 違いで、
- * 同じフォーム (content-form.tsx) で編集する。
- * メニューを 2 つに分けると «同じ一覧が 2 か所に出る» か
- * «type で絞った一覧を 2 本用意する» ことになり、
- * 「種別を変えて保存したら別のメニューに移動した」という
- * 分かりにくさが生まれる。1 本にまとめて一覧で種別バッジを見せる。
+ * データ上はどちらも `contents` テーブルの `type` 違いだが、
+ * 運営の作業としては「ブログを書く」と「ライブ写真を上げる」は別物。
+ * 混在した一覧だと種別バッジを目で追う必要があり、
+ * ギャラリーには「写真の枚数」という固有の情報もある。
+ *
+ *   /admin/contents  … ブログ一覧
+ *   /admin/galleries … ギャラリー一覧
+ *
+ * 編集画面 (/admin/contents/[id]) は共通のまま。
+ * 同じフォームで種別を切り替えられる作りなので、
+ * 編集画面まで二重化すると保守が倍になる。
  */
 const NAV: NavItem[] = [
   { href: '/admin', label: 'ダッシュボード', icon: LayoutDashboard, capability: null },
-  { href: '/admin/contents', label: 'ブログ・ギャラリー', icon: FileText, capability: 'CONTENT' },
+  { href: '/admin/contents', label: 'ブログ', icon: FileText, capability: 'CONTENT' },
+  { href: '/admin/galleries', label: 'ギャラリー', icon: Images, capability: 'CONTENT' },
   { href: '/admin/videos', label: '動画', icon: Video, capability: 'CONTENT' },
   { href: '/admin/live', label: 'ライブ', icon: Radio, capability: 'CONTENT' },
   { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },
