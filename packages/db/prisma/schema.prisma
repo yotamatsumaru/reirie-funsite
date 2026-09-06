@@ -559,6 +559,15 @@ model Content {
   publishedAt   DateTime?     @map("published_at")
   authorName    String?       @map("author_name")
   tags          String[]      @default([])
+  /// ギャラリーの «アルバム» 名 (例: "2026 春ツアー")。
+  ///
+  /// 専用テーブルを作らず Content の 1 列にした理由:
+  ///   - アルバムは「ライブごと」「月ごと」「衣装ごと」など括り方が運用で変わる。
+  ///     テーブルにすると名前を変えるだけでマイグレーションと管理画面が必要になる。
+  ///   - 表紙や説明といった «アルバム自身の属性» は要望に含まれておらず、
+  ///     いま作ると使われないカラムを抱えることになる。
+  /// NULL / 空文字は「アルバム未設定」で、一覧では「その他」にまとめる。
+  album         String?
   viewCount     Int           @default(0) @map("view_count")
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
@@ -568,6 +577,8 @@ model Content {
 
   @@index([type, status, publishedAt])
   @@index([accessLevel])
+  /// アルバム絞り込み (/gallery?album=...) 用。
+  @@index([type, album])
   @@map("contents")
 }
 

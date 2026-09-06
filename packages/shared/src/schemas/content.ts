@@ -47,6 +47,17 @@ export const CreateContentSchema = z.object({
   imageUrls: z.array(z.string()).optional(),
   /** ギャラリー画像のキャプション。imageUrls と同じ順序で対応する。 */
   imageCaptions: z.array(z.string().max(200)).optional(),
+  /**
+   * ギャラリーの «アルバム» 名。
+   *
+   * nullable にしている理由: 一度付けたアルバム名を «外す» 操作が必要で、
+   * undefined (キーを送らない) は「変更しない」を意味するため
+   * 区別できる値が要る。null が来たら未設定に戻す。
+   *
+   * 前後の空白の除去は apps/web の lib/gallery-album.ts が行う
+   * (空白のみの入力を «未設定» に寄せる判断は表示側の知識なので)。
+   */
+  album: z.string().max(60).nullable().optional(),
 });
 export type CreateContentInput = z.infer<typeof CreateContentSchema>;
 

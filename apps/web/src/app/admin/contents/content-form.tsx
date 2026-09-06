@@ -24,6 +24,7 @@ import { formatJstDateTime, type AccessLevelLiteral } from '@idol/shared';
 import { slugifyTitle, suggestSlug, validateSlug } from '@/lib/content-slug';
 import { validateContentBodyImage } from '@/lib/content-body-image';
 import { GalleryImagesEditor, type GalleryImageDraft } from './gallery-images-editor';
+import { ALBUM_NAME_MAX } from '@/lib/gallery-album';
 // 動画フォームと同じ JST 変換を再利用する。
 // 独自に実装すると «動画は 9 時間ずれないのに記事はずれる» という
 // 不整合が生まれるため。
@@ -60,6 +61,11 @@ export interface ContentInitial {
   authorName: string;
   tags: string[];
   /**
+   * アルバム名 (種別 = GALLERY のときのみ使用)。
+   * 空文字は「未設定」= 一覧では「その他」にまとまる。
+   */
+  album: string;
+  /**
    * 公開日時。`<input type="datetime-local">` の値 (JST として解釈)。
    * 空文字は「未設定」= 公開にした時点で即公開。
    */
@@ -82,6 +88,7 @@ const EMPTY: ContentInitial = {
   status: 'DRAFT',
   authorName: '',
   tags: [],
+  album: '',
   publishedAt: '',
   galleryImages: [],
 };
@@ -243,6 +250,18 @@ export function ContentForm({
         status: form.status,
         authorName: form.authorName || undefined,
         tags,
+        /**
+         * アルバム名。
+         *
+         * ブログのときは送らない。ブログにはアルバムの概念がなく、
+         * 種別を切り替えて保存し直したときに
+         * 意図しない値が残るのを防ぐ。
+         *
+         * 空文字のときは null を送る (undefined ではない)。
+         * undefined だと API 側が「変更なし」と解釈するので、
+         * 一度付けたアルバム名を空にして保存しても消せなくなる。
+         */
+        ...(form.type === 'GALLERY' ? { album: form.album.trim() || null } : {}),
         /**
          * 公開日時。
          *
@@ -557,6 +576,17 @@ export function ContentForm({
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="お知らせ, ライブ, 新曲"
               />
+
+              {!isBlog && (
+                <Input
+                  label="アルバム名 (任意)"
+                  value={form.album}
+                  onChange={(e) => set('album', e.target.value)}
+                  maxLength={ALBUM_NAME_MAX}
+                  placeholder="2026 春ツアー"
+                  hint="同じアルバム名を付けたギャラリーが一覧でまとまり、タブで切り替えられます。空のときは「その他」に入ります。"
+                />
+              )}
             </CardBody>
           </Card>
 
