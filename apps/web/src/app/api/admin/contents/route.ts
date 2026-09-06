@@ -12,6 +12,7 @@ import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sanitizeContentBody } from '@/lib/sanitize-html';
+import { buildGalleryImages } from '@/lib/gallery-images';
 import type { Prisma } from '@idol/db';
 
 export const runtime = 'nodejs';
@@ -66,6 +67,8 @@ export const POST = handle(async (req: Request) => {
   const exists = await prisma.content.findUnique({ where: { slug: body.slug } });
   if (exists) throw errors.conflict('同じ slug のコンテンツが既に存在します');
 
+  const galleryImages = buildGalleryImages(body.imageUrls, body.imageCaptions);
+
   const created = await prisma.content.create({
     data: {
       type: body.type,
@@ -86,10 +89,17 @@ export const POST = handle(async (req: Request) => {
             : null,
       authorName: body.authorName,
       tags: body.tags,
-      ...(body.imageUrls && body.imageUrls.length > 0
+      // ギャラリー画像。共有スキーマは string を受けるだけなので、
+      // 危険なスキーム (javascript: など) の排除・重複除去・上限は
+      // ここで normalizeGalleryImageUrls が担う。
+      ...(galleryImages.length > 0
         ? {
             images: {
-              create: body.imageUrls.map((url, i) => ({ url, sortOrder: i })),
+              create: galleryImages.map((img, i) => ({
+                url: img.url,
+                caption: img.caption,
+                sortOrder: i,
+              })),
             },
           }
         : {}),

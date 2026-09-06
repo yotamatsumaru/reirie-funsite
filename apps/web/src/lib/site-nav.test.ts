@@ -48,6 +48,18 @@ describe('NAV_GROUPS の構造', () => {
     expect(topLevelHrefs()).toContain('/me/videos');
   });
 
+  it('「ギャラリー」がトップレベルに存在する', () => {
+    expect(topLevelHrefs()).toContain('/gallery');
+  });
+
+  it('ギャラリーのラベルは「ギャラリー」', () => {
+    expect(findItem('/gallery').label).toBe('ギャラリー');
+  });
+
+  it('ギャラリーも入れ子になっていない', () => {
+    expect(findItem('/gallery').children).toBeUndefined();
+  });
+
   it('「コンテンツ」項目は存在しない (回帰: 親項目を廃止した)', () => {
     expect(topLevelHrefs()).not.toContain('/contents');
     expect(allItems().map((i) => i.label)).not.toContain('コンテンツ');
@@ -75,6 +87,11 @@ describe('NAV_GROUPS の構造', () => {
   it('ブログは動画より前に並ぶ (更新頻度が高い導線を上に置く)', () => {
     const hrefs = topLevelHrefs();
     expect(hrefs.indexOf('/blog')).toBeLessThan(hrefs.indexOf('/me/videos'));
+  });
+
+  it('ブログ → 動画 → ギャラリー の順に並ぶ', () => {
+    const hrefs = topLevelHrefs();
+    expect(hrefs.indexOf('/me/videos')).toBeLessThan(hrefs.indexOf('/gallery'));
   });
 
   it('ホームが先頭にある', () => {
@@ -241,17 +258,20 @@ describe('filterNavGroups', () => {
   function hideContents() {
     return filterNavGroups(
       NAV_GROUPS,
-      (item) => item.href !== '/blog' && item.href !== '/me/videos',
+      (item) =>
+        item.href !== '/blog' && item.href !== '/me/videos' && item.href !== '/gallery',
     );
   }
 
-  it('ブログ・動画を非表示にすると両方消える', () => {
+  it('ブログ・動画・ギャラリーを非表示にすると全て消える', () => {
     const hrefs = hideContents().flatMap((g) => g.items.map((i) => i.href));
     expect(hrefs).not.toContain('/blog');
     expect(hrefs).not.toContain('/me/videos');
+    // ギャラリーの判定を Sidebar 側で足し忘れると、OFF なのに残って 404 になる
+    expect(hrefs).not.toContain('/gallery');
   });
 
-  it('ブログ・動画を非表示にしても他の項目は残る', () => {
+  it('ブログ・動画・ギャラリーを非表示にしても他の項目は残る', () => {
     const hrefs = hideContents().flatMap((g) => g.items.map((i) => i.href));
     expect(hrefs).toEqual(expect.arrayContaining(['/', '/game', '/notices', '/products']));
   });

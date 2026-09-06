@@ -28,7 +28,25 @@ export const CreateContentSchema = z.object({
   publishedAt: z.iso.datetime().optional(),
   authorName: z.string().optional(),
   tags: z.array(z.string()).default([]),
-  imageUrls: z.array(z.url()).optional(),
+  /**
+   * ギャラリーに並べる画像 URL。
+   *
+   * `z.url()` を使わない理由 (重要):
+   * 画像アップロード API (/api/admin/contents/images) は S3 未設定の環境で
+   * `/api/media/content-body-image/<uuid>` という **相対パス** を返す。
+   * `z.url()` は絶対 URL しか通さないため、
+   * 「アップロードは成功するのに、その URL を登録すると 400」という
+   * 状態になっていた (S3 設定済みの本番では通るので気付きにくい)。
+   *
+   * ここでは緩く string として受け、
+   * `javascript:` などの危険なスキームの排除と正規化は
+   * apps/web の lib/gallery.ts (normalizeGalleryImageUrls) が行う。
+   * 検証を apps 側に置くのは、許可する形 (自サーバの配信パス) が
+   * Web アプリのルーティングに依存する知識だからである。
+   */
+  imageUrls: z.array(z.string()).optional(),
+  /** ギャラリー画像のキャプション。imageUrls と同じ順序で対応する。 */
+  imageCaptions: z.array(z.string().max(200)).optional(),
 });
 export type CreateContentInput = z.infer<typeof CreateContentSchema>;
 

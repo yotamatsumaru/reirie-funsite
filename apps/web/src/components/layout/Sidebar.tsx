@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import {
   Home,
+  Images,
   PlayCircle,
   FileText,
   ShoppingBag,
@@ -52,6 +53,7 @@ const NAV_ICONS: Record<NavIconKey, LucideIcon> = {
   home: Home,
   blog: FileText,
   video: PlayCircle,
+  gallery: Images,
   game: Gamepad2,
   notice: Bell,
   goods: ShoppingBag,
@@ -103,6 +105,9 @@ export function Sidebar({
         //  クリックすると 404 になる)
         if (item.href === '/blog') return contentsVisible;
         if (item.href === '/me/videos') return contentsVisible;
+        // ギャラリーも同じマスタースイッチ配下。
+        // ここを足し忘れると OFF なのにナビに残り、押すと 404 になる。
+        if (item.href === '/gallery') return contentsVisible;
         if (item.href === '/products') return productsVisible;
         // ゲームは非公開中でも管理者には表示する (開発中の動作確認のため)。
         // 一般会員にはナビからもページからも完全に見えなくなる。

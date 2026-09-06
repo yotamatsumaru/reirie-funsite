@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isContentPublished } from '@/lib/content-visibility';
 import { prisma } from '@idol/db';
 import { canAccess } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
@@ -18,7 +19,9 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ slug: st
     where: { slug },
     include: { images: { orderBy: { sortOrder: 'asc' } } },
   });
-  if (!content || content.status !== 'PUBLISHED') {
+  // 公開予約を尊重する。ここを status だけで判定すると、
+  // API 経由で予約時刻前の内容が取得できてしまう。
+  if (!content || !isContentPublished(content)) {
     throw errors.notFound('記事が見つかりません');
   }
   if (!canAccess(session?.user?.plan, content.accessLevel)) {

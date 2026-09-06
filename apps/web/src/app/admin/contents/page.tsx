@@ -1,37 +1,41 @@
+/**
+ * ブログ記事の管理一覧。
+ *
+ * ## ギャラリーを別ページに分けた
+ *
+ * 以前はこのページが type を絞らず、ブログとギャラリーを混ぜて出していた。
+ * しかし
+ *   - 運営は「ブログを書く」「ライブ写真を上げる」を別の作業として認識する
+ *   - 一覧に混在すると、種別バッジを目で追わないと目的の物が探せない
+ *   - ギャラリーには「写真の枚数」という固有の列がある
+ * ため、`/admin/contents` = ブログ、`/admin/galleries` = ギャラリー に分けた。
+ *
+ * ルート自体は `/admin/contents` のまま変えていない。
+ * 管理者がブックマークしている可能性があり、URL を変えると
+ * リダイレクトを用意しない限り 404 になるため。
+ *
+ * 一覧のテーブルは `content-list.tsx` に共通化してある
+ * (両方に同じテーブルを書くと、片方だけ列を足す等のズレが起きる)。
+ */
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { prisma } from '@idol/db';
-import { Card, CardBody } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { requireCapabilityPage } from '@/auth';
-import { accessLevelLabel, formatJstDateTime } from '@idol/shared';
+import { AdminContentList } from './content-list';
 
 export const metadata: Metadata = { title: 'ブログ管理' };
 export const dynamic = 'force-dynamic';
 
-/**
- * ContentType を日本語ラベルに変換。
- *
- * GALLERY を残しているのは、過去に作られたギャラリー記事が
- * DB に存在しうるため。ラベルを消すと一覧に生の "GALLERY" が出てしまう。
- * (新規作成フォームでは引き続き選べる。この PR はメニュー構成の変更で、
- *  コンテンツ種別そのものを廃止する変更ではない)
- */
-const TYPE_LABEL: Record<string, string> = { BLOG: 'ブログ', GALLERY: 'ギャラリー' };
-function typeLabel(t: string): string {
-  return TYPE_LABEL[t] ?? t;
-}
-
 export default async function AdminContentsPage() {
   await requireCapabilityPage('CONTENT');
+
   const items = await prisma.content.findMany({
+    where: { type: 'BLOG' },
     orderBy: { updatedAt: 'desc' },
     take: 50,
     select: {
       id: true,
-      slug: true,
       title: true,
-      type: true,
       status: true,
       accessLevel: true,
       publishedAt: true,
@@ -43,94 +47,27 @@ export default async function AdminContentsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">ブログ管理</h1>
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 sm:text-2xl">ブログ管理</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            記事の作成・編集。写真をまとめて見せる場合は
+            <Link href="/admin/galleries" className="ml-1 text-brand-600 hover:underline">
+              ギャラリー管理
+            </Link>
+            をご利用ください。
+          </p>
+        </div>
+        {/* 種別を BLOG に固定して新規作成へ渡す。
+            «ブログ管理から作ったのにギャラリーになっていた» を防ぐ。 */}
         <Link
-          href="/admin/contents/new"
+          href="/admin/contents/new?type=BLOG"
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
-          + 新規作成
+          + 記事を書く
         </Link>
       </div>
 
-      {/* モバイル: カードリスト */}
-      <div className="space-y-3 md:hidden">
-        {items.length === 0 ? (
-          <Card>
-            <CardBody className="text-center text-sm text-slate-500">
-              記事はありません
-            </CardBody>
-          </Card>
-        ) : (
-          items.map((c) => (
-            <Card key={c.id}>
-              <CardBody className="space-y-2">
-                <Link
-                  href={`/admin/contents/${c.id}`}
-                  className="block font-semibold text-brand-600 hover:underline"
-                >
-                  {c.title}
-                </Link>
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  <Badge tone="gray">{typeLabel(c.type)}</Badge>
-                  <Badge tone={c.accessLevel === 'PREMIUM' ? 'brand' : c.accessLevel === 'MEMBERS' ? 'info' : 'gray'}>
-                    {accessLevelLabel(c.accessLevel)}
-                  </Badge>
-                  <Badge tone={c.status === 'PUBLISHED' ? 'success' : 'gray'}>{c.status}</Badge>
-                </div>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>閲覧 {c.viewCount}</span>
-                  <span>{formatJstDateTime(c.updatedAt)}</span>
-                </div>
-              </CardBody>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* デスクトップ: テーブル */}
-      <Card className="hidden md:block">
-        <CardBody className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">タイトル</th>
-                <th className="px-4 py-3">種別</th>
-                <th className="px-4 py-3">アクセス</th>
-                <th className="px-4 py-3">状態</th>
-                <th className="px-4 py-3">閲覧数</th>
-                <th className="px-4 py-3">更新</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/contents/${c.id}`} className="text-brand-600 hover:underline">
-                      {c.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">{typeLabel(c.type)}</td>
-                  <td className="px-4 py-3">{accessLevelLabel(c.accessLevel)}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={c.status === 'PUBLISHED' ? 'success' : 'gray'}>{c.status}</Badge>
-                  </td>
-                  <td className="px-4 py-3">{c.viewCount}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {formatJstDateTime(c.updatedAt)}
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                    記事はありません
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </CardBody>
-      </Card>
+      <AdminContentList items={items} kind="BLOG" />
     </div>
   );
 }
