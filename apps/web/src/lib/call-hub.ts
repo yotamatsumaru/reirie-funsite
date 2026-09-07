@@ -5,9 +5,17 @@
  * - WebRTC の media stream そのものは P2P でブラウザ間直結 (STUN: Google public)
  * - Map<roomId, Set<Client>> を hot-reload を跨いで持続させるため globalThis に置く
  *
- * ⚠️ 開発用最小構成:
- *   - シングルプロセス前提（PM2 cluster で複数 worker だと room が分散する）
- *   - 本番運用するなら Redis pub/sub 等に置き換える
+ * ⚠️ シングルプロセス前提（PM2 cluster で複数 worker だと room が分散する）
+ *
+ * この制約に合わせて `deploy/ecosystem.config.js` は
+ * `exec_mode: 'fork'` / `instances: 1` に固定してある。
+ * cluster にすると演者とファンが別 worker に振られ、
+ * 「呼び出しても相手が現れない」状態になる（実際に発生した）。
+ *
+ * → この hub を Redis pub/sub 等のプロセス外ストアに置き換えるまで、
+ *   ecosystem.config.js を cluster に戻してはいけない。
+ *   逆に言えば、ここを Redis 化できれば cluster に戻して
+ *   CPU のマルチコアを活用できる。
  */
 
 import type { SignalMessage } from './call-types';

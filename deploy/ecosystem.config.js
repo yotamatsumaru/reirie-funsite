@@ -1,7 +1,8 @@
 /**
  * PM2 ecosystem 定義
  *
- * - cluster モードで CPU コア数に応じて自動スケール
+ * - fork モードの単一プロセスで起動する
+ *   (1on1 通話のシグナリングが in-memory のため。詳細は下の instances 付近)
  * - メモリ上限超でリスタート
  * - .env.production を自前パースして env として PM2 に渡す
  *   (注意: PM2 には公式の env_file プロパティは無い。過去の本ファイルで
@@ -107,9 +108,56 @@ module.exports = {
         HOSTNAME: '0.0.0.0',
         PORT: 3000,
       },
-      instances: 'max',
-      exec_mode: 'cluster',
-      max_memory_restart: '768M',
+      /**
+       * ⚠️ cluster ではなく fork (単一プロセス) で動かす。変更しないこと。
+       *
+       * 【理由】1on1 通話のシグナリングが in-memory だから
+       *
+       * 通話は WebRTC で P2P 接続するが、その前段の SDP / ICE candidate の
+       * 交換 (シグナリング) を SSE で行っている。その仲介役である
+       * `apps/web/src/lib/call-hub.ts` は room を
+       * `Map<roomId, Set<Client>>` として **プロセスのメモリ内** に持つ。
+       *
+       * cluster モードだと PM2 が worker を CPU コア数だけ起動し、
+       * 各 worker が別プロセス = **別のメモリ空間** になる。すると
+       *
+       *   演者   が worker A に接続 → worker A のメモリに room を作る
+       *   ファン が worker B に接続 → worker B に別の room ができる
+       *
+       * となり、互いを相手として認識できない。結果として
+       * 「呼び出しても永遠に相手が現れない」状態になる。
+       * どの worker に振られるかは接続ごとに変わるため、
+       * **たまたま同じ worker に入ったときだけ繋がる** という
+       * 再現性の低い不具合として現れる (これが実際に起きていた)。
+       *
+       * call-hub.ts 自身のコメントにも
+       * 「シングルプロセス前提 (PM2 cluster で複数 worker だと room が分散する)」
+       * と明記されている。
+       *
+       * 【cluster を捨てるトレードオフ】
+       *
+       * CPU のマルチコアを使い切れなくなるが、この構成では影響が小さい:
+       *   - Next.js は 1 プロセス内で非同期にリクエストを処理する
+       *   - 重い処理 (画像・動画の変換) は S3 + MediaConvert に出してある
+       *   - DB 待ちが支配的で CPU バウンドではない
+       * 一方 cluster のままだと通話がそもそも成立しないため、
+       * 得られるものと失うものが釣り合わない。
+       *
+       * 【将来 cluster に戻す条件】
+       *
+       * call-hub を Redis pub/sub 等のプロセス外ストアに置き換えること。
+       * それが済むまでは fork のままにする必要がある。
+       * (instances を増やすなら call-hub の作り替えが前提)
+       */
+      instances: 1,
+      exec_mode: 'fork',
+      /**
+       * fork で 1 プロセスに集約する分、1 プロセスあたりの上限を上げる。
+       * cluster 時代は worker ごとに 768M だったので、
+       * そのままだと «全体で使えるメモリが 1/コア数 になる» ことになり、
+       * 画像アップロードなどで再起動ループに入りやすくなる。
+       */
+      max_memory_restart: '1536M',
       min_uptime: '10s',
       max_restarts: 10,
       restart_delay: 5000,

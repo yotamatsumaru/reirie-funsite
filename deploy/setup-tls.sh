@@ -102,6 +102,57 @@ server {
 
   add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 
+  # ===================================================================
+  # SSE (Server-Sent Events) 用の設定
+  #
+  # 対象: 1on1 通話のシグナリング (/api/call/[roomId]/events) と
+  #       特典会の待機列 (/api/call/events/[id]/queue/events)
+  #
+  # 【なぜ location / と分けるのか】
+  #
+  # 既定の proxy 設定 (下の location /) は proxy_buffering が on で、
+  # nginx がレスポンスをある程度ためてからクライアントへ流す。
+  # 通常のページでは効率が良いが、SSE では致命的で
+  #
+  #   1. イベントがバッファに溜まったまま送られず、
+  #      相手の接続通知や SDP/ICE が届かない = 通話が繋がらない
+  #   2. proxy_read_timeout (300s) より前に nginx が
+  #      「無音」と判断して接続を切る
+  #
+  # という症状になる。アプリ側は 15 秒ごとに ping を送り、
+  # レスポンスヘッダーに X-Accel-Buffering: no を付けているが、
+  # それだけに頼らず nginx 側でも明示しておく
+  # (ヘッダーは将来の実装変更で失われ得るし、
+  #  読み取りタイムアウトはヘッダーでは制御できない)。
+  # ===================================================================
+  location /api/call/ {
+    proxy_pass http://nextjs_upstream;
+    proxy_http_version 1.1;
+
+    # SSE の要点: バッファリングを完全に無効化して即時に流す
+    proxy_buffering off;
+    proxy_cache off;
+    # gzip をかけるとバッファされてしまうため無効化
+    gzip off;
+
+    # SSE は long-lived な GET なので、Connection は upgrade ではなく
+    # 空にして keep-alive のまま維持する。
+    # location / と同じ 'upgrade' を入れると、WebSocket でないのに
+    # アップグレードを示すことになり中間機器が接続を切ることがある。
+    proxy_set_header Connection '';
+
+    # 15 秒ごとに ping が来るので、その 4 倍以上を見て切断しない。
+    # 通話・待機列は数十分続き得るため長めに取る。
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $proxied_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
   location /_next/static/ {
     proxy_pass http://nextjs_upstream;
     proxy_cache_valid 200 1y;
