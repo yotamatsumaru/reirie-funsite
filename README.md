@@ -45,6 +45,9 @@ pnpm --filter @idol/web dev
 - **Auth.js v5** (Credentials)
 - **Tailwind 4** + Zustand 5 + Zod 4
 - **monorepo**: pnpm + Turbo (apps/web, packages/{db,shared}, functions/stripe-webhook, infra)
-- **デプロイ先**: AWS EC2 (Amazon Linux 2023) + PM2 cluster mode + nginx reverse proxy
+- **デプロイ先**: AWS EC2 (Amazon Linux 2023) + PM2 (fork / 単一プロセス) + nginx reverse proxy
+  - cluster ではなく fork なのは、1on1 通話のシグナリング (`lib/call-hub.ts`) が
+    プロセス内メモリに room を持つため。複数 worker だと演者とファンが別プロセスに
+    振られて互いを認識できない。詳細は `deploy/ecosystem.config.js` のコメント参照
 
 詳細は `genspark_ai_developer` ブランチを参照。
