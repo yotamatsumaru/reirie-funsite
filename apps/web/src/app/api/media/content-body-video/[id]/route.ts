@@ -3,11 +3,16 @@
  *
  * DB に保存されたブログ本文動画を配信する (S3 未設定時のフォールバック保存先)。
  *
- * 認証は不要。理由は content-body-image と同じで、本文動画は記事の一部として
- * `<video src>` で読まれるものであり、記事自体の公開範囲 (AccessLevel) は
- * 記事ページ側で制御されるため。ここで会員判定を挟むと、
- * 公開記事の動画が未ログインで再生できなくなる。
- * URL は UUID なので推測による列挙も現実的でない。
+ * ## 公開範囲のチェックについて
+ *
+ * 以前は無認証だった (「記事ページ側で公開範囲を制御しているから不要」という判断)。
+ * 画像版と同じ理由でこれを改めている。限定公開の記事に貼った動画クリップが、
+ * URL を直接叩けば未ログインでも取得できる状態だったため。
+ *
+ * 判定は画像と同じ仕組みを共有している (lib/media-access.ts)。
+ * 「その動画を参照しているコンテンツのうち最もゆるい公開範囲」を要求水準とするので、
+ * 公開記事の動画は従来どおり未ログインでも再生でき、
+ * 限定記事の動画はプランを満たさないと 404 になる。
  *
  * ## 画像版と違い Range リクエストに対応している理由
  *
@@ -23,7 +28,12 @@
  * そのため Range ヘッダを解釈して 206 を返す。
  */
 import { prisma } from '@idol/db';
+import { auth } from '@/auth';
+import type { PlanTypeLiteral } from '@idol/shared';
 import { parseByteRange } from '@/lib/byte-range';
+import { contentBodyVideoMediaPath } from '@/lib/content-body-video';
+import { canDeliverMedia, mediaCacheControl, requiredLevelForMedia } from '@/lib/media-access';
+import { findMediaReferrers } from '@/lib/media-referrers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +58,31 @@ export async function GET(
     return new Response('Not Found', { status: 404 });
   }
 
+  // ---- 公開範囲の判定 ----
+  const referrers = await findMediaReferrers(contentBodyVideoMediaPath(id));
+  const requiredLevel = requiredLevelForMedia(referrers);
+
+  /**
+   * PUBLIC 相当なら session を読まない。
+   * 動画は Range リクエストで何度も呼ばれるため、
+   * 毎回 Cookie を復号すると再生中ずっと余計な処理が走る。
+   */
+  if (requiredLevel !== 'PUBLIC') {
+    const session = await auth();
+    const isStaff = session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN';
+
+    const allowed = canDeliverMedia({
+      referrers,
+      plan: session?.user?.plan as PlanTypeLiteral | undefined,
+      isStaff,
+    });
+
+    // 403 だと «その ID の動画は存在する» ことが分かってしまうため 404。
+    if (!allowed) {
+      return new Response('Not Found', { status: 404 });
+    }
+  }
+
   const body = Buffer.isBuffer(video.data) ? video.data : Buffer.from(video.data);
   const size = body.byteLength;
   const contentType = video.contentType ?? 'video/mp4';
@@ -56,8 +91,8 @@ export async function GET(
     'Content-Type': contentType,
     // これが無いと iOS Safari が部分取得を諦め、再生できないことがある。
     'Accept-Ranges': 'bytes',
-    // URL に UUID が入っており内容が変わらないため長期キャッシュしてよい。
-    'Cache-Control': 'public, max-age=31536000, immutable',
+    // 限定公開のものは共有キャッシュに残さない (詳細は lib/media-access.ts)。
+    'Cache-Control': mediaCacheControl(requiredLevel),
   };
 
   const range = parseByteRange(req.headers.get('range'), size);

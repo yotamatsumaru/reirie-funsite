@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { FolderOpen } from 'lucide-react';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
 import { accessLevelLabel, canAccess, formatJstDate, formatJstDateTime } from '@idol/shared';
@@ -100,6 +101,20 @@ export default async function ContentDetailPage({
           <Badge tone={content.accessLevel === 'PREMIUM' ? 'brand' : 'info'}>
             {accessLevelLabel(content.accessLevel)}
           </Badge>
+        )}
+        {/*
+          アルバム名はバッジではなくリンクにする。
+          «同じアルバムの他の写真も見たい» は自然な流れなので、
+          ここから一覧の絞り込みへ戻れるようにしておく。
+        */}
+        {isGallery && content.album && (
+          <Link
+            href={`/gallery?album=${encodeURIComponent(content.album)}`}
+            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 hover:text-brand-700"
+          >
+            <FolderOpen className="h-3 w-3" aria-hidden />
+            {content.album}
+          </Link>
         )}
       </div>
       <h1 className="text-2xl font-bold leading-snug text-slate-800 sm:text-3xl">{content.title}</h1>

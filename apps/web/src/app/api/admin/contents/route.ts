@@ -13,6 +13,7 @@ import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sanitizeContentBody } from '@/lib/sanitize-html';
 import { buildGalleryImages } from '@/lib/gallery-images';
+import { normalizeAlbumName } from '@/lib/gallery-album';
 import type { Prisma } from '@idol/db';
 
 export const runtime = 'nodejs';
@@ -89,6 +90,13 @@ export const POST = handle(async (req: Request) => {
             : null,
       authorName: body.authorName,
       tags: body.tags,
+      /**
+       * アルバム名。
+       * 前後の空白を落とし、空になったら null (未設定) にする。
+       * 空文字をそのまま保存すると、一覧で空白のタブが並ぶ
+       * (詳細は lib/gallery-album.ts)。
+       */
+      album: normalizeAlbumName(body.album),
       // ギャラリー画像。共有スキーマは string を受けるだけなので、
       // 危険なスキーム (javascript: など) の排除・重複除去・上限は
       // ここで normalizeGalleryImageUrls が担う。

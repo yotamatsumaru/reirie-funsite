@@ -11,6 +11,7 @@ import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sanitizeContentBody } from '@/lib/sanitize-html';
 import { buildGalleryImages } from '@/lib/gallery-images';
+import { normalizeAlbumName } from '@/lib/gallery-album';
 
 export const runtime = 'nodejs';
 
@@ -63,6 +64,16 @@ export const PATCH = handle(
         ...(body.status ? { status: body.status } : {}),
         ...(body.authorName !== undefined ? { authorName: body.authorName } : {}),
         ...(body.tags ? { tags: body.tags } : {}),
+        /**
+         * アルバム名。
+         *
+         * `!== undefined` で見ているのが重要。
+         * 一度付けたアルバム名を «外す» 操作があるため、
+         * null (未設定に戻す) と undefined (送られていない = 変更なし) を
+         * 区別する必要がある。真偽値で見ると空文字や null が
+         * 「送られていない」と同じ扱いになり、アルバム名を消せなくなる。
+         */
+        ...(body.album !== undefined ? { album: normalizeAlbumName(body.album) } : {}),
         publishedAt,
       },
     });
