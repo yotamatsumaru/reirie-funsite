@@ -7,6 +7,10 @@ export const ContentStatusSchema = z.enum(['DRAFT', 'PUBLISHED', 'ARCHIVED']);
 export const ListContentsQuerySchema = z.object({
   type: ContentTypeSchema.optional(),
   tag: z.string().optional(),
+  // ギャラリーのアルバム絞り込み (/gallery?album=<name> 相当)。
+  // 未設定グループは gallery-album.ts の UNGROUPED_ALBUM_KEY ('__none__') を渡す。
+  // 実際の where 条件への変換は albumFilterWhere() に委譲する。
+  album: z.string().max(60).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
 });
