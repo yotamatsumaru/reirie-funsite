@@ -102,9 +102,25 @@ export const GET = handle(async (req: Request) => {
         viewCount: g.viewCount,
         unlocked,
         previewImages: unlocked ? galleryPreviewImages(g.images) : [],
-        // 枚数も伏せる。「何枚あるか」自体もプレミアムの判断材料に
-        // 含めたくない (Web版のロック済みカードも枚数を出していない)。
-        imageCount: unlocked ? g._count.images : 0,
+        /**
+         * 枚数は鍵付きでもそのまま返す。
+         *
+         * Web版 /gallery は `const total = g._count.images` を
+         * unlocked と無関係に算出し、ロック済みカードにも
+         * 「写真 N 枚」バッジを出している (実機で確認済み:
+         * 未ログインでも 2/3/4/4/4 と実数が表示される)。
+         * ここで 0 にすると、アプリだけ「写真 0 枚」と表示され
+         * Web と食い違う。
+         *
+         * 枚数を伏せない方が要件にも合う。伏せるべきなのは
+         * 写真の URL (= 中身) であって、「何枚あるか」は
+         * 「プレミアムに入ると何が見られるか」を伝える情報であり、
+         * プラン加入の判断材料として出す価値がある
+         * (鍵付きで見せる方針そのものと同じ理由)。
+         * 中身は previewImages / coverImageUrl を null・空にすることで
+         * 伏せてあり、配信側の権限チェックでも二重に守られている。
+         */
+        imageCount: g._count.images,
       };
     });
 

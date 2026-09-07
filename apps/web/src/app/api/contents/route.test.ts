@@ -3,8 +3,9 @@
  *
  * 特に GALLERY 種別は「見えないものを除外する」既存の他種別 (BLOG 等) とは
  * 挙動が異なり (鍵付きで見せる)、実装を間違えると
- *   - 閲覧不可なのに coverImageUrl / previewImages / imageCount が漏れる
+ *   - 閲覧不可なのに coverImageUrl / previewImages (写真の URL) が漏れる
  *   - 閲覧可能なのに unlocked が false になり画像が出ない
+ *   - 逆に伏せすぎて Web 版と表示が食い違う (imageCount は鍵付きでも返す)
  * のどちらの方向にも壊れうる。ロジックの分岐点をここで固定する。
  *
  * DB (@idol/db) と認証 (@/lib/api-auth) と公開設定 (@/lib/app-setting) を
@@ -98,7 +99,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/contents?type=GALLERY (鍵付き一覧)', () => {
-  it('閲覧不可 (プラン不足) の場合、unlocked=false でカバー画像/プレビュー/枚数を一切返さない', async () => {
+  it('閲覧不可 (プラン不足) の場合、unlocked=false でカバー画像/プレビューを一切返さない', async () => {
     rows = [makeGallery({ accessLevel: 'PREMIUM', coverImageUrl: '/cover.jpg' })];
     currentPlan = 'FREE';
 
@@ -111,7 +112,23 @@ describe('GET /api/contents?type=GALLERY (鍵付き一覧)', () => {
     expect(item.unlocked).toBe(false);
     expect(item.coverImageUrl).toBeNull();
     expect(item.previewImages).toEqual([]);
-    expect(item.imageCount).toBe(0);
+  });
+
+  it('閲覧不可でも「写真の枚数」は返す (Web版 /gallery と揃える)', async () => {
+    // Web版はロック済みカードにも「写真 N 枚」バッジを出している
+    // (total を unlocked と無関係に算出しているため)。
+    // ここで 0 を返すとアプリだけ「写真 0 枚」になり表示が食い違う。
+    // 伏せるべきなのは写真の URL (中身) であって枚数ではない。
+    rows = [makeGallery({ accessLevel: 'PREMIUM' })];
+    currentPlan = 'FREE';
+
+    const body = await (await get('?type=GALLERY')).json();
+    const item = body.items[0];
+    expect(item.unlocked).toBe(false);
+    expect(item.imageCount).toBe(2);
+    // 枚数は出すが、中身 (URL) は漏らさないことを同時に固定する
+    expect(item.previewImages).toEqual([]);
+    expect(item.coverImageUrl).toBeNull();
   });
 
   it('閲覧可能な場合、unlocked=true でカバー画像/プレビュー/枚数を返す', async () => {
