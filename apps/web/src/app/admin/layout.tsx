@@ -82,14 +82,24 @@ const NAV: NavItem[] = [
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/admin');
-  // ADMIN または SUPER_ADMIN
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') redirect('/');
 
   const principal = {
     role: session.user.role,
     capabilities: session.user.capabilities,
   };
-  // 管理領域を1つも持たない ADMIN は管理画面に入れない
+  /**
+   * 入口の判定は hasAnyCapability に一本化する。
+   *
+   * 以前はここでロール名を直接比較していたため、
+   * STAFF が /admin に入れず「/super-admin は見られるのにブログが書けない」
+   * という状態になっていた。ロール判定が hasAnyCapability と
+   * ここの 2 箇所に分かれていたのが原因なので、判定を 1 つに寄せる。
+   *
+   * hasAnyCapability の中身:
+   *   SUPER_ADMIN / STAFF → 常に true
+   *   ADMIN               → 領域を 1 つ以上持っていれば true
+   *   USER                → false
+   */
   if (!hasAnyCapability(principal)) redirect('/');
 
   // 保有権限のメニューだけ表示（ダッシュボードは常に表示）

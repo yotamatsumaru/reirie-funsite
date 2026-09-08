@@ -48,7 +48,7 @@ export function InviteAdminForm() {
       role === 'SUPER_ADMIN'
         ? `${email} に SUPER_ADMIN 招待を送信しますか？\nすべての操作権限を持つ強力なロールです。`
         : role === 'STAFF'
-          ? `${email} に STAFF（スタッフ管理者）招待を送信しますか？\n管理画面を閲覧できますが、返金・BAN などの書き込み操作はできません。`
+          ? `${email} に STAFF（スタッフ管理者）招待を送信しますか？\n運営ダッシュボードでブログ・商品などの登録・編集ができます。\nスーパー管理者の画面は閲覧のみで、返金・BAN・ロール変更はできません。`
           : `${email} に ADMIN 招待を送信しますか？`;
     if (!confirm(msg)) return;
 
@@ -106,7 +106,7 @@ export function InviteAdminForm() {
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
           >
             <option value="ADMIN">ADMIN</option>
-            <option value="STAFF">STAFF（スタッフ管理者・閲覧のみ）</option>
+            <option value="STAFF">STAFF（スタッフ管理者・運営作業可 / 返金BANは不可）</option>
             <option value="SUPER_ADMIN">SUPER_ADMIN</option>
           </select>
         </div>
@@ -151,7 +151,7 @@ export function InviteAdminForm() {
         </div>
       ) : role === 'STAFF' ? (
         <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-          STAFF（スタッフ管理者）はスーパー管理者と同じ画面を閲覧できますが、返金・BAN・ロール変更などの書き込み操作はできません。
+          STAFF（スタッフ管理者）は運営ダッシュボード (/admin) でブログ・ギャラリー・動画・商品・ゲーム・1on1 の登録や編集ができます。スーパー管理者の画面 (/super-admin) は閲覧のみで、返金・BAN・ロール変更などはできません。
         </p>
       ) : (
         <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">

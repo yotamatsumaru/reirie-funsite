@@ -1,11 +1,16 @@
 /**
  * /super-admin レイアウト
  *
- * - SUPER_ADMIN は全操作可 / STAFF (スタッフ管理者) は閲覧のみ可
+ * - SUPER_ADMIN は全操作可 / STAFF (スタッフ管理者) は **この画面では** 閲覧のみ可
  *   (ADMIN・一般会員はトップへリダイレクト)
  * - STAFF の場合は SuperAdminReadOnlyProvider で配下の Client Component に
  *   「閲覧のみ」を伝え、返金・サブスク変更などの書き込み UI を隠す。
  *   ただし権限の実体は各 API の requireSuperAdmin() 側で担保している。
+ *
+ * ⚠️ 「閲覧のみ」はこの /super-admin に限った話。
+ *    STAFF は運営ダッシュボード (/admin) ではブログ・商品などを
+ *    登録・編集できる (権限の 2 階建て構造は @idol/shared の
+ *    hasCapability のコメント参照)。
  * - サイドナビ + モバイル横スクロールタブ
  * - lucide-react アイコンに統一
  */
@@ -121,11 +126,15 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
               }`}
             >
               <ShieldAlert className="h-4 w-4" aria-hidden />
-              {isStaffViewer ? 'スタッフ管理者モード（閲覧のみ）' : 'SUPER ADMIN モード'}
+              {isStaffViewer ? 'スタッフ管理者モード（この画面は閲覧のみ）' : 'SUPER ADMIN モード'}
             </p>
             {isStaffViewer && (
+              /*
+                「閲覧のみ」がサイト全体の話だと誤解されないようにする。
+                STAFF は /admin ではブログ等を登録・編集できる。
+              */
               <p className="hidden text-sky-600/80 md:block">
-                返金・サブスク変更などの操作はスーパー管理者のみ実行できます
+                返金・サブスク変更などはスーパー管理者のみ。ブログ・商品などの登録は「通常管理画面」から行えます
               </p>
             )}
             <div className="flex items-center gap-3">
@@ -205,16 +214,17 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
 
               <hr className="my-4 border-slate-200" />
 
-              {/* STAFF は /admin に入れない (admin/layout.tsx でリダイレクトされる) ため出さない */}
-              {!isStaffViewer && (
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <ArrowLeftRight className="h-4 w-4" aria-hidden />
-                  通常管理画面 へ
-                </Link>
-              )}
+              {/*
+                STAFF も /admin で日常の運営作業を行うため、全員に出す。
+                (以前は STAFF が /admin に入れずリンクを隠していた)
+              */}
+              <Link
+                href="/admin"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <ArrowLeftRight className="h-4 w-4" aria-hidden />
+                通常管理画面 へ
+              </Link>
             </nav>
           </aside>
 

@@ -126,10 +126,10 @@ export default async function SuperAdminAdminsPage() {
             <h2 className="text-sm font-semibold text-slate-800">
               スタッフ管理者 ({staffs.length} 名)
             </h2>
-            <Badge tone="info">STAFF（閲覧のみ）</Badge>
+            <Badge tone="info">STAFF（運営作業可 / 返金BANは不可）</Badge>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            スーパー管理者と同じ画面を閲覧できますが、返金・BAN・ロール変更などの書き込み操作はできません。
+            運営ダッシュボード (/admin) でブログ・ギャラリー・動画・商品・ゲーム・1on1 の登録や編集ができます。スーパー管理者の画面 (/super-admin) は閲覧のみで、返金・BAN・ロール変更などはできません。
           </p>
         </CardHeader>
         <CardBody className="p-0">
