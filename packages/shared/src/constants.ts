@@ -144,8 +144,38 @@ export function normalizeAdminCapabilities(
 /**
  * ユーザーが指定の管理権限を持つか判定する。
  *  - SUPER_ADMIN は常に true
+ *  - STAFF は常に true (運営ダッシュボード /admin の全領域を扱える)
  *  - ADMIN は adminCapabilities に含まれていれば true
  *  - それ以外 (USER) は false
+ *
+ * ## STAFF を許可する理由（重要・権限境界の説明）
+ *
+ * 権限は 2 階建てになっている。
+ *
+ *   1. /admin       … 日々の運営作業 (ブログ・ギャラリー・動画・商品・
+ *                     注文・ゲーム・1on1)。この関数が担当する。
+ *   2. /super-admin … 経営・危険操作 (返金・BAN・ロール変更・売上・
+ *                     サイトの公開設定)。requireSuperAdmin() が担当する。
+ *
+ * STAFF は「運営スタッフ」であり、1 の日常業務は任せたい。
+ * 一方で 2 の返金や BAN を任せるわけにはいかない。
+ *
+ * 以前は STAFF を 1 でも弾いていたため、
+ * 「/super-admin の重い画面は見られるのに、ブログすら書けない」
+ * という直感に反する状態になっていた。
+ * ここで STAFF を許可し、1 は「フル操作可」、
+ * 2 は従来どおり「閲覧のみ」に整理する。
+ *
+ * ⚠️ この変更は /super-admin の読み取り専用ポリシーには一切影響しない。
+ *    あちらは requireSuperAdmin / requireSuperAdminView という
+ *    別のガードで守られており、静的監査テスト
+ *    (api/super-admin/staff-permissions.test.ts) が
+ *    「書き込み API に閲覧用ガードを使っていないか」を機械的に検査している。
+ *
+ * STAFF に capabilities を持たせない理由:
+ * capabilities は「ADMIN に一部領域だけ任せる」ための仕組み。
+ * STAFF は元々 /super-admin 全体を見られる立場なので、
+ * /admin だけ領域を絞っても情報の遮蔽にならず、運用が複雑になるだけ。
  */
 export function hasCapability(
   params: {
@@ -155,6 +185,7 @@ export function hasCapability(
   required: AdminCapabilityLiteral,
 ): boolean {
   if (params.role === 'SUPER_ADMIN') return true;
+  if (params.role === 'STAFF') return true;
   if (params.role !== 'ADMIN') return false;
   return (params.capabilities ?? []).includes(required);
 }
@@ -165,6 +196,8 @@ export function hasAnyCapability(params: {
   capabilities?: readonly string[] | null;
 }): boolean {
   if (params.role === 'SUPER_ADMIN') return true;
+  // STAFF は capabilities を持たなくても /admin に入れる (hasCapability 参照)。
+  if (params.role === 'STAFF') return true;
   if (params.role !== 'ADMIN') return false;
   return (params.capabilities ?? []).length > 0;
 }

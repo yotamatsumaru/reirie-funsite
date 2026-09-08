@@ -26,7 +26,7 @@ export function GrantAdminForm() {
       role === 'SUPER_ADMIN'
         ? `${email} に SUPER_ADMIN 権限を付与しますか？\nすべての操作権限を持つ強力なロールです。`
         : role === 'STAFF'
-          ? `${email} に STAFF（スタッフ管理者）権限を付与しますか？\n管理画面を閲覧できますが、返金・BAN などの書き込み操作はできません。`
+          ? `${email} に STAFF（スタッフ管理者）権限を付与しますか？\n運営ダッシュボードでブログ・商品などの登録・編集ができます。\nスーパー管理者の画面は閲覧のみで、返金・BAN・ロール変更はできません。`
           : `${email} に ADMIN 権限を付与しますか？`;
     if (!confirm(msg)) return;
 
@@ -70,7 +70,7 @@ export function GrantAdminForm() {
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
         >
           <option value="ADMIN">ADMIN</option>
-          <option value="STAFF">STAFF（スタッフ管理者・閲覧のみ）</option>
+          <option value="STAFF">STAFF（スタッフ管理者・運営作業可 / 返金BANは不可）</option>
           <option value="SUPER_ADMIN">SUPER_ADMIN</option>
         </select>
       </div>

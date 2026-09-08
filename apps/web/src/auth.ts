@@ -238,10 +238,22 @@ export async function requireSession() {
   return session;
 }
 
+/**
+ * 運営ダッシュボード (/admin) 全体のガード。
+ *
+ * ADMIN / STAFF / SUPER_ADMIN を許可する。
+ * STAFF を含めるのは、STAFF が /admin の日常業務を担当するため
+ * (権限の 2 階建て構造は @idol/shared の hasCapability のコメント参照)。
+ * これを外すとダッシュボードの集計 API だけ 403 になり、
+ * 画面は開けるのに数値が出ないという中途半端な状態になる。
+ *
+ * ⚠️ 返金 / BAN / ロール変更などの危険操作はこのガードではなく
+ *    requireSuperAdmin() を使うこと (STAFF を必ず拒否する)。
+ */
 export async function requireAdmin() {
   const session = await requireSession();
-  // ADMIN または SUPER_ADMIN を許可
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') {
+  const role = session.user.role;
+  if (role !== 'ADMIN' && role !== 'STAFF' && role !== 'SUPER_ADMIN') {
     const { errors } = await import('./lib/errors');
     throw errors.forbidden('管理者権限が必要です');
   }
