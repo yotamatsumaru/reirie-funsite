@@ -42,7 +42,8 @@ export const GET = handle(async (req: Request) => {
       take: query.limit,
       include: {
         user: { select: { id: true, email: true, displayName: true } },
-        items: { select: { id: true, productName: true, variantName: true, quantity: true } },
+        // 発送担当がサイズを確認できるようにする
+        items: { select: { id: true, productName: true, variantName: true, optionSize: true, optionColor: true, quantity: true } },
       },
     }),
     prisma.order.count({ where }),

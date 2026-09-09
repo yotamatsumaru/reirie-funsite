@@ -17,6 +17,10 @@ export interface CartLineItem {
   productSlug: string;
   productName: string;
   variantName: string;
+  /** サイズ・カラーを含む表示用ラベル (例:「ホワイト / L」) */
+  variantLabel?: string;
+  optionSize?: string | null;
+  optionColor?: string | null;
   quantity: number;
   unitPrice: number;
   subtotal: number;
