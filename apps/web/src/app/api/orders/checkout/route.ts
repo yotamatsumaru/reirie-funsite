@@ -7,7 +7,12 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { CheckoutSchema, canAccess, canUseShop } from '@idol/shared';
+import {
+  CheckoutSchema,
+  buildOrderLineLabel,
+  canAccess,
+  canUseShop,
+} from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { calculateOrderTotals, effectiveUnitPrice, generateOrderNumber } from '@/lib/pricing';
@@ -61,6 +66,10 @@ export const POST = handle(async (req: Request) => {
     productId: string;
     productName: string;
     variantName: string;
+    /** 注文時点のサイズ・カラー。商品マスタを後から変えても
+     *  注文内容が変わらないようスナップショットとして保存する。 */
+    optionSize: string | null;
+    optionColor: string | null;
     unitPrice: number;
     quantity: number;
     subtotal: number;
@@ -104,6 +113,8 @@ export const POST = handle(async (req: Request) => {
       productId: v.productId,
       productName: v.product.name,
       variantName: v.name,
+      optionSize: v.optionSize,
+      optionColor: v.optionColor,
       unitPrice: unit,
       quantity: item.quantity,
       subtotal: sub,
@@ -164,6 +175,8 @@ export const POST = handle(async (req: Request) => {
             variantId: s.variantId,
             productName: s.productName,
             variantName: s.variantName,
+            optionSize: s.optionSize,
+            optionColor: s.optionColor,
             unitPrice: s.unitPrice,
             quantity: s.quantity,
             subtotal: s.subtotal,
@@ -194,8 +207,17 @@ export const POST = handle(async (req: Request) => {
           unit_amount: totals.totalAmount,
           product_data: {
             name: `注文 ${orderNumber} (${snapshots.length}点)`,
+            // サイズを含める。決済画面で «何を買うのか» が分からないと
+            // 購入直前の不安につながるため
             description: snapshots
-              .map((s) => `${s.productName} / ${s.variantName} × ${s.quantity}`)
+              .map(
+                (s) =>
+                  `${buildOrderLineLabel(s.productName, {
+                    name: s.variantName,
+                    optionColor: s.optionColor,
+                    optionSize: s.optionSize,
+                  })} × ${s.quantity}`,
+              )
               .slice(0, 5)
               .join('\n'),
           },

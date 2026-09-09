@@ -920,6 +920,13 @@ model OrderItem {
   variantId   String @map("variant_id") @db.Uuid
   productName String @map("product_name")
   variantName String @map("variant_name")
+  // 注文時点のサイズ・カラーを «そのまま» 残す。
+  // variantName だけだと「ホワイト」しか残らず、
+  // どのサイズが注文されたのか発送担当にも購入者にも分からなかった。
+  // 後から商品マスタを変更・削除しても注文内容が変わらないよう、
+  // 参照ではなくスナップショットとして保持する。
+  optionSize  String? @map("option_size")
+  optionColor String? @map("option_color")
   unitPrice   Int    @map("unit_price")
   quantity    Int
   subtotal    Int
