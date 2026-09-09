@@ -150,9 +150,29 @@ if [ -n "$TURN_URLS" ] && [ -n "$TURN_USERNAME" ] && [ -n "$TURN_CREDENTIAL" ]; 
   set_env_var TURN_URLS "$TURN_URLS"
   set_env_var TURN_USERNAME "$TURN_USERNAME"
   set_env_var TURN_CREDENTIAL "$TURN_CREDENTIAL"
+elif [ -n "$TURN_URLS" ] || [ -n "$TURN_USERNAME" ] || [ -n "$TURN_CREDENTIAL" ]; then
+  # 一部だけ登録されている状態。3 つ揃わないと TURN は有効にならないため、
+  # «登録したのに効かない» と悩まないよう、何が欠けているかを明示する。
+  # 注意: `[ -z "$X" ] && echo ...` 形式は条件が偽のとき終了コード 1 を返す。
+  # このスクリプトは set -e で動くため、その行がブロック末尾に来ると
+  # スクリプト全体が中断してしまう (実際に検証で再現した)。
+  # if 文で書いて終了コードを持ち越さないようにする。
+  echo "[regenerate-env][WARN] TURN の設定が不完全です。3 つすべて必要です:" >&2
+  if [ -z "$TURN_URLS" ]; then
+    echo "[regenerate-env][WARN]   - ${SSM_BASE}/turn/urls が未登録" >&2
+  fi
+  if [ -z "$TURN_USERNAME" ]; then
+    echo "[regenerate-env][WARN]   - ${SSM_BASE}/turn/username が未登録" >&2
+  fi
+  if [ -z "$TURN_CREDENTIAL" ]; then
+    echo "[regenerate-env][WARN]   - ${SSM_BASE}/turn/credential が未登録" >&2
+  fi
+  echo "[regenerate-env][WARN]   → 揃うまで STUN のみで動作します (docs/CALL_TURN_SETUP.md)" >&2
 else
   echo "[regenerate-env]   skip TURN (未設定: STUN のみで動作します)"
   echo "[regenerate-env]   → モバイル回線から繋がらない場合は docs/CALL_TURN_SETUP.md を参照"
+  echo "[regenerate-env]   ※ SSM への登録は «手元の PC» から行ってください"
+  echo "[regenerate-env]     (EC2 のロールは cron/* 以外への書き込みを許可していません)"
 fi
 
 # =====================================================================
