@@ -42,6 +42,19 @@ import {
   writeStoredDeviceId,
   type DeviceOption,
 } from '@/lib/call-devices';
+import {
+  DISCONNECT_GRACE_MS,
+  MAX_ICE_RESTARTS,
+  actionAfterGrace,
+  actionForConnectionState,
+  buildMediaAttempts,
+  classifyMediaError,
+  iceRestartDelayMs,
+  mediaErrorMessage,
+  shouldTryAudioOnly,
+  type MediaErrorKind,
+} from '@/lib/call-resilience';
+import { useWakeLock } from '@/lib/use-wake-lock';
 
 type Role = 'performer' | 'fan';
 
@@ -58,6 +71,8 @@ type Status =
   | 'connecting'
   | 'waiting'
   | 'in-call'
+  /** 一時的に切れている (スマホの回線切替・画面ロック等)。復帰を試みている最中 */
+  | 'reconnecting'
   | 'ended'
   | 'error';
 
@@ -110,6 +125,8 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   const [labelsHidden, setLabelsHidden] = useState(false);
   const [switching, setSwitching] = useState<null | 'camera' | 'mic' | 'speaker'>(null);
   const [deviceNote, setDeviceNote] = useState<string | null>(null);
+  /** カメラが取得できず音声のみで参加しているか */
+  const [videoUnavailable, setVideoUnavailable] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -131,6 +148,33 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   // 現在選択中の deviceId を同期的に読みたい箇所があるので ref でも保持
   const cameraIdRef = useRef<string | null>(null);
   const micIdRef = useRef<string | null>(null);
+
+  // --- 再接続まわり ---
+  /** 'disconnected' の猶予タイマー */
+  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** ICE 再接続の遅延タイマー */
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** これまでに ICE 再接続を試みた回数 */
+  const iceRestartCountRef = useRef(0);
+  /**
+   * onconnectionstatechange の実処理。
+   * createPeerConnection より後に定義したいので ref 経由で参照する。
+   */
+  const connectionChangeRef = useRef<((pc: RTCPeerConnection) => void) | null>(null);
+
+  /** 通話中は画面を消灯させない (スマホで «話している最中に真っ暗» を防ぐ) */
+  useWakeLock(status === 'in-call' || status === 'reconnecting');
+
+  const clearReconnectTimers = useCallback(() => {
+    if (graceTimerRef.current) {
+      clearTimeout(graceTimerRef.current);
+      graceTimerRef.current = null;
+    }
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  }, []);
 
   // ---------------------------------------------------------------
   // デバイス一覧の取得
@@ -236,17 +280,21 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
       }
     };
 
+    /**
+     * 接続状態の変化。
+     *
+     * 【重要】'disconnected' で即終了しない。
+     * スマホは Wi-Fi ⇄ モバイル回線の切替や画面ロックで日常的にこの状態になり、
+     * 多くは数秒で復帰する。即 'ended' にすると復帰できる通話まで切れてしまう。
+     * 実処理は下で定義する handleConnectionChange に委譲する
+     * (makeOffer を参照するため定義順の都合で ref 経由)。
+     */
     pc.onconnectionstatechange = () => {
-      const s = pc.connectionState;
-      if (s === 'connected') {
-        updateStatus('in-call');
-      } else if (s === 'failed' || s === 'disconnected') {
-        updateStatus('ended');
-      }
+      connectionChangeRef.current?.(pc);
     };
 
     return pc;
-  }, [postSignal, updateStatus]);
+  }, [postSignal]);
 
   // ---------------------------------------------------------------
   // 演者側 (Offerer) が相手に offer を投げる
@@ -261,6 +309,105 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   }, [postSignal]);
 
   // ---------------------------------------------------------------
+  // 再接続 (スマホの回線切替・画面ロック対策)
+  // ---------------------------------------------------------------
+
+  /**
+   * ICE 再接続を試みる。
+   *
+   * Offerer 側だけが offer を作り直す (両側が同時に作ると衝突するため)。
+   * Answerer 側は相手からの新しい offer を待つ。
+   */
+  const tryIceRestart = useCallback(() => {
+    const pc = pcRef.current;
+    if (!pc || pc.connectionState === 'closed') return;
+
+    if (iceRestartCountRef.current >= MAX_ICE_RESTARTS) {
+      updateStatus('ended');
+      return;
+    }
+    iceRestartCountRef.current += 1;
+    const attempt = iceRestartCountRef.current;
+    updateStatus('reconnecting');
+
+    if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+    restartTimerRef.current = setTimeout(() => {
+      const cur = pcRef.current;
+      if (!cur || cur.connectionState === 'closed') return;
+      // すでに復帰していれば何もしない
+      if (cur.connectionState === 'connected') {
+        updateStatus('in-call');
+        return;
+      }
+      if (!isOffererRef.current) {
+        // Answerer 側は相手の offer を待つだけ
+        return;
+      }
+      void (async () => {
+        try {
+          const offer = await cur.createOffer({ iceRestart: true });
+          await cur.setLocalDescription(offer);
+          await postSignal(
+            { kind: 'offer', sdp: offer.sdp ?? '' },
+            peerIdRef.current ?? undefined,
+          );
+        } catch (err) {
+          console.warn('[call] ICE restart failed', err);
+        }
+      })();
+    }, iceRestartDelayMs(attempt));
+  }, [postSignal, updateStatus]);
+
+  /**
+   * connectionState の変化に応じて «継続 / 猶予 / 再接続 / 終了» を決める。
+   * 判定そのものは call-resilience.ts の純関数に置いてテスト可能にしている。
+   */
+  useEffect(() => {
+    connectionChangeRef.current = (pc: RTCPeerConnection) => {
+      const action = actionForConnectionState(pc.connectionState);
+
+      if (action === 'in-call') {
+        // 復帰したので猶予・再試行カウントをリセット
+        clearReconnectTimers();
+        iceRestartCountRef.current = 0;
+        updateStatus('in-call');
+        return;
+      }
+
+      if (action === 'grace') {
+        // 一時的な不通。すぐ終了せず、猶予を置いて様子を見る
+        if (graceTimerRef.current) return; // すでに猶予中
+        updateStatus('reconnecting');
+        graceTimerRef.current = setTimeout(() => {
+          graceTimerRef.current = null;
+          const cur = pcRef.current;
+          if (!cur) return;
+          const next = actionAfterGrace(cur.connectionState, iceRestartCountRef.current);
+          if (next === 'in-call') {
+            iceRestartCountRef.current = 0;
+            updateStatus('in-call');
+          } else if (next === 'recover') {
+            tryIceRestart();
+          } else {
+            updateStatus('ended');
+          }
+        }, DISCONNECT_GRACE_MS);
+        return;
+      }
+
+      if (action === 'recover') {
+        tryIceRestart();
+        return;
+      }
+
+      if (action === 'ended') {
+        clearReconnectTimers();
+        updateStatus('ended');
+      }
+    };
+  }, [clearReconnectTimers, tryIceRestart, updateStatus]);
+
+  // ---------------------------------------------------------------
   // SSE で受信したシグナルを処理
   // ---------------------------------------------------------------
   const handleSignal = useCallback(
@@ -269,12 +416,19 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
       if (!pc) return;
 
       if (payload.kind === 'offer') {
+        // 再接続時の «作り直された offer» もここで受ける (再ネゴシエーション)
         peerIdRef.current = from;
         await pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp });
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await postSignal({ kind: 'answer', sdp: answer.sdp ?? '' }, from);
       } else if (payload.kind === 'answer') {
+        // offer を出していない状態で answer が届くと例外になるため状態を確認する
+        // (再接続で offer/answer が行き違うと起こりうる)
+        if (pc.signalingState !== 'have-local-offer') {
+          console.warn('[call] unexpected answer in state', pc.signalingState);
+          return;
+        }
         await pc.setRemoteDescription({ type: 'answer', sdp: payload.sdp });
       } else if (payload.kind === 'ice') {
         try {
@@ -302,37 +456,68 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
       audioDeviceId: micIdRef.current,
     };
 
-    try {
-      let stream: MediaStream;
-      try {
-        // 選択されたデバイスを exact で要求
-        stream = await navigator.mediaDevices.getUserMedia(
-          buildMediaConstraints(selection, { exact: true }),
-        );
-      } catch (exactErr) {
-        // 指定デバイスが使えない (OverconstrainedError / NotFoundError) 場合は
-        // ブラウザ既定にフォールバックして通話自体は成立させる
-        console.warn('[call] exact device failed, retrying with ideal', exactErr);
-        stream = await navigator.mediaDevices.getUserMedia(
-          buildMediaConstraints(selection, { exact: false }),
-        );
-        setDeviceNote(
-          '選択したカメラ／マイクが使用できなかったため、既定のデバイスで接続しました。',
-        );
-      }
-
-      localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-      // 許可が下りた後は label が取れるようになるので一覧を再取得
-      void refreshDevices();
-    } catch (err) {
-      console.error('[call] getUserMedia failed', err);
-      setErrorMsg('カメラ・マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。');
+    /**
+     * カメラ・マイクの取得。
+     *
+     * 「exact 指定 → ideal 指定 → 音声のみ」の順に試す。
+     * 最後の «音声のみ» が無いと、**カメラ非搭載の PC は通話に入れない**
+     * (デスクトップ PC では珍しくない)。
+     *
+     * また失敗種別ごとに文言を変える。以前は一律「アクセスが拒否されました」
+     * だったため、カメラが無いだけの利用者が原因に辿り着けなかった。
+     */
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      // http:// でのアクセスや未対応ブラウザ (mediaDevices 自体が生えない)
+      const kind: MediaErrorKind =
+        typeof window !== 'undefined' && !window.isSecureContext ? 'insecure' : 'unsupported';
+      setErrorMsg(mediaErrorMessage(kind));
       updateStatus('error');
       return;
     }
+
+    let stream: MediaStream | null = null;
+    let lastErr: unknown = null;
+
+    for (const attempt of buildMediaAttempts()) {
+      // 権限そのものを拒否されているなら、映像を外しても結果は同じ。
+      // 無駄な権限ダイアログを繰り返さないために打ち切る。
+      if (!attempt.video && !shouldTryAudioOnly(classifyMediaError(lastErr))) {
+        break;
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(
+          buildMediaConstraints(selection, {
+            exact: attempt.exact,
+            video: attempt.video,
+          }),
+        );
+        if (attempt.note) setDeviceNote(attempt.note);
+        setVideoUnavailable(!attempt.video);
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn('[call] getUserMedia attempt failed', attempt, err);
+      }
+    }
+
+    if (!stream) {
+      const kind = classifyMediaError(lastErr);
+      console.error('[call] getUserMedia failed', kind, lastErr);
+      setErrorMsg(mediaErrorMessage(kind));
+      updateStatus('error');
+      return;
+    }
+
+    localStreamRef.current = stream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+    }
+    // 映像が無い場合はカメラ ON/OFF ボタンを押せても意味が無いので状態を合わせる
+    if (stream.getVideoTracks().length === 0) {
+      setCamOn(false);
+    }
+    // 許可が下りた後は label が取れるようになるので一覧を再取得
+    void refreshDevices();
 
     updateStatus('connecting');
 
@@ -403,6 +588,10 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   // 終了処理
   // ---------------------------------------------------------------
   const hangUp = useCallback(() => {
+    // 再接続タイマーが残っていると、切った後に復帰処理が走ってしまう
+    clearReconnectTimers();
+    iceRestartCountRef.current = 0;
+
     try {
       pcRef.current?.close();
     } catch {
@@ -431,7 +620,7 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
     isOffererRef.current = false;
     setPeerCount(0);
     updateStatus('ended');
-  }, [updateStatus]);
+  }, [clearReconnectTimers, updateStatus]);
 
   // unmount で必ずクリーンアップ
   useEffect(() => {
@@ -598,7 +787,12 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
   // ---------------------------------------------------------------
   // 描画
   // ---------------------------------------------------------------
-  const inSession = status === 'in-call' || status === 'waiting' || status === 'connecting';
+  // 再接続中も «通話中» と同じ操作パネルを出す (勝手に画面が変わると不安なため)
+  const inSession =
+    status === 'in-call' ||
+    status === 'waiting' ||
+    status === 'connecting' ||
+    status === 'reconnecting';
 
   return (
     <div className="space-y-4">
@@ -735,14 +929,34 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
           </div>
         )}
 
-        {/* 自分の映像 (小・右下) */}
-        <video
-          ref={localVideoRef}
-          autoPlay
-          playsInline
-          muted
-          className="absolute bottom-3 right-3 w-32 rounded-lg border border-white/30 bg-black object-cover shadow-lg sm:w-48"
-        />
+        {/* 再接続中は画面全体にオーバーレイして «切れたのでは» という不安を防ぐ */}
+        {status === 'reconnecting' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-900/70 text-white">
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+            <p className="text-sm font-medium">接続が不安定です。再接続しています…</p>
+            <p className="text-xs opacity-80">
+              電波の良い場所へ移動すると復帰しやすくなります
+            </p>
+          </div>
+        )}
+
+        {/* 自分の映像 (小・右下)。カメラが無い場合は代わりに案内を出す */}
+        {videoUnavailable ? (
+          inSession && (
+            <div className="absolute bottom-3 right-3 flex w-32 flex-col items-center justify-center gap-1 rounded-lg border border-white/30 bg-black/80 px-2 py-3 text-center shadow-lg sm:w-48">
+              <VideoOff className="h-5 w-5 text-white/70" aria-hidden />
+              <span className="text-[11px] leading-tight text-white/80">音声のみで参加中</span>
+            </div>
+          )
+        ) : (
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute bottom-3 right-3 w-32 rounded-lg border border-white/30 bg-black object-cover shadow-lg sm:w-48"
+          />
+        )}
       </div>
 
       <div className="flex items-center justify-center gap-3">
@@ -769,12 +983,24 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
             >
               {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
             </IconButton>
+            {/* カメラが無い場合はボタンを押しても何も起きないので無効化する */}
             <IconButton
-              label={camOn ? 'カメラをオフ' : 'カメラをオン'}
+              label={
+                videoUnavailable
+                  ? 'カメラがありません（音声のみで参加中）'
+                  : camOn
+                    ? 'カメラをオフ'
+                    : 'カメラをオン'
+              }
               onClick={toggleCam}
-              tone={camOn ? 'neutral' : 'danger'}
+              tone={videoUnavailable ? 'neutral' : camOn ? 'neutral' : 'danger'}
+              disabled={videoUnavailable}
             >
-              {camOn ? <VideoIcon className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+              {camOn && !videoUnavailable ? (
+                <VideoIcon className="h-5 w-5" />
+              ) : (
+                <VideoOff className="h-5 w-5" />
+              )}
             </IconButton>
             <IconButton label="通話を終了" onClick={hangUp} tone="hangup">
               <PhoneOff className="h-5 w-5" />
@@ -814,6 +1040,8 @@ function StatusBar({
           : '演者の参加を待っています';
       case 'in-call':
         return '通話中';
+      case 'reconnecting':
+        return '接続が不安定です。再接続しています…';
       case 'ended':
         return '通話を終了しました';
       case 'error':
@@ -824,7 +1052,10 @@ function StatusBar({
   const dotColor =
     status === 'in-call'
       ? 'bg-emerald-500'
-      : status === 'waiting' || status === 'connecting' || status === 'requesting-media'
+      : status === 'waiting' ||
+          status === 'connecting' ||
+          status === 'requesting-media' ||
+          status === 'reconnecting'
         ? 'bg-amber-500'
         : status === 'error'
           ? 'bg-rose-500'
@@ -850,14 +1081,17 @@ function IconButton({
   onClick,
   tone,
   children,
+  disabled = false,
 }: {
   label: string;
   onClick: () => void;
   tone: 'neutral' | 'danger' | 'hangup';
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
-  const cls =
-    tone === 'hangup'
+  const cls = disabled
+    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+    : tone === 'hangup'
       ? 'bg-rose-600 text-white hover:bg-rose-700'
       : tone === 'danger'
         ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
@@ -866,6 +1100,7 @@ function IconButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       title={label}
       className={`inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors ${cls}`}

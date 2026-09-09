@@ -125,6 +125,37 @@ set_env_var STRIPE_PRICE_PREMIUM_MONTHLY "$STRIPE_PRICE_PREMIUM_MONTHLY"
 set_env_var STRIPE_PRICE_PREMIUM_YEARLY "$STRIPE_PRICE_PREMIUM_YEARLY"
 
 # =====================================================================
+# 1on1 通話の TURN サーバー設定
+# ---------------------------------------------------------------------
+#   TURN_URLS       : turn:host:3478 形式。複数ある場合は , か ; 区切り
+#   TURN_USERNAME   : TURN の username
+#   TURN_CREDENTIAL : TURN の credential (パスワード)
+#
+# 【なぜ必要か】
+#   未設定だと STUN のみになり、スマホのモバイル回線 (4G/5G) や
+#   企業・ホテルの Wi-Fi から «通話が繋がらない» ことがある。
+#   携帯キャリアは多重 NAT 構成が多く、STUN だけでは経路を作れないため。
+#
+# 未設定でも通話機能自体は動く (STUN のみで動作) ので、
+# 値が空ならスキップして既存の設定を壊さない。
+# 設定手順は docs/CALL_TURN_SETUP.md を参照。
+# =====================================================================
+echo "[regenerate-env] fetching TURN settings from SSM..."
+
+TURN_URLS=$(ssm_get "${SSM_BASE}/turn/urls")
+TURN_USERNAME=$(ssm_get "${SSM_BASE}/turn/username")
+TURN_CREDENTIAL=$(ssm_get "${SSM_BASE}/turn/credential")
+
+if [ -n "$TURN_URLS" ] && [ -n "$TURN_USERNAME" ] && [ -n "$TURN_CREDENTIAL" ]; then
+  set_env_var TURN_URLS "$TURN_URLS"
+  set_env_var TURN_USERNAME "$TURN_USERNAME"
+  set_env_var TURN_CREDENTIAL "$TURN_CREDENTIAL"
+else
+  echo "[regenerate-env]   skip TURN (未設定: STUN のみで動作します)"
+  echo "[regenerate-env]   → モバイル回線から繋がらない場合は docs/CALL_TURN_SETUP.md を参照"
+fi
+
+# =====================================================================
 # 動画エンコード / 配信 (MediaConvert + CloudFront) 設定
 # ---------------------------------------------------------------------
 #   MEDIACONVERT_ROLE_ARN     : CDK StorageStack が作成したロール ARN
