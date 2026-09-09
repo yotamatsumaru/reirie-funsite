@@ -192,6 +192,7 @@ enum RewardRedemptionStatus {
 enum MiniGameType {
   ACCHI_MUITE_HOI // あっち向いてホイ
   SLOT // スロット (3 リール)
+  MEMORY // 神経衰弱 (REIRIE の写真でペアを揃える)
 }
 
 // ミニゲームの1プレイ結果
@@ -430,6 +431,7 @@ model User {
   // Mini Game (あっち向いてホイ等)
   miniGamePlays      MiniGamePlay[]
   extraPlayPurchases MiniGameExtraPlayPurchase[]
+  memorySessions     MemoryGameSession[]
 
   // MyRoom (家具の部屋) — 家具マスタを追加した運営アカウントとしての履歴
   myRoomFurnituresCreated MyRoomFurniture[] @relation("MyRoomFurnitureCreatedBy")
@@ -1784,6 +1786,59 @@ model MiniGameExtraPlayPurchase {
 
   @@unique([userId, gameType, date])
   @@map("mini_game_extra_play_purchases")
+}
+
+/// 神経衰弱 (MEMORY) の進行中セッション。
+///
+/// 【なぜテーブルが必要か / 最重要】
+/// あっち向いてホイ・スロットは «1 リクエスト = 1 プレイ完結» なので
+/// サーバーが状態を持つ必要がなかった。神経衰弱は複数ターンにまたがるため
+/// 「どの位置にどの写真があるか」をどこかに保持しなければならない。
+///
+/// これをクライアントに渡すと、レスポンスを見るだけで全カードの位置が判明し、
+/// ノーミスで Pui を稼げてしまう (ゲームが成立しない)。
+/// そこで盤面はこのテーブルにのみ置き、クライアントには
+/// «めくった位置の写真» だけを返す。
+///
+/// 【1 ユーザー 1 セッション】
+/// userId に unique を張り、同時に複数の盤面を持てないようにしている。
+/// 複数持てると「良い盤面を引くまで開き直す」ことや、
+/// 1 日の回数制限を回避した並行プレイが可能になる。
+/// 新しく開始するときは既存行を上書きする。
+model MemoryGameSession {
+  id     String @id @default(uuid()) @db.Uuid
+  /// 1 ユーザーにつき進行中の盤面は 1 つだけ
+  userId String @unique @map("user_id") @db.Uuid
+
+  /// 盤面 (JSON 文字列)。{"cards":[位置→ペア番号], "photos":[{id,url,caption}]}
+  /// ★この値は絶対にクライアントへ返さない★
+  board String @db.Text
+
+  /// 揃って確定した位置の配列 (JSON 文字列)。例: "[0,3,5,9]"
+  matchedIndexes String @default("[]") @map("matched_indexes")
+
+  /// いまめくっている 1 枚目の位置。2 枚目をめくると null に戻る
+  firstPick Int? @map("first_pick")
+
+  /// 使用した手数 (1 手 = 2 枚めくり)
+  moves Int @default(0)
+
+  /// このプレイを「1 日の回数」として計上済みか。
+  /// 開始時に計上するため通常 true だが、集計方法を変えても
+  /// 二重計上しないようフラグとして持つ。
+  counted Boolean @default(true)
+
+  /// JST 基準の "YYYY-MM-DD" (どの日のプレイ枠で開始したか)
+  date String
+
+  startedAt DateTime @default(now()) @map("started_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 期限切れセッションの掃除用
+  @@index([startedAt])
+  @@map("memory_game_sessions")
 }
 
 /// ファンから REIRIE への DM。
