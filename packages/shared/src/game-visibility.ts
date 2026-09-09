@@ -40,7 +40,7 @@ export const GAME_VISIBILITY_KEY = 'game.visibility';
  * 【ゲームを追加するとき】この配列にキーを足し、GAME_VISIBILITY_ITEMS に
  * 表示情報を足すだけで、管理画面のトグルと各ゲートに自動で反映される。
  */
-export const GAME_KEYS = ['acchi', 'slot', 'story'] as const;
+export const GAME_KEYS = ['acchi', 'slot', 'memory', 'story'] as const;
 
 export type GameKey = (typeof GAME_KEYS)[number];
 
@@ -62,6 +62,13 @@ export const GAME_VISIBILITY_ITEMS: {
     label: 'スロット',
     emoji: '🎰',
     description: 'ミニゲーム (/me/games/slot)。絵柄を揃えると Pui がもらえます。',
+  },
+  {
+    key: 'memory',
+    label: 'PUI メモリー (神経衰弱)',
+    emoji: '🃏',
+    description:
+      'ミニゲーム (/me/games/memory)。REIRIE の写真でペアを揃えると Pui がもらえます。カードに使う写真はギャラリーの公開範囲に従います。',
   },
   {
     key: 'story',
@@ -99,6 +106,23 @@ export type GameVisibilityMap = Record<GameKey, boolean>;
 export const DEFAULT_GAME_VISIBILITY: GameVisibilityMap = {
   acchi: true,
   slot: true,
+  /**
+   * 【新規ゲームだけ既定を false にしている理由】
+   *
+   * 既存 3 本は「すでに公開済みのものが勝手に非公開になる」事故を防ぐため
+   * 既定 true にしている。一方 memory (神経衰弱) は新規追加なので、
+   * 「公開済みだった」という前提が無い。
+   *
+   * さらに、このゲームはギャラリーの写真を必要とする
+   * (8 ペア = 8 枚以上ないと開始できない)。デプロイした瞬間に一般公開されると、
+   * 写真が足りないサイトでは会員が «開始できないゲーム» を目にすることになる。
+   *
+   * そのため既定は非公開とし、運営が管理画面で動作を確認してから
+   * 公開できるようにしている (GAME_KEYS 冒頭のコメントに書かれている
+   * 「開発中は見せず、完成したら公開する」という本来の使い方に沿う)。
+   * 管理者は非公開中もプレビューで遊べる。
+   */
+  memory: false,
   story: true,
 };
 
