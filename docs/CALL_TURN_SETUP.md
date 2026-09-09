@@ -103,7 +103,27 @@ sudo bash ~/app/deploy/regenerate-env.sh | head -2
 
 ### 手順 1：SSM にパラメータを登録
 
+> 🚫 **EC2 サーバー上では実行できません（意図的な制限です）**
+>
+> EC2 のロールは **読み取りは全パス許可 / 書き込みは `cron/*` のみ** に
+> 絞られています（`infra/lib/ec2-stack.ts`）。これは
+> «サーバーが侵害されても Stripe の本番キー等を書き換えられない» ための
+> 安全設計なので、**この制限を緩めないでください**。
+>
+> EC2 上で実行すると次のエラーになります（正常な動作です）。
+> ```
+> An error occurred (AccessDeniedException) when calling the PutParameter
+> operation: ... is not authorized to perform: ssm:PutParameter
+> ```
+>
+> **登録は手元の PC（管理者権限の AWS プロファイル）から行ってください。**
+> サーバー上で行うのは「手順 2（反映）」だけです。
+
 ```bash
+# ▼ 手元の PC で実行する（EC2 上ではない）
+#    管理者権限のプロファイルを使う
+export AWS_PROFILE=your-admin-profile
+
 # 手順 0 で確認した値を入れる
 SSM_BASE=/idol-fansite/dev
 REGION=ap-northeast-1
@@ -122,8 +142,21 @@ aws ssm put-parameter --region "$REGION" --overwrite \
   --value "YOUR-CREDENTIAL"
 ```
 
-> 既存の値を確認したい場合：
-> `aws ssm get-parameters-by-path --path "$SSM_BASE" --region "$REGION" --query 'Parameters[].Name'`
+登録できたら、手元の PC で確認します。
+
+```bash
+aws ssm get-parameters-by-path --path "${SSM_BASE}/turn" \
+  --region "$REGION" --query 'Parameters[].Name'
+# → [ ".../turn/urls", ".../turn/username", ".../turn/credential" ]
+```
+
+> 既存パラメータの一覧を見たい場合：
+> `aws ssm get-parameters-by-path --path "$SSM_BASE" --recursive --region "$REGION" --query 'Parameters[].Name'`
+
+> 💡 **AWS CLI を使いたくない場合**はマネジメントコンソールからでも登録できます。
+> Systems Manager → パラメータストア → 「パラメータの作成」で
+> 名前に `/idol-fansite/dev/turn/urls` のようにフルパスを入力します
+> （`urls` は「文字列」、`username` と `credential` は「安全な文字列」を選択）。
 
 ### 手順 2：サーバーに反映
 
@@ -237,6 +270,7 @@ Wi-Fi のままだとテストになりません（Wi-Fi では TURN 無しで�
 |---|---|
 | API に TURN が出ない | 3 つの変数がすべて設定されているか（1 つでも欠けると無効） |
 | API に TURN が出ない | `bash deploy/deploy.sh` で再起動したか（`pm2 restart` では反映されません） |
+| `AccessDeniedException` (`ssm:PutParameter`) | **EC2 上で登録しようとしている**。手元の PC の管理者プロファイルから実行する（EC2 は `cron/*` 以外書き込み不可。仕様です） |
 | `No such file or directory` | アプリのディレクトリ（`cd ~/app` 等）に移動してから実行しているか |
 | `Process or Namespace web not found` | PM2 に未登録。`pm2 start deploy/ecosystem.config.js` で起動する |
 | `relay` 候補が出ない | 認証情報の有効期限切れ、URL のポート番号が正しいか |
