@@ -190,6 +190,25 @@ describe('memoryReward', () => {
   it('理論最大報酬を超えることはない', () => {
     expect(memoryReward(MEMORY_PAIR_COUNT, true)).toBeLessThanOrEqual(MEMORY_MAX_REWARD);
   });
+
+  /**
+   * 実機の通しプレイで観測した結果を回帰テストとして固定する。
+   * (API 経由で実際に遊び、DB の mini_game_plays / pui_transactions と
+   *  突き合わせて確認した値)
+   *
+   *   - 11 手で全 8 ペア達成 → WIN / 48 Pui
+   *   - 20 手使い切って 2 ペア → LOSE / 8 Pui (クリアボーナスなし)
+   *
+   * 報酬計算を将来変更したときに、実際に付与された額と
+   * 式が食い違ったままリリースされるのを防ぐ。
+   */
+  it('実機検証と同じ値になる: 全8ペア達成で 48 Pui', () => {
+    expect(memoryReward(8, true)).toBe(48);
+  });
+
+  it('実機検証と同じ値になる: 手数切れで2ペアなら 8 Pui (ボーナスなし)', () => {
+    expect(memoryReward(2, false)).toBe(8);
+  });
 });
 
 describe('残り数の計算', () => {
