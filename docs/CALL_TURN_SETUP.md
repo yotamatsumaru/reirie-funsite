@@ -85,42 +85,88 @@ STUN で調べた住所に外から接続できず、**直接繋げません**�
 このプロジェクトは **AWS SSM パラメータストア** から環境変数を読み込みます
 （`deploy/user-data.sh` / `deploy/regenerate-env.sh`）。
 
-### 手順 1：SSM にパラメータを登録
+### 手順 0：SSM のベースパスを確認する（推測しないこと）
 
-`APP_NAME` と `ENV_NAME` は既存のデプロイ設定に合わせてください
-（既存パラメータは `/${APP_NAME}/${ENV_NAME}/...` という形式です）。
+パラメータは `/${APP_NAME}/${ENV_NAME}/...` という形式で保存されています。
+**この値は環境ごとに異なる**ため、必ず実際の値を確認してください。
+
+`regenerate-env.sh` を実行すると 1 行目に表示されます。
 
 ```bash
-APP_NAME=idol          # 既存の設定に合わせる
-ENV_NAME=prod          # 既存の設定に合わせる
+sudo bash ~/app/deploy/regenerate-env.sh | head -2
+# → [regenerate-env] SSM base: /idol-fansite/dev (region: ap-northeast-1)
+#                              ^^^^^^^^^^^^^^^^^ これがベースパス
+```
+
+> 💡 本番サーバーの実測値は **`/idol-fansite/dev`**（`APP_NAME=idol-fansite` / `ENV_NAME=dev`）でした。
+> ホストによって異なる可能性があるため、作業するサーバー上で必ず確認してください。
+
+### 手順 1：SSM にパラメータを登録
+
+```bash
+# 手順 0 で確認した値を入れる
+SSM_BASE=/idol-fansite/dev
 REGION=ap-northeast-1
 
 aws ssm put-parameter --region "$REGION" --overwrite \
-  --name "/${APP_NAME}/${ENV_NAME}/turn/urls" --type String \
+  --name "${SSM_BASE}/turn/urls" --type String \
   --value "turn:YOUR-TURN-HOST:3478,turns:YOUR-TURN-HOST:5349"
 
 # 認証情報は SecureString（暗号化）で登録する
 aws ssm put-parameter --region "$REGION" --overwrite \
-  --name "/${APP_NAME}/${ENV_NAME}/turn/username" --type SecureString \
+  --name "${SSM_BASE}/turn/username" --type SecureString \
   --value "YOUR-USERNAME"
 
 aws ssm put-parameter --region "$REGION" --overwrite \
-  --name "/${APP_NAME}/${ENV_NAME}/turn/credential" --type SecureString \
+  --name "${SSM_BASE}/turn/credential" --type SecureString \
   --value "YOUR-CREDENTIAL"
 ```
 
 > 既存の値を確認したい場合：
-> `aws ssm get-parameters-by-path --path "/${APP_NAME}/${ENV_NAME}" --region "$REGION" --query 'Parameters[].Name'`
+> `aws ssm get-parameters-by-path --path "$SSM_BASE" --region "$REGION" --query 'Parameters[].Name'`
 
 ### 手順 2：サーバーに反映
 
-```bash
-# EC2 にログインして実行
-sudo bash /opt/idol/deploy/regenerate-env.sh    # パスは環境に合わせる
+**必ずアプリのディレクトリに移動してから実行してください。**
+リポジトリ配置は環境により異なります（実測: `/home/ec2-user/app`）。
 
-# 反映後、アプリを再起動
-pm2 restart web
+```bash
+cd ~/app                      # 環境に合わせる。deploy/ がある場所
+sudo bash deploy/regenerate-env.sh
 ```
+
+反映後、**アプリを再起動します**。
+
+```bash
+bash ~/app/deploy/deploy.sh
+```
+
+> ⚠️ **`pm2 restart web` は使わないでください。**
+> 環境変数は PM2 が `ecosystem.config.js` を **読み込む時**に
+> `.env.production` からパースされます。`pm2 restart` は
+> 既存プロセスの設定を使い回すため、**`.env.production` の変更が反映されません**。
+> `deploy.sh` は `pm2 reload <ecosystem> --update-env` を実行し、
+> 失敗時は `delete → start` で確実に立て直します。
+>
+> どうしても手動で行う場合は次のようにします。
+> ```bash
+> cd ~/app
+> pm2 reload deploy/ecosystem.config.js --update-env \
+>   || { pm2 delete web; pm2 start deploy/ecosystem.config.js; }
+> pm2 save
+> ```
+>
+> <details><summary>実験で確認した結果（クリックで展開）</summary>
+>
+> 同じ構成の最小再現環境で検証しました。
+>
+> ```
+> 起動時                                   → MYVAR=BEFORE
+> .env を AFTER に書き換え
+> pm2 restart <name>                       → MYVAR=BEFORE  ← 反映されない
+> pm2 reload <ecosystem> --update-env      → MYVAR=AFTER   ← 反映される
+> ```
+> </details>
 
 成功すると次のように出力されます。
 
@@ -190,7 +236,9 @@ Wi-Fi のままだとテストになりません（Wi-Fi では TURN 無しで�
 | 症状 | 確認すること |
 |---|---|
 | API に TURN が出ない | 3 つの変数がすべて設定されているか（1 つでも欠けると無効） |
-| API に TURN が出ない | `pm2 restart web` をしたか（再起動しないと反映されません） |
+| API に TURN が出ない | `bash deploy/deploy.sh` で再起動したか（`pm2 restart` では反映されません） |
+| `No such file or directory` | アプリのディレクトリ（`cd ~/app` 等）に移動してから実行しているか |
+| `Process or Namespace web not found` | PM2 に未登録。`pm2 start deploy/ecosystem.config.js` で起動する |
 | `relay` 候補が出ない | 認証情報の有効期限切れ、URL のポート番号が正しいか |
 | モバイル回線だけ繋がらない | `turns:`（TLS 版・ポート 5349）も併記すると改善することがあります |
 | 音声だけ繋がり映像が出ない | 帯域不足の可能性。TURN とは別要因です |
