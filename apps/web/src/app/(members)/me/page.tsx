@@ -28,6 +28,7 @@ import { BirthdayMailSection } from './birthday-mail-section';
 import { listUserBirthdayMails } from '@/lib/birthday-mail';
 import { ContactReplySection } from './contact-reply-section';
 import { listMyContactReplies } from '@/lib/contact-reply';
+import { resolveMyRoomVisibility } from '@/lib/myroom-visibility';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,11 @@ export const dynamic = 'force-dynamic';
 export default async function MePage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/signin?callbackUrl=/me');
+
+  // ReiRieRoom (MyRoom) のリンクを出すかどうか。
+  // 非公開中は «実際に開ける人» (管理者) にだけ出す。
+  const { canView: canViewMyRoom, isPreview: myRoomIsPreview } =
+    await resolveMyRoomVisibility();
 
   const [user, recentHistory, birthdayMails, contactReplies] = await Promise.all([
     prisma.user.findUnique({
@@ -377,6 +383,25 @@ export default async function MePage() {
           <Link href="/me/orders" className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500">
             注文履歴
           </Link>
+          {/*
+            ReiRieRoom (MyRoom) は現在「非公開・管理者のみ」。
+            リンクは «実際に開ける人» にだけ出す。
+            一般会員に出すと 404 になるリンクを踏ませることになり、
+            「壊れている」と誤解されるうえ、非公開の機能の存在も漏れる。
+          */}
+          {canViewMyRoom && (
+            <Link
+              href="/me/myroom"
+              className="rounded-md border border-slate-200 px-4 py-3 hover:border-brand-500"
+            >
+              ReiRieRoom
+              {myRoomIsPreview && (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                  非公開
+                </span>
+              )}
+            </Link>
+          )}
         </CardBody>
       </Card>
 
