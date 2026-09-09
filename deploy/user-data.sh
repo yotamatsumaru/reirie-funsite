@@ -145,6 +145,11 @@ STRIPE_PRICE_STANDARD_MONTHLY=$(ssm_get "${SSM_BASE}/stripe/price/standard-month
 STRIPE_PRICE_STANDARD_YEARLY=$(ssm_get "${SSM_BASE}/stripe/price/standard-yearly")
 STRIPE_PRICE_PREMIUM_MONTHLY=$(ssm_get "${SSM_BASE}/stripe/price/premium-monthly")
 STRIPE_PRICE_PREMIUM_YEARLY=$(ssm_get "${SSM_BASE}/stripe/price/premium-yearly")
+# 1on1 通話の TURN サーバー (未設定なら STUN のみで動作する)
+# 詳細と取得手順は docs/CALL_TURN_SETUP.md
+TURN_URLS=$(ssm_get "${SSM_BASE}/turn/urls")
+TURN_USERNAME=$(ssm_get "${SSM_BASE}/turn/username")
+TURN_CREDENTIAL=$(ssm_get "${SSM_BASE}/turn/credential")
 CLOUDFRONT_VIDEO_DOMAIN=$(ssm_get "${SSM_BASE}/cloudfront/video-domain")
 CLOUDFRONT_ASSET_DOMAIN=$(ssm_get "${SSM_BASE}/cloudfront/asset-domain")
 CLOUDFRONT_KEY_PAIR_ID=$(ssm_get "${SSM_BASE}/cloudfront/key-pair-id")
@@ -278,6 +283,11 @@ STRIPE_PRICE_STANDARD_MONTHLY=${STRIPE_PRICE_STANDARD_MONTHLY}
 STRIPE_PRICE_STANDARD_YEARLY=${STRIPE_PRICE_STANDARD_YEARLY}
 STRIPE_PRICE_PREMIUM_MONTHLY=${STRIPE_PRICE_PREMIUM_MONTHLY}
 STRIPE_PRICE_PREMIUM_YEARLY=${STRIPE_PRICE_PREMIUM_YEARLY}
+
+# 1on1 通話の TURN (空なら STUN のみ。ice-servers API 側で存在チェックしている)
+TURN_URLS=${TURN_URLS}
+TURN_USERNAME=${TURN_USERNAME}
+TURN_CREDENTIAL=${TURN_CREDENTIAL}
 
 LAWSON_TICKET_API_BASE=${LAWSON_API_BASE}
 LAWSON_TICKET_API_KEY=${LAWSON_API_KEY}
