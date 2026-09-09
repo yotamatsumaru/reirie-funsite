@@ -21,7 +21,12 @@ import {
   formatJstDate,
   type PlanTypeLiteral,
 } from '@idol/shared';
-import { Download } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
+import {
+  recentJstMonths,
+  currentJstMonth,
+  formatMonthLabel,
+} from '@/lib/accounting-report';
 
 export const metadata: Metadata = { title: '売上管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -141,6 +146,11 @@ export default async function SuperAdminSalesPage({
     exportQuery.toString() ? `?${exportQuery.toString()}` : ''
   }`;
 
+  // 経理用 PDF の対象月の選択肢 (直近 13 か月・新しい順)。
+  // 未来の月は recentJstMonths が返さない。
+  const reportMonths = recentJstMonths(13);
+  const defaultReportMonth = currentJstMonth();
+
   return (
     <main>
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -158,6 +168,55 @@ export default async function SuperAdminSalesPage({
           CSV エクスポート
         </a>
       </header>
+
+      {/*
+        経理用 月次レポート (PDF)
+        GET フォームなので JS 無しで動く。送信すると
+        /api/super-admin/sales/report?month=YYYY-MM がそのまま PDF を返す。
+      */}
+      <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">経理用レポート (PDF)</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              選んだ月の売上・消費税の内訳・Stripe 手数料・差引入金額をまとめた PDF を出力します。
+              集計は日本時間の月初〜月末、成功した決済のみが対象です。
+            </p>
+          </div>
+          <form
+            method="GET"
+            action="/api/super-admin/sales/report"
+            className="flex flex-wrap items-center gap-2"
+          >
+            <label htmlFor="report-month" className="sr-only">
+              対象月
+            </label>
+            <select
+              id="report-month"
+              name="month"
+              defaultValue={defaultReportMonth}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700"
+            >
+              {reportMonths.map((m) => (
+                <option key={m} value={m}>
+                  {formatMonthLabel(m)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+            >
+              <FileText className="h-3.5 w-3.5" aria-hidden />
+              PDF 出力
+            </button>
+          </form>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+          ※ Stripe 手数料は出力時に Stripe へ問い合わせるため、件数が多い月は数十秒かかることがあります。
+          社内管理用の集計資料であり、適格請求書 (インボイス) ではありません。
+        </p>
+      </section>
 
       {isTruncated && (
         <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
