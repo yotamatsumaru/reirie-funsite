@@ -24,6 +24,8 @@ import {
   remainingPlays,
   SLOT_MAX_PLAYS_PER_DAY,
   slotRemainingPlays,
+  MEMORY_MAX_PLAYS_PER_DAY,
+  memoryRemainingPlays,
   applyPlanPuiMultiplier,
   MONTHLY_PUI_BONUS,
   EXTRA_PLAY_COST_PUI,
@@ -1364,6 +1366,119 @@ export async function buySlotExtraPlay(
       balance,
       purchasedToday,
       maxPerDay: SLOT_MAX_PLAYS_PER_DAY + purchasedToday,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------
+// 神経衰弱 (MEMORY)
+// ---------------------------------------------------------------------
+
+const MEMORY_LOCK_SCOPE = 'MEMORY:play';
+
+export type MemoryPlayPersistResult = {
+  /** 実際に付与された Pui (プラン倍率適用後) */
+  reward: number;
+  balance: number;
+  playedToday: number;
+  remaining: number;
+};
+
+/**
+ * 神経衰弱のゲーム終了を記録し、Pui を付与する。
+ *
+ * 【acchi / slot との違い】
+ * acchi / slot は «1 リクエスト = 1 プレイ» なので、この関数が
+ * 回数上限のチェックも兼ねていた。神経衰弱は «開始» の時点で
+ * 回数を消費しているため、ここでは上限チェックを行わない
+ * (終了時に上限で弾くと、遊んだのに Pui が貰えない事故になる)。
+ *
+ * 【二重付与の防止】
+ * セッション行の削除と Pui 付与を同一トランザクションで行い、
+ * 「行を消せた場合のみ」付与する。終了リクエストが二重に来ても、
+ * 2 回目は削除対象が無いため付与されない。
+ *
+ * @param basePayout プラン倍率適用前の Pui (memoryReward の結果)
+ */
+export async function recordMemoryPlay(
+  userId: string,
+  cleared: boolean,
+  basePayout: number,
+  detail: string,
+  date: string,
+  now: Date = new Date(),
+): Promise<MemoryPlayPersistResult> {
+  return prisma.$transaction(async (tx) => {
+    await acquireUserGameLock(tx, userId, MEMORY_LOCK_SCOPE);
+
+    // ★二重付与の防止★
+    // 進行中セッションを消せた場合のみ «初回の終了» と判断する。
+    const deleted = await tx.memoryGameSession.deleteMany({ where: { userId } });
+
+    const plan = await getUserPlanTx(tx, userId);
+    const reward =
+      deleted.count > 0 && basePayout > 0
+        ? applyPlanPuiMultiplier(basePayout, plan)
+        : 0;
+
+    if (deleted.count === 0) {
+      // すでに終了処理済み。残高だけ返す (Pui は動かさない)。
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { pui: true },
+      });
+      const played = await tx.miniGamePlay.count({
+        where: { userId, gameType: 'MEMORY', date },
+      });
+      return {
+        reward: 0,
+        balance: u?.pui ?? 0,
+        playedToday: played,
+        remaining: memoryRemainingPlays(played),
+      };
+    }
+
+    await tx.miniGamePlay.create({
+      data: {
+        userId,
+        gameType: 'MEMORY',
+        date,
+        // MiniGameResult は WIN/LOSE/DRAW の 3 値。
+        // 全ペア揃えた = WIN、手数上限で終了 = LOSE に丸め、
+        // 揃えたペア数などの詳細は detail に JSON で残す。
+        result: cleared ? 'WIN' : 'LOSE',
+        rewardPui: reward,
+        detail,
+      },
+    });
+
+    let balance: number;
+    if (reward > 0) {
+      balance = await applyPui(tx, {
+        userId,
+        amount: reward,
+        // acchi / slot と同じ理由コードを使う
+        // (PuiReason enum に MINI_GAME は存在しない)
+        reason: 'GAME_REWARD',
+        note: '神経衰弱 報酬',
+      });
+    } else {
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { pui: true },
+      });
+      balance = u?.pui ?? 0;
+    }
+
+    const playedToday = await tx.miniGamePlay.count({
+      where: { userId, gameType: 'MEMORY', date },
+    });
+
+    return {
+      reward,
+      balance,
+      playedToday,
+      remaining: memoryRemainingPlays(playedToday, MEMORY_MAX_PLAYS_PER_DAY),
     };
   });
 }

@@ -54,6 +54,7 @@ jest.mock('@/lib/api-auth', () => ({
   },
 }));
 
+import { GAME_KEYS } from '@idol/shared';
 import {
   resolveGameVisibility,
   resolveAllGameVisibility,
@@ -61,6 +62,18 @@ import {
   requireGameSectionVisible,
   requireGameVisible,
 } from './game-visibility';
+
+/**
+ * 全ゲーム同一値の公開設定マップを GAME_KEYS から作る。
+ *
+ * 【なぜハードコードしないか】
+ * 以前は { acchi: true, slot: true, story: true } と直接書いていたため、
+ * ゲームを 1 本追加するだけでこのファイルの多くのテストが落ちた。
+ * 「新しいゲームを足しても壊れない」ことが GAME_KEYS 導出の狙いなので、
+ * テスト側もキー一覧から組み立てる。
+ */
+const everyGame = (value: boolean): Record<string, boolean> =>
+  Object.fromEntries(GAME_KEYS.map((k) => [k, value]));
 
 /** site.sectionVisibility に保存されている状態を作る */
 function setStoredVisibility(v: Record<string, unknown> | null) {
@@ -317,7 +330,7 @@ describe('resolveGameVisibility (Server Component 用 / 引数なし = ゲーム
 
   it('全ゲーム個別 OFF なら一般会員は /game を開けない', async () => {
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: false, slot: false, story: false });
+    setStoredGameVisibility(everyGame(false));
     cookieSession = { user: { id: 'u1', role: 'USER' } };
     const state = await resolveGameVisibility();
     expect(state.canView).toBe(false);
@@ -380,18 +393,22 @@ describe('resolveAllGameVisibility (ゲーム一覧用)', () => {
   it('公開中は全ゲームが閲覧可能', async () => {
     setStoredVisibility(ALL_VISIBLE);
     const state = await resolveAllGameVisibility();
-    expect(state.publiclyVisible).toEqual({ acchi: true, slot: true, story: true });
-    expect(state.canView).toEqual({ acchi: true, slot: true, story: true });
+    // 個別設定を «全 ON» に保存した状態を作ってから確認する
+    // (新規ゲームは既定が非公開なので、既定のままだと false になる)
+    setStoredGameVisibility(everyGame(true));
+    const all = await resolveAllGameVisibility();
+    expect(all.publiclyVisible).toEqual(everyGame(true));
+    expect(all.canView).toEqual(everyGame(true));
     expect(state.canViewSection).toBe(true);
     expect(state.isPreview).toBe(false);
   });
 
   it('一般会員には非公開ゲームだけが canView: false になる', async () => {
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: false });
+    setStoredGameVisibility({ ...everyGame(true), acchi: false });
     cookieSession = { user: { id: 'u1', role: 'USER' } };
     const state = await resolveAllGameVisibility();
-    expect(state.canView).toEqual({ acchi: false, slot: true, story: true });
+    expect(state.canView).toEqual({ ...everyGame(true), acchi: false });
     // 他が公開されているのでページ自体は開ける。
     expect(state.canViewSection).toBe(true);
   });
@@ -408,7 +425,7 @@ describe('resolveAllGameVisibility (ゲーム一覧用)', () => {
 
   it('全ゲーム非公開なら一般会員はページごと開けない', async () => {
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: false, slot: false, story: false });
+    setStoredGameVisibility(everyGame(false));
     cookieSession = { user: { id: 'u1', role: 'USER' } };
     const state = await resolveAllGameVisibility();
     expect(state.canViewSection).toBe(false);
@@ -416,11 +433,11 @@ describe('resolveAllGameVisibility (ゲーム一覧用)', () => {
 
   it('全ゲーム非公開でも管理者はプレビューとして全部見られる', async () => {
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: false, slot: false, story: false });
+    setStoredGameVisibility(everyGame(false));
     cookieSession = { user: { id: 'a1', role: 'SUPER_ADMIN' } };
     const state = await resolveAllGameVisibility();
     expect(state.canViewSection).toBe(true);
     expect(state.isPreview).toBe(true);
-    expect(state.canView).toEqual({ acchi: true, slot: true, story: true });
+    expect(state.canView).toEqual(everyGame(true));
   });
 });
