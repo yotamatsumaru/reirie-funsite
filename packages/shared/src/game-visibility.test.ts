@@ -24,17 +24,42 @@ import {
   type GameVisibilityMap,
 } from './game-visibility';
 
-const ALL_ON: GameVisibilityMap = { acchi: true, slot: true, story: true };
+/**
+ * 全ゲーム ON / OFF のマップ。
+ *
+ * 【なぜハードコードしないか】
+ * 以前は { acchi: true, slot: true, story: true } と直接書いていたため、
+ * ゲームを 1 本追加するだけでこのファイルの多くのテストが落ちた。
+ * 「新しいゲームを足しても壊れない」ことこそ GAME_KEYS 導出の狙いなので、
+ * テスト側もキー一覧から組み立てる。
+ */
+function mapWith(value: boolean, overrides: Partial<GameVisibilityMap> = {}): GameVisibilityMap {
+  const base = Object.fromEntries(GAME_KEYS.map((k) => [k, value])) as GameVisibilityMap;
+  return { ...base, ...overrides };
+}
+
+const ALL_ON: GameVisibilityMap = mapWith(true);
 
 describe('定義', () => {
   it('AppSetting のキーは game.visibility', () => {
     expect(GAME_VISIBILITY_KEY).toBe('game.visibility');
   });
 
-  it('既定値はすべて公開 (既存サイトが勝手に非公開にならない)', () => {
+  it('既定値は全ゲーム分そろっており、真偽値である', () => {
     for (const key of GAME_KEYS) {
-      expect(DEFAULT_GAME_VISIBILITY[key]).toBe(true);
+      expect(typeof DEFAULT_GAME_VISIBILITY[key]).toBe('boolean');
     }
+  });
+
+  /**
+   * 既存 3 本は「すでに公開済みのものが勝手に非公開になる」事故を防ぐため
+   * 既定 true を維持しなければならない。
+   * (新規追加ゲームは運営が動作確認してから公開するので既定 false でよい)
+   */
+  it('既存ゲーム (acchi / slot / story) の既定は公開のまま', () => {
+    expect(DEFAULT_GAME_VISIBILITY.acchi).toBe(true);
+    expect(DEFAULT_GAME_VISIBILITY.slot).toBe(true);
+    expect(DEFAULT_GAME_VISIBILITY.story).toBe(true);
   });
 
   it('GAME_VISIBILITY_ITEMS は全ゲームを過不足なく網羅する', () => {
@@ -80,32 +105,34 @@ describe('GameVisibilityMapSchema', () => {
 
 describe('normalizeGameVisibility', () => {
   it('保存済みの値を反映する', () => {
-    expect(normalizeGameVisibility({ acchi: false, slot: true, story: false })).toEqual({
-      acchi: false,
-      slot: true,
-      story: false,
-    });
+    expect(normalizeGameVisibility({ acchi: false, slot: true, story: false })).toEqual(
+      mapWith(DEFAULT_GAME_VISIBILITY.memory, {
+        acchi: false,
+        slot: true,
+        story: false,
+        // 保存されていないキーは既定値のまま
+        memory: DEFAULT_GAME_VISIBILITY.memory,
+      }),
+    );
   });
 
-  it('保存されていないゲームは公開扱い (新規追加ゲームが消えない)', () => {
+  it('保存されていないゲームは既定値のまま (設定が消えない)', () => {
     expect(normalizeGameVisibility({ acchi: false })).toEqual({
+      ...DEFAULT_GAME_VISIBILITY,
       acchi: false,
-      slot: true,
-      story: true,
     });
   });
 
   it('未知のキーは無視し、既知のキーの設定は保つ', () => {
     const result = normalizeGameVisibility({ slot: false, removedGame: false });
-    expect(result).toEqual({ acchi: true, slot: false, story: true });
+    expect(result).toEqual({ ...DEFAULT_GAME_VISIBILITY, slot: false });
     expect(result).not.toHaveProperty('removedGame');
   });
 
-  it('真偽値でない値は既定値 (公開) 扱いにし、全体を巻き戻さない', () => {
+  it('真偽値でない値は既定値扱いにし、全体を巻き戻さない', () => {
     expect(normalizeGameVisibility({ acchi: 'no', slot: false })).toEqual({
-      acchi: true,
+      ...DEFAULT_GAME_VISIBILITY,
       slot: false,
-      story: true,
     });
   });
 
@@ -167,15 +194,11 @@ describe('canViewGame / isGamePreview (管理者プレビュー)', () => {
 
 describe('hasAnyPubliclyVisibleGame', () => {
   it('1 本でも公開されていれば true', () => {
-    expect(hasAnyPubliclyVisibleGame(true, { acchi: false, slot: true, story: false })).toBe(
-      true,
-    );
+    expect(hasAnyPubliclyVisibleGame(true, mapWith(false, { slot: true }))).toBe(true);
   });
 
   it('全ゲーム個別 OFF なら false (ナビからゲームを隠せる)', () => {
-    expect(
-      hasAnyPubliclyVisibleGame(true, { acchi: false, slot: false, story: false }),
-    ).toBe(false);
+    expect(hasAnyPubliclyVisibleGame(true, mapWith(false))).toBe(false);
   });
 
   it('マスター OFF なら false', () => {

@@ -11,6 +11,7 @@ export * from './myroom-furniture';
 export * from './maintenance';
 export * from './mini-game';
 export * from './slot-game';
+export * from './memory-game';
 export * from './promo';
 export * from './game-audio';
 export * from './site-image';

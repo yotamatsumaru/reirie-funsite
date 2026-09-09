@@ -10,6 +10,9 @@ import {
   ACCHI_WIN_REWARD,
   SLOT_MAX_PLAYS_PER_DAY,
   SLOT_MAX_PAYOUT,
+  MEMORY_MAX_PLAYS_PER_DAY,
+  MEMORY_MAX_REWARD,
+  MEMORY_PAIR_COUNT,
   gameThumbnailSlot,
   type GameKey,
 } from '@idol/shared';
@@ -62,6 +65,21 @@ const MINI_GAMES: {
       '3つの絵柄を揃えてポイントゲット! 7が揃えば大量の Pui がもらえます。',
     themeColor: '#fef3c7',
     badges: [`1日${SLOT_MAX_PLAYS_PER_DAY}回まで`, `最高${SLOT_MAX_PAYOUT}pt`, '無料'],
+    requiresAuth: true,
+  },
+  {
+    slug: 'memory',
+    title: 'PUI メモリー',
+    emoji: '\u{1F0CF}',
+    href: '/me/games/memory',
+    description:
+      'REIRIE の写真で神経衰弱! ペアを揃えると写真が大きく見られて Pui ももらえます。',
+    themeColor: '#fce7f3',
+    badges: [
+      `1日${MEMORY_MAX_PLAYS_PER_DAY}回まで`,
+      `最高${MEMORY_MAX_REWARD}pt`,
+      `${MEMORY_PAIR_COUNT}ペア`,
+    ],
     requiresAuth: true,
   },
 ];
