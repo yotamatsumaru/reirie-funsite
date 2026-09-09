@@ -1,0 +1,3283 @@
+[
+  {
+    "path": "/api/admin-invite/[token]",
+    "file": "api/admin-invite/[token]/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "cookie",
+    "authLabel": "Cookie専用",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": true,
+    "perMethod": null,
+    "doc": "招待の状態確認（受諾ページ表示用）— 認証不要"
+  },
+  {
+    "path": "/api/admin/call/events/[id]/next",
+    "file": "api/admin/call/events/[id]/next/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "「次のファンを本ルームへ呼ぶ」 — スタッフが操作する司令塔ボタン。"
+  },
+  {
+    "path": "/api/admin/call/events/[id]/restore",
+    "file": "api/admin/call/events/[id]/restore/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "NO_SHOW にしたチケットを WAITING に戻す (救済オペレーション)。"
+  },
+  {
+    "path": "/api/admin/call/events/[id]",
+    "file": "api/admin/call/events/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "管理者用 特典会イベント詳細 API"
+  },
+  {
+    "path": "/api/admin/call/events/[id]/serials",
+    "file": "api/admin/call/events/[id]/serials/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "管理者用 シリアル発行 API"
+  },
+  {
+    "path": "/api/admin/call/events/[id]/skip",
+    "file": "api/admin/call/events/[id]/skip/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "特定チケットをスキップ (NO_SHOW) する。"
+  },
+  {
+    "path": "/api/admin/call/events",
+    "file": "api/admin/call/events/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "管理者用 特典会イベント API"
+  },
+  {
+    "path": "/api/admin/categories",
+    "file": "api/admin/categories/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "全カテゴリ"
+  },
+  {
+    "path": "/api/admin/contents/[id]",
+    "file": "api/admin/contents/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "詳細"
+  },
+  {
+    "path": "/api/admin/contents/images",
+    "file": "api/admin/contents/images/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ブログ記事・ギャラリー本文に挿入する画像をアップロードし、挿入用の URL を返す。"
+  },
+  {
+    "path": "/api/admin/contents",
+    "file": "api/admin/contents/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "全コンテンツ一覧 (DRAFT/ARCHIVED 含む)"
+  },
+  {
+    "path": "/api/admin/contents/videos",
+    "file": "api/admin/contents/videos/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ブログ記事本文に挿入する「短い動画」をアップロードし、挿入用の URL を返す。"
+  },
+  {
+    "path": "/api/admin/game/assets/[id]",
+    "file": "api/admin/game/assets/[id]/route.ts",
+    "methods": [
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/game/assets",
+    "file": "api/admin/game/assets/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/game/characters/[id]",
+    "file": "api/admin/game/characters/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/game/characters",
+    "file": "api/admin/game/characters/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "全キャラ (DRAFT 含む)"
+  },
+  {
+    "path": "/api/admin/game/items/[id]",
+    "file": "api/admin/game/items/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/game/items",
+    "file": "api/admin/game/items/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/game/players",
+    "file": "api/admin/game/players/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "プレイヤー進捗一覧 (運営調査用)"
+  },
+  {
+    "path": "/api/admin/game/scenarios/[id]",
+    "file": "api/admin/game/scenarios/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/game/scenarios",
+    "file": "api/admin/game/scenarios/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "章一覧"
+  },
+  {
+    "path": "/api/admin/inventories/[variantId]",
+    "file": "api/admin/inventories/[variantId]/route.ts",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "在庫取得"
+  },
+  {
+    "path": "/api/admin/live/[id]",
+    "file": "api/admin/live/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "詳細"
+  },
+  {
+    "path": "/api/admin/live",
+    "file": "api/admin/live/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ライブ配信一覧 (全ステータス)"
+  },
+  {
+    "path": "/api/admin/myroom/furnitures/[id]/image",
+    "file": "api/admin/myroom/furnitures/[id]/image/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "家具画像のアップロード / 差し替え"
+  },
+  {
+    "path": "/api/admin/myroom/furnitures/[id]",
+    "file": "api/admin/myroom/furnitures/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "家具マスタの更新（部分更新）"
+  },
+  {
+    "path": "/api/admin/myroom/furnitures",
+    "file": "api/admin/myroom/furnitures/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "家具マスタ一覧"
+  },
+  {
+    "path": "/api/admin/orders/[id]/cancel",
+    "file": "api/admin/orders/[id]/cancel/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/orders/[id]/ship",
+    "file": "api/admin/orders/[id]/ship/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/orders",
+    "file": "api/admin/orders/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/orders/shipping/confirm",
+    "file": "api/admin/orders/shipping/confirm/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "対象注文を一括で SHIPPED に遷移させ、送り状番号を保存する。"
+  },
+  {
+    "path": "/api/admin/orders/shipping/export",
+    "file": "api/admin/orders/shipping/export/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "取込用CSV (UTF-8 BOM付き) でダウンロードする。"
+  },
+  {
+    "path": "/api/admin/orders/shipping/import",
+    "file": "api/admin/orders/shipping/import/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "のテキストを受け取り、注文番号 (orderNumber) で自社の注文に突き合わせて"
+  },
+  {
+    "path": "/api/admin/products/[id]/images/[imageId]",
+    "file": "api/admin/products/[id]/images/[imageId]/route.ts",
+    "methods": [
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "商品画像を削除"
+  },
+  {
+    "path": "/api/admin/products/[id]/images",
+    "file": "api/admin/products/[id]/images/route.ts",
+    "methods": [
+      "GET",
+      "POST",
+      "PATCH"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "商品画像一覧"
+  },
+  {
+    "path": "/api/admin/products/[id]",
+    "file": "api/admin/products/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "商品詳細 (variants/inventory込み)"
+  },
+  {
+    "path": "/api/admin/products/[id]/variants",
+    "file": "api/admin/products/[id]/variants/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/products",
+    "file": "api/admin/products/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "全商品 (非公開含む)"
+  },
+  {
+    "path": "/api/admin/reward-catalog/[id]/assets/[assetId]",
+    "file": "api/admin/reward-catalog/[id]/assets/[assetId]/route.ts",
+    "methods": [
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "DB 保存 (data) のものはレコード削除で実体も消える。"
+  },
+  {
+    "path": "/api/admin/reward-catalog/[id]/assets",
+    "file": "api/admin/reward-catalog/[id]/assets/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "(multipart/form-data)"
+  },
+  {
+    "path": "/api/admin/reward-catalog/[id]",
+    "file": "api/admin/reward-catalog/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "景品カタログ更新"
+  },
+  {
+    "path": "/api/admin/reward-catalog",
+    "file": "api/admin/reward-catalog/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "景品カタログ一覧"
+  },
+  {
+    "path": "/api/admin/reward-redemptions/[id]",
+    "file": "api/admin/reward-redemptions/[id]/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "発送管理ステータス更新"
+  },
+  {
+    "path": "/api/admin/reward-redemptions",
+    "file": "api/admin/reward-redemptions/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "景品交換・発送管理 一覧"
+  },
+  {
+    "path": "/api/admin/stats",
+    "file": "api/admin/stats/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "admin",
+    "authLabel": "管理者",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/admin/uploads/image",
+    "file": "api/admin/uploads/image/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "multipart で直接アップロード) を使うため、このエンドポイントは S3 専用とする。"
+  },
+  {
+    "path": "/api/admin/videos/[id]/encode",
+    "file": "api/admin/videos/[id]/encode/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "(Lambda 未整備でも管理画面の「公開」で手動 READY 化が可能)"
+  },
+  {
+    "path": "/api/admin/videos/[id]/publish",
+    "file": "api/admin/videos/[id]/publish/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "管理画面からの手動公開フラグ用としても提供"
+  },
+  {
+    "path": "/api/admin/videos/[id]",
+    "file": "api/admin/videos/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "DELETE /api/admin/videos/[id]"
+  },
+  {
+    "path": "/api/admin/videos/[id]/sync",
+    "file": "api/admin/videos/[id]/sync/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "エンコード状態を MediaConvert / S3 に直接問い合わせて DB に反映する。"
+  },
+  {
+    "path": "/api/admin/videos/[id]/thumbnail",
+    "file": "api/admin/videos/[id]/thumbnail/route.ts",
+    "methods": [
+      "POST",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "… 画像ファイルをアップロードして設定"
+  },
+  {
+    "path": "/api/admin/videos/[id]/visibility",
+    "file": "api/admin/videos/[id]/visibility/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "動画 1 本ごとの公開 / 非公開を切り替える。"
+  },
+  {
+    "path": "/api/admin/videos/encode-config",
+    "file": "api/admin/videos/encode-config/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "エンコード (MediaConvert) / 配信 (CloudFront) の設定状況を返す診断エンドポイント。"
+  },
+  {
+    "path": "/api/admin/videos/job-complete",
+    "file": "api/admin/videos/job-complete/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "cron",
+    "authLabel": "Cron専用（secret または管理者）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "MediaConvert ジョブ完了通知の受け口 (EventBridge → Lambda から呼ばれる)。"
+  },
+  {
+    "path": "/api/admin/videos",
+    "file": "api/admin/videos/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "動画一覧 (全ステータス)"
+  },
+  {
+    "path": "/api/admin/videos/upload-url",
+    "file": "api/admin/videos/upload-url/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/auth/forgot-password",
+    "file": "api/auth/forgot-password/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/auth/resend-verification-code",
+    "file": "api/auth/resend-verification-code/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/auth/reset-password",
+    "file": "api/auth/reset-password/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/auth/signup",
+    "file": "api/auth/signup/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/auth/verify-email",
+    "file": "api/auth/verify-email/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/call/[roomId]/events",
+    "file": "api/call/[roomId]/events/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "SSE (Server-Sent Events) でシグナリングメッセージを受信する。"
+  },
+  {
+    "path": "/api/call/[roomId]/signal",
+    "file": "api/call/[roomId]/signal/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "クライアントから offer / answer / ICE candidate を送信し、"
+  },
+  {
+    "path": "/api/call/events/[id]/enter-waiting",
+    "file": "api/call/events/[id]/enter-waiting/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ファンが待機室ページにアクセスした際に呼ばれる \"自動入室\" エンドポイント。"
+  },
+  {
+    "path": "/api/call/events/[id]/queue/events",
+    "file": "api/call/events/[id]/queue/events/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "(Server-Sent Events)"
+  },
+  {
+    "path": "/api/call/ice-servers",
+    "file": "api/call/ice-servers/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "クライアント (CallRoom.tsx) が RTCPeerConnection を作成する直前に呼ぶ。"
+  },
+  {
+    "path": "/api/call/redeem",
+    "file": "api/call/redeem/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "plan",
+    "authLabel": "プラン条件つき",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "シリアルコードを引き換えて CallTicket を発行する。"
+  },
+  {
+    "path": "/api/cart/items/[id]",
+    "file": "api/cart/items/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/cart/items",
+    "file": "api/cart/items/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/cart",
+    "file": "api/cart/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/contact",
+    "file": "api/contact/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "cookie",
+    "authLabel": "Cookie専用",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": true,
+    "perMethod": null,
+    "doc": "お問い合わせフォームの送信 (公開エンドポイント)"
+  },
+  {
+    "path": "/api/contents/[slug]",
+    "file": "api/contents/[slug]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [
+      "コンテンツ公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/contents/albums",
+    "file": "api/contents/albums/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [
+      "コンテンツ公開トグル"
+    ],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "アルバムタブ用の一覧 (名前・絞り込みキー・件数) を返す。"
+  },
+  {
+    "path": "/api/contents/comments/[id]",
+    "file": "api/contents/comments/[id]/route.ts",
+    "methods": [
+      "DELETE"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/contents/comments",
+    "file": "api/contents/comments/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "plan",
+    "authLabel": "プラン条件つき",
+    "gates": [
+      "コンテンツ公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": {
+      "GET": "optional",
+      "POST": "plan"
+    },
+    "doc": null
+  },
+  {
+    "path": "/api/contents",
+    "file": "api/contents/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [
+      "コンテンツ公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/cron/birthday-mail",
+    "file": "api/cron/birthday-mail/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "cron",
+    "authLabel": "Cron専用（secret または管理者）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "誕生日メールの自動送信を実行する (冪等)。"
+  },
+  {
+    "path": "/api/game/characters/[slug]",
+    "file": "api/game/characters/[slug]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/game/characters",
+    "file": "api/game/characters/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/game/gift",
+    "file": "api/game/gift/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "PlayerProgress.affinity に affinityBoost を加算"
+  },
+  {
+    "path": "/api/game/progress",
+    "file": "api/game/progress/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "自分の進捗"
+  },
+  {
+    "path": "/api/game/purchase",
+    "file": "api/game/purchase/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/game/save-slots",
+    "file": "api/game/save-slots/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "セーブスロット一覧"
+  },
+  {
+    "path": "/api/game/scenarios/[id]",
+    "file": "api/game/scenarios/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/game/webhook",
+    "file": "api/game/webhook/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Stripe Dashboard で `checkout.session.completed` イベントを購読する"
+  },
+  {
+    "path": "/api/live/[id]/playback",
+    "file": "api/live/[id]/playback/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/live",
+    "file": "api/live/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/maintenance-status",
+    "file": "api/maintenance-status/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "メンテナンスモードの ON/OFF だけを返す公開エンドポイント"
+  },
+  {
+    "path": "/api/me/birthday-mail/read",
+    "file": "api/me/birthday-mail/read/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "マイページで誕生日メールを開いたときに既読化する。"
+  },
+  {
+    "path": "/api/me/card",
+    "file": "api/me/card/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "会員カード情報を取得 (会員番号を未付与なら採番する)"
+  },
+  {
+    "path": "/api/me/contact-replies",
+    "file": "api/me/contact-replies/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "自分が受け取った運営からの返信一覧"
+  },
+  {
+    "path": "/api/me/contact-reply/read",
+    "file": "api/me/contact-reply/read/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "マイページで運営からの返信 (お知らせ) を開いたときに既読化する。"
+  },
+  {
+    "path": "/api/me/dm",
+    "file": "api/me/dm/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "DM公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "自分の DM 一覧 + 呼んでほしい名前 + NG ワード(クライアント事前判定用)"
+  },
+  {
+    "path": "/api/me/email",
+    "file": "api/me/email/route.ts",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "… 現在のアドレスと、手続き中の申請の有無を返す"
+  },
+  {
+    "path": "/api/me/email/verify",
+    "file": "api/me/email/verify/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "確認コードを入力してメールアドレス変更を確定する"
+  },
+  {
+    "path": "/api/me/games/acchi/buy-extra-play",
+    "file": "api/me/games/acchi/buy-extra-play/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "実装本体は `/api/v1/games/acchi/buy-extra-play` と共通化されており、"
+  },
+  {
+    "path": "/api/me/games/acchi",
+    "file": "api/me/games/acchi/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "本日の残りプレイ回数 & 残高を取得"
+  },
+  {
+    "path": "/api/me/games/memory/flip",
+    "file": "api/me/games/memory/flip/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { index: number }"
+  },
+  {
+    "path": "/api/me/games/memory/giveup",
+    "file": "api/me/games/memory/giveup/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "神経衰弱 — 途中でやめる"
+  },
+  {
+    "path": "/api/me/games/memory",
+    "file": "api/me/games/memory/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "神経衰弱 (PUI メモリー) — 状態取得"
+  },
+  {
+    "path": "/api/me/games/memory/start",
+    "file": "api/me/games/memory/start/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "神経衰弱 — ゲーム開始"
+  },
+  {
+    "path": "/api/me/games/slot/buy-extra-play",
+    "file": "api/me/games/slot/buy-extra-play/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/me/games/slot",
+    "file": "api/me/games/slot/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "本日の残りプレイ回数・残高・配当表を取得"
+  },
+  {
+    "path": "/api/me/login-bonus",
+    "file": "api/me/login-bonus/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "毎日のログインボーナスを受け取る"
+  },
+  {
+    "path": "/api/me/orders/[id]/invoice",
+    "file": "api/me/orders/[id]/invoice/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "常に 404 (Not Found) を返す (ページ側 `notFound()` と同じ方針)。"
+  },
+  {
+    "path": "/api/me/orders",
+    "file": "api/me/orders/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/me/orders/subscription/[paymentId]/invoice",
+    "file": "api/me/orders/subscription/[paymentId]/invoice/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "「支払明細書」を PDF でダウンロードする。"
+  },
+  {
+    "path": "/api/me/payments",
+    "file": "api/me/payments/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/me/points",
+    "file": "api/me/points/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Pui 残高 & 取引履歴 (直近 50 件)"
+  },
+  {
+    "path": "/api/me/profile/preferred-name",
+    "file": "api/me/profile/preferred-name/route.ts",
+    "methods": [
+      "PUT"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "REIRIE に呼んでほしい名前を更新"
+  },
+  {
+    "path": "/api/me/reward-catalog",
+    "file": "api/me/reward-catalog/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "公開中の景品カタログ一覧 (会員向け)"
+  },
+  {
+    "path": "/api/me/reward-downloads/[assetId]",
+    "file": "api/me/reward-downloads/[assetId]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "(RewardRedemption が CANCELED 以外) であること。"
+  },
+  {
+    "path": "/api/me/reward-downloads",
+    "file": "api/me/reward-downloads/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "その配布ファイル一覧を返す。"
+  },
+  {
+    "path": "/api/me/reward-point-packs",
+    "file": "api/me/reward-point-packs/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "購入可能な Pui パック一覧 (会員向け)"
+  },
+  {
+    "path": "/api/me/reward-points/purchase",
+    "file": "api/me/reward-points/purchase/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "【2026-07 通貨名変更】URL 自体 (reward-points) は後方互換のため変更していない。"
+  },
+  {
+    "path": "/api/me/reward-redemptions",
+    "file": "api/me/reward-redemptions/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "自分の景品交換履歴"
+  },
+  {
+    "path": "/api/me",
+    "file": "api/me/route.ts",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/me/social-share",
+    "file": "api/me/social-share/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "SNS シェアによるポイント付与 (X のみ)"
+  },
+  {
+    "path": "/api/me/summary",
+    "file": "api/me/summary/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "サイドバー等で使う会員概要 (プラン・ランク・保有 Pui)"
+  },
+  {
+    "path": "/api/media/birthday-mail/[id]",
+    "file": "api/media/birthday-mail/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "(URL は uuid で推測困難。公開扱い)。"
+  },
+  {
+    "path": "/api/media/character-image/[id]",
+    "file": "api/media/character-image/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/media/content-body-image/[id]",
+    "file": "api/media/content-body-image/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "cookie",
+    "authLabel": "Cookie専用",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": true,
+    "perMethod": null,
+    "doc": "DB に保存された本文画像・ギャラリー写真を配信する (S3 未設定時のフォールバック保存先)。"
+  },
+  {
+    "path": "/api/media/content-body-video/[id]",
+    "file": "api/media/content-body-video/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "cookie",
+    "authLabel": "Cookie専用",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": true,
+    "perMethod": null,
+    "doc": "DB に保存されたブログ本文動画を配信する (S3 未設定時のフォールバック保存先)。"
+  },
+  {
+    "path": "/api/media/game-audio/[id]",
+    "file": "api/media/game-audio/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/media/myroom-furniture/[id]",
+    "file": "api/media/myroom-furniture/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "【認証をかけていない理由】"
+  },
+  {
+    "path": "/api/media/product-image/[id]",
+    "file": "api/media/product-image/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/media/site-image/[id]",
+    "file": "api/media/site-image/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/media/video-thumbnail/[id]",
+    "file": "api/media/video-thumbnail/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "DB (`Video.thumbnailData`) に保存された動画サムネイルを配信する。"
+  },
+  {
+    "path": "/api/myroom/furnitures",
+    "file": "api/myroom/furnitures/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [
+      "MyRoom公開トグル"
+    ],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "会員向けの家具カタログ。"
+  },
+  {
+    "path": "/api/notices/[id]",
+    "file": "api/notices/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "お知らせ詳細"
+  },
+  {
+    "path": "/api/notices",
+    "file": "api/notices/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "公開中のお知らせ一覧"
+  },
+  {
+    "path": "/api/orders/[id]",
+    "file": "api/orders/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/orders/checkout",
+    "file": "api/orders/checkout/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/postal-lookup",
+    "file": "api/postal-lookup/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "郵便番号から住所を引く公開エンドポイント"
+  },
+  {
+    "path": "/api/products/[slug]",
+    "file": "api/products/[slug]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [
+      "ショップ公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/products/categories",
+    "file": "api/products/categories/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [
+      "ショップ公開トグル"
+    ],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/products",
+    "file": "api/products/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [
+      "ショップ公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/subscriptions/cancel",
+    "file": "api/subscriptions/cancel/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/subscriptions/change-plan/cancel",
+    "file": "api/subscriptions/change-plan/cancel/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/subscriptions/change-plan",
+    "file": "api/subscriptions/change-plan/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/subscriptions/checkout",
+    "file": "api/subscriptions/checkout/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/subscriptions/me",
+    "file": "api/subscriptions/me/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/subscriptions/monthly-bonus",
+    "file": "api/subscriptions/monthly-bonus/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "cron",
+    "authLabel": "Cron専用（secret または管理者）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": {
+      "GET": "member",
+      "POST": "cron"
+    },
+    "doc": "月次ボーナスギフトを全アクティブ会員に付与する Cron 用エンドポイント。"
+  },
+  {
+    "path": "/api/subscriptions/portal",
+    "file": "api/subscriptions/portal/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/super-admin/acchi-settings",
+    "file": "api/super-admin/acchi-settings/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "あっち向いてホイのプラン別「設定」(1〜6) を取得"
+  },
+  {
+    "path": "/api/super-admin/admins/[id]/capabilities",
+    "file": "api/super-admin/admins/[id]/capabilities/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { capabilities: ('CONTENT'|'MERCH'|'GAME'|'CALL')[] }"
+  },
+  {
+    "path": "/api/super-admin/admins/grant",
+    "file": "api/super-admin/admins/grant/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { email: string, role: 'ADMIN' | 'STAFF' | 'SUPER_ADMIN' }"
+  },
+  {
+    "path": "/api/super-admin/admins/invitations/[id]",
+    "file": "api/super-admin/admins/invitations/[id]/route.ts",
+    "methods": [
+      "POST",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "招待を取消 (PENDING → REVOKED)"
+  },
+  {
+    "path": "/api/super-admin/admins/invitations",
+    "file": "api/super-admin/admins/invitations/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "招待一覧 (SUPER_ADMIN)"
+  },
+  {
+    "path": "/api/super-admin/announcements/[id]",
+    "file": "api/super-admin/announcements/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "{ title?, body?, audience?, status?, sendEmail? }"
+  },
+  {
+    "path": "/api/super-admin/announcements",
+    "file": "api/super-admin/announcements/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { title, body, audience, status, sendEmail }"
+  },
+  {
+    "path": "/api/super-admin/birthday/candidates",
+    "file": "api/super-admin/birthday/candidates/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "誕生日メールの「強制送信」対象を検索する (運営の救済操作用)。"
+  },
+  {
+    "path": "/api/super-admin/birthday/recipients",
+    "file": "api/super-admin/birthday/recipients/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "誕生日メールの送信対象者一覧を取得する。"
+  },
+  {
+    "path": "/api/super-admin/birthday/schedule",
+    "file": "api/super-admin/birthday/schedule/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "現在の設定 + 最終実行状況を取得"
+  },
+  {
+    "path": "/api/super-admin/birthday/send",
+    "file": "api/super-admin/birthday/send/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "誕生日メールを送信する。"
+  },
+  {
+    "path": "/api/super-admin/birthday/template",
+    "file": "api/super-admin/birthday/template/route.ts",
+    "methods": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "指定年のテンプレート取得"
+  },
+  {
+    "path": "/api/super-admin/birthday/test",
+    "file": "api/super-admin/birthday/test/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "誕生日メールのテスト送信。"
+  },
+  {
+    "path": "/api/super-admin/character-images",
+    "file": "api/super-admin/character-images/route.ts",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "キャラクター画像一覧 (ポーズ別) を取得"
+  },
+  {
+    "path": "/api/super-admin/contact-notification",
+    "file": "api/super-admin/contact-notification/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "お問い合わせ通知設定を取得"
+  },
+  {
+    "path": "/api/super-admin/contact/[id]/reply",
+    "file": "api/super-admin/contact/[id]/reply/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "お問い合わせへ運営から返信する (SUPER_ADMIN 限定)。"
+  },
+  {
+    "path": "/api/super-admin/contact/[id]",
+    "file": "api/super-admin/contact/[id]/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "お問い合わせの対応状況・管理メモを更新 (SUPER_ADMIN 限定)"
+  },
+  {
+    "path": "/api/super-admin/dm-ng-words",
+    "file": "api/super-admin/dm-ng-words/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "現在の DM NG ワード一覧を取得"
+  },
+  {
+    "path": "/api/super-admin/dm/[id]",
+    "file": "api/super-admin/dm/[id]/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "DM を既読にする (status=READ)"
+  },
+  {
+    "path": "/api/super-admin/dm",
+    "file": "api/super-admin/dm/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ファンから REIRIE への DM 一覧 (新着順)"
+  },
+  {
+    "path": "/api/super-admin/game-audio",
+    "file": "api/super-admin/game-audio/route.ts",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "あっち向いてホイのボイス一覧 (スロット別) を取得"
+  },
+  {
+    "path": "/api/super-admin/game-visibility",
+    "file": "api/super-admin/game-visibility/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ゲーム個別の公開設定を取得"
+  },
+  {
+    "path": "/api/super-admin/maintenance",
+    "file": "api/super-admin/maintenance/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "メンテナンスモード設定を取得"
+  },
+  {
+    "path": "/api/super-admin/member-numbers/backfill",
+    "file": "api/super-admin/member-numbers/backfill/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "会員番号の採番状況を取得"
+  },
+  {
+    "path": "/api/super-admin/member-ranks",
+    "file": "api/super-admin/member-ranks/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "会員ランクの昇格条件 (しきい値) を取得"
+  },
+  {
+    "path": "/api/super-admin/newsletter/export",
+    "file": "api/super-admin/newsletter/export/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/super-admin/orders/[id]",
+    "file": "api/super-admin/orders/[id]/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/super-admin/point-rates",
+    "file": "api/super-admin/point-rates/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "現在の Pui 付与レートを取得"
+  },
+  {
+    "path": "/api/super-admin/points/adjust",
+    "file": "api/super-admin/points/adjust/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "管理者による Pui 手動調整"
+  },
+  {
+    "path": "/api/super-admin/points/reconcile",
+    "file": "api/super-admin/points/reconcile/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Pui 残高の整合性是正"
+  },
+  {
+    "path": "/api/super-admin/reward-point-packs/[id]",
+    "file": "api/super-admin/reward-point-packs/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "更新"
+  },
+  {
+    "path": "/api/super-admin/reward-point-packs/reconcile",
+    "file": "api/super-admin/reward-point-packs/reconcile/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Pui パック購入の未付与是正 (再照合)"
+  },
+  {
+    "path": "/api/super-admin/reward-point-packs",
+    "file": "api/super-admin/reward-point-packs/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "特典ポイントパック一覧"
+  },
+  {
+    "path": "/api/super-admin/sales/export",
+    "file": "api/super-admin/sales/export/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/super-admin/sales/report",
+    "file": "api/super-admin/sales/report/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Payment には FAILED / PENDING / REFUNDED も入る。"
+  },
+  {
+    "path": "/api/super-admin/settings",
+    "file": "api/super-admin/settings/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { key: string, value: string | number | boolean }"
+  },
+  {
+    "path": "/api/super-admin/share-templates",
+    "file": "api/super-admin/share-templates/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "現在の SNS シェアテンプレート文を取得"
+  },
+  {
+    "path": "/api/super-admin/site-images",
+    "file": "api/super-admin/site-images/route.ts",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "サイト画像一覧 (スロット別) を取得"
+  },
+  {
+    "path": "/api/super-admin/site-visibility",
+    "file": "api/super-admin/site-visibility/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "コンテンツ/グッズ/DM セクションの公開設定を取得"
+  },
+  {
+    "path": "/api/super-admin/slot-settings",
+    "file": "api/super-admin/slot-settings/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "スロットのプラン別「設定」(1〜6) を取得"
+  },
+  {
+    "path": "/api/super-admin/stripe-mode",
+    "file": "api/super-admin/stripe-mode/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Stripe 運用モード (LIVE/TEST) とテスト資格情報を取得"
+  },
+  {
+    "path": "/api/super-admin/subscriptions/[id]/refund",
+    "file": "api/super-admin/subscriptions/[id]/refund/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "サブスクリプション課金の返金 (SUPER_ADMIN 限定)"
+  },
+  {
+    "path": "/api/super-admin/subscriptions/[id]",
+    "file": "api/super-admin/subscriptions/[id]/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body:"
+  },
+  {
+    "path": "/api/super-admin/subscriptions/health",
+    "file": "api/super-admin/subscriptions/health/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "プラン反映の不整合（決済済みなのに無料プラン扱い等）を検知して返す。"
+  },
+  {
+    "path": "/api/super-admin/subscriptions/reconcile",
+    "file": "api/super-admin/subscriptions/reconcile/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "Stripe 上の実際のサブスクリプションと DB の Subscription テーブルを再照合する。"
+  },
+  {
+    "path": "/api/super-admin/totp/disable",
+    "file": "api/super-admin/totp/disable/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "誤操作・乗っ取り時の悪用防止のため、現在のパスワードの再入力を必須とする"
+  },
+  {
+    "path": "/api/super-admin/totp/setup",
+    "file": "api/super-admin/totp/setup/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "新しい Base32 シークレットを生成し、暗号化して DB に保存する"
+  },
+  {
+    "path": "/api/super-admin/totp/status",
+    "file": "api/super-admin/totp/status/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "setup/verify の途中 (シークレット発行済みだが確認コード未入力) と、"
+  },
+  {
+    "path": "/api/super-admin/totp/verify",
+    "file": "api/super-admin/totp/verify/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { code: string } (6桁数字)"
+  },
+  {
+    "path": "/api/super-admin/users/[id]/email",
+    "file": "api/super-admin/users/[id]/email/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "運営が会員のメールアドレスを変更する"
+  },
+  {
+    "path": "/api/super-admin/users/[id]",
+    "file": "api/super-admin/users/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body 例:"
+  },
+  {
+    "path": "/api/super-admin/users/[id]/subscription",
+    "file": "api/super-admin/users/[id]/subscription/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "SUPER_ADMIN 限定: 1ユーザー分のサブスクを個別に修復 / 付与する。"
+  },
+  {
+    "path": "/api/super-admin/users/[id]/warning",
+    "file": "api/super-admin/users/[id]/warning/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "このユーザーへの警告履歴一覧 (新しい順)"
+  },
+  {
+    "path": "/api/super-admin/users/create-fan",
+    "file": "api/super-admin/users/create-fan/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "通常のフローは会員自身が /signup でメール認証を経て登録するが、"
+  },
+  {
+    "path": "/api/super-admin/users/set-member-number",
+    "file": "api/super-admin/users/set-member-number/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "通常のファン新規登録 (create-fan) は「メールアドレスが既に登録されている」場合"
+  },
+  {
+    "path": "/api/tickets/events/[id]",
+    "file": "api/tickets/events/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/tickets/events",
+    "file": "api/tickets/events/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/tickets/link/confirm",
+    "file": "api/tickets/link/confirm/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/tickets/link",
+    "file": "api/tickets/link/route.ts",
+    "methods": [
+      "GET",
+      "DELETE"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/tickets/link/start",
+    "file": "api/tickets/link/start/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/tickets/presale/grants",
+    "file": "api/tickets/presale/grants/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/tickets/presale/request",
+    "file": "api/tickets/presale/request/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "1) ローチケ連携が LINKED 状態"
+  },
+  {
+    "path": "/api/v1/auth/me",
+    "file": "api/v1/auth/me/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "現在の認証ユーザー情報と Pui 残高を返す"
+  },
+  {
+    "path": "/api/v1/auth/token/refresh",
+    "file": "api/v1/auth/token/refresh/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "refresh トークンで access トークンを再発行する"
+  },
+  {
+    "path": "/api/v1/auth/token",
+    "file": "api/v1/auth/token/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "email + password で API トークンを発行する"
+  },
+  {
+    "path": "/api/v1/games/acchi/assets",
+    "file": "api/v1/games/acchi/assets/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "あっちむいてPUI の表示素材 (キャラクター画像・ボイス) の URL を返す。"
+  },
+  {
+    "path": "/api/v1/games/acchi/buy-extra-play",
+    "file": "api/v1/games/acchi/buy-extra-play/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "実装本体は `/api/me/games/acchi/buy-extra-play` と共通化されており、"
+  },
+  {
+    "path": "/api/v1/games/acchi",
+    "file": "api/v1/games/acchi/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "本日の残りプレイ回数 & 残高"
+  },
+  {
+    "path": "/api/v1/games/memory/flip",
+    "file": "api/v1/games/memory/flip/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "body: { index: number }"
+  },
+  {
+    "path": "/api/v1/games/memory/giveup",
+    "file": "api/v1/games/memory/giveup/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "神経衰弱 — 途中でやめる"
+  },
+  {
+    "path": "/api/v1/games/memory",
+    "file": "api/v1/games/memory/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "神経衰弱 (PUI メモリー) — 状態取得"
+  },
+  {
+    "path": "/api/v1/games/memory/start",
+    "file": "api/v1/games/memory/start/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "神経衰弱 — ゲーム開始"
+  },
+  {
+    "path": "/api/v1/games/slot/buy-extra-play",
+    "file": "api/v1/games/slot/buy-extra-play/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "実装本体は `/api/me/games/slot/buy-extra-play` と共通。"
+  },
+  {
+    "path": "/api/v1/games/slot",
+    "file": "api/v1/games/slot/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [
+      "ゲーム公開トグル"
+    ],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "本日の残りプレイ回数・残高・配当表"
+  },
+  {
+    "path": "/api/videos/[id]/hls/[...path]",
+    "file": "api/videos/[id]/hls/[...path]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須（視聴権あり）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "HLS プレイリスト / セグメント プロキシ"
+  },
+  {
+    "path": "/api/videos/[id]/playback",
+    "file": "api/videos/[id]/playback/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須（視聴権あり）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/videos/[id]/progress",
+    "file": "api/videos/[id]/progress/route.ts",
+    "methods": [
+      "PATCH"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須（視聴権あり）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "再生中のクライアントから視聴進捗を受け取り、視聴ログ 1 行を更新する。"
+  },
+  {
+    "path": "/api/videos/[id]",
+    "file": "api/videos/[id]/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
+    "path": "/api/videos",
+    "file": "api/videos/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "optional",
+    "authLabel": "任意（未ログインでも可）",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  }
+]
