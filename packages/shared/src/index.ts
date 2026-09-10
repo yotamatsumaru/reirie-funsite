@@ -34,3 +34,6 @@ export * from './schemas/contact-ack';
 export * from './schemas/birthday-mail';
 export * from './schemas/subscription-health';
 export * from './schemas/email-change';
+
+// 1on1 チケットの «まだ有効か» 判定 (アプリのホームバナー分岐で使う)
+export * from './call-ticket-active';

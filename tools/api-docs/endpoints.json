@@ -974,6 +974,20 @@
     "doc": "シリアルコードを引き換えて CallTicket を発行する。"
   },
   {
+    "path": "/api/call/tickets/me",
+    "file": "api/call/tickets/me/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "自分の «まだ有効な» 1on1 チケット一覧"
+  },
+  {
     "path": "/api/cart/items/[id]",
     "file": "api/cart/items/[id]/route.ts",
     "methods": [
