@@ -7,7 +7,7 @@
 > node tools/api-docs/extract.mjs && node tools/api-docs/generate.mjs
 > ```
 
-最終生成: 2026-09-09 / アプリ向けエンドポイント **112 本**
+最終生成: 2026-09-10 / アプリ向けエンドポイント **112 本**
 
 ---
 
