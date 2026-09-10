@@ -7,7 +7,7 @@
 > node tools/api-docs/extract.mjs && node tools/api-docs/generate.mjs
 > ```
 
-最終生成: 2026-09-09 / アプリ向けエンドポイント **112 本**
+最終生成: 2026-09-10 / アプリ向けエンドポイント **113 本**
 
 ---
 
@@ -297,6 +297,7 @@ GET /api/call/{roomId}/events?access_token=<accessToken>
 | GET | `/api/call/events/[id]/queue/events` | 任意 | — | (Server-Sent Events) |
 | GET | `/api/call/ice-servers` | 会員 | — | クライアント (CallRoom.tsx) が RTCPeerConnection を作成する直前に呼ぶ。 |
 | POST | `/api/call/redeem` | プラン | — | シリアルコードを引き換えて CallTicket を発行する。 |
+| GET | `/api/call/tickets/me` | 会員 | — | 自分の «まだ有効な» 1on1 チケット一覧 |
 
 ### 5-14. ライブ配信
 
