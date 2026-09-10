@@ -13,6 +13,7 @@ import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { NotifyPanel } from './notify-panel';
 
 export const metadata: Metadata = { title: '会報誌 発送リスト | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -158,6 +159,9 @@ export default async function NewsletterMailingListPage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* 会報誌のメール連絡（住所記入のお願い / 発送連絡） */}
+      <NotifyPanel needsInfoCount={needsInfoCount} shippableCount={shippableCount} />
 
       <Card>
         <CardHeader>

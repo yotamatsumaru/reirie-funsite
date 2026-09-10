@@ -10,6 +10,7 @@ export * from './game-visibility';
 export * from './myroom-furniture';
 export * from './myroom-layout';
 export * from './product-variant-label';
+export * from './newsletter-shipping';
 export * from './maintenance';
 export * from './mini-game';
 export * from './slot-game';
