@@ -4,6 +4,7 @@ export * from './access-control';
 export * from './plan-benefits';
 export * from './membership';
 export * from './membership-rank';
+export * from './login-bonus-app';
 export * from './stripe-mode';
 export * from './site-section-visibility';
 export * from './game-visibility';
