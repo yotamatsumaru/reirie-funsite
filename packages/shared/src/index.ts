@@ -9,6 +9,7 @@ export * from './site-section-visibility';
 export * from './game-visibility';
 export * from './myroom-furniture';
 export * from './myroom-layout';
+export * from './newsletter-shipping';
 export * from './maintenance';
 export * from './mini-game';
 export * from './slot-game';

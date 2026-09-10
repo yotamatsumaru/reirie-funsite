@@ -431,6 +431,7 @@ model User {
   // Mini Game (あっち向いてホイ等)
   miniGamePlays      MiniGamePlay[]
   extraPlayPurchases MiniGameExtraPlayPurchase[]
+  newsletterMailLogs NewsletterMailLog[]
   memorySessions     MemoryGameSession[]
 
   // MyRoom (家具の部屋) — 家具マスタを追加した運営アカウントとしての履歴
@@ -2311,4 +2312,54 @@ model MyRoomFurniture {
   @@index([status, sortOrder])
   @@index([category, sortOrder])
   @@map("myroom_furnitures")
+}
+
+// =====================================================================
+// Newsletter (会報誌) — 発送ログ
+// =====================================================================
+
+// 会報誌メールの種別
+enum NewsletterMailKind {
+  // 住所未記入の会員への «ご登録のお願い»
+  ADDRESS_REMINDER
+  // 発送完了のお知らせ
+  SHIPPING_NOTICE
+}
+
+//
+// 会報誌メールの送信ログ。
+//
+// 【なぜ必要か】
+// 会報誌の発送連絡は «実在の会員» への一斉送信なので、
+// 押し間違いや二度押しで同じ号の案内が重複して届くと信用を損なう。
+// (issueKey, kind, userId) を一意にして、同じ号・同じ種別のメールが
+// 同じ会員に 2 回送られないようにする。
+//
+// 送信«前»に行を作る (先に予約してから送る) ため、
+// 送信中にサーバーが落ちても二重送信にならない。
+// 失敗した場合は error を記録し、sentAt は null のままにする。
+model NewsletterMailLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  // 号を識別するキー (例: "2026-spring")。運用者が入力する
+  issueKey String             @map("issue_key")
+  kind     NewsletterMailKind
+  userId   String             @map("user_id") @db.Uuid
+
+  // 送信時点のメールアドレス (後から変更されても履歴を残す)
+  email String
+
+  // 送信成功時刻。null = 未送信 or 失敗
+  sentAt DateTime? @map("sent_at")
+  // 失敗理由 (成功時は null)
+  error  String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 同じ号・同じ種別を同じ会員に二重送信しない
+  @@unique([issueKey, kind, userId])
+  @@index([issueKey, kind])
+  @@map("newsletter_mail_logs")
 }
