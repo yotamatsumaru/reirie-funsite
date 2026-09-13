@@ -119,30 +119,93 @@ sudo bash ~/app/deploy/regenerate-env.sh | head -2
 > **登録は手元の PC（管理者権限の AWS プロファイル）から行ってください。**
 > サーバー上で行うのは「手順 2（反映）」だけです。
 
+登録方法は 3 通りあります。**方法 A（画面操作）が最も確実**です。
+
+---
+
+#### 方法 A：AWS マネジメントコンソール（推奨・OS を問わない）
+
+コマンドを使わないので、コピペミスや OS ごとの文法差で失敗しません。
+
+1. AWS コンソールにログイン → 上部で **リージョンを「アジアパシフィック (東京)」** に切り替え
+2. **Systems Manager** → 左メニュー **パラメータストア** → **「パラメータの作成」**
+3. 次の 3 つを **1 つずつ** 作成します（名前は**フルパス**で入力）
+
+| # | 名前 | タイプ | 値 |
+|---|---|---|---|
+| 1 | `/idol-fansite/dev/turn/urls` | 文字列 | `turn:取得したホスト:3478,turns:取得したホスト:5349` |
+| 2 | `/idol-fansite/dev/turn/username` | **安全な文字列** | Cloudflare で取得した username |
+| 3 | `/idol-fansite/dev/turn/credential` | **安全な文字列** | Cloudflare で取得した credential |
+
+> 「安全な文字列」= SecureString（暗号化）。KMS キーは既定の `alias/aws/ssm` で構いません。
+> 「データ型」は `text` のままで OK です。
+
+---
+
+#### 方法 B：Windows PowerShell
+
+> ⚠️ **PowerShell では bash の書き方が使えません。**
+> `export VAR=値` や 行末の `\`（継続文字）は **エラーになります**。
+> PowerShell では変数は `$VAR = "値"`、継続文字は **バッククォート `` ` ``** です。
+>
+> 迷ったら、下の「1 行版」をそのままコピーするのが確実です。
+>
+> <details><summary>bash 記法との違い（PowerShell 7.4 で検証済み）</summary>
+>
+> | 用途 | bash | PowerShell |
+> |---|---|---|
+> | 環境変数 | `export VAR=値` ❌ | `$env:VAR = "値"` ✅ |
+> | 変数 | `VAR=値` ❌ | `$VAR = "値"` ✅ |
+> | 行の継続 | `\` ❌ | `` ` ``（バッククォート）✅ |
+>
+> ❌ の書き方は `CommandNotFoundException` や
+> 「単項演算子 '--' の後に式が存在しません」というエラーになります。
+> </details>
+
+```powershell
+# ▼ 手元の PC の PowerShell で実行する（EC2 上ではない）
+$env:AWS_PROFILE = "your-admin-profile"   # 管理者権限のプロファイル名
+$SSM_BASE = "/idol-fansite/dev"           # 手順 0 で確認した値
+$REGION   = "ap-northeast-1"
+
+# --- 1 行ずつ実行（改行させないのが安全）---
+aws ssm put-parameter --region $REGION --overwrite --name "$SSM_BASE/turn/urls" --type String --value "turn:取得したホスト:3478,turns:取得したホスト:5349"
+
+aws ssm put-parameter --region $REGION --overwrite --name "$SSM_BASE/turn/username" --type SecureString --value "取得したusername"
+
+aws ssm put-parameter --region $REGION --overwrite --name "$SSM_BASE/turn/credential" --type SecureString --value "取得したcredential"
+```
+
+登録できたか確認します。
+
+```powershell
+aws ssm get-parameters-by-path --path "$SSM_BASE/turn" --region $REGION --query "Parameters[].Name"
+```
+
+---
+
+#### 方法 C：Mac / Linux / WSL（bash）
+
 ```bash
 # ▼ 手元の PC で実行する（EC2 上ではない）
-#    管理者権限のプロファイルを使う
 export AWS_PROFILE=your-admin-profile
 
-# 手順 0 で確認した値を入れる
 SSM_BASE=/idol-fansite/dev
 REGION=ap-northeast-1
 
 aws ssm put-parameter --region "$REGION" --overwrite \
   --name "${SSM_BASE}/turn/urls" --type String \
-  --value "turn:YOUR-TURN-HOST:3478,turns:YOUR-TURN-HOST:5349"
+  --value "turn:取得したホスト:3478,turns:取得したホスト:5349"
 
 # 認証情報は SecureString（暗号化）で登録する
 aws ssm put-parameter --region "$REGION" --overwrite \
   --name "${SSM_BASE}/turn/username" --type SecureString \
-  --value "YOUR-USERNAME"
+  --value "取得したusername"
 
 aws ssm put-parameter --region "$REGION" --overwrite \
   --name "${SSM_BASE}/turn/credential" --type SecureString \
-  --value "YOUR-CREDENTIAL"
+  --value "取得したcredential"
 ```
-
-登録できたら、手元の PC で確認します。
 
 ```bash
 aws ssm get-parameters-by-path --path "${SSM_BASE}/turn" \
@@ -150,13 +213,12 @@ aws ssm get-parameters-by-path --path "${SSM_BASE}/turn" \
 # → [ ".../turn/urls", ".../turn/username", ".../turn/credential" ]
 ```
 
-> 既存パラメータの一覧を見たい場合：
-> `aws ssm get-parameters-by-path --path "$SSM_BASE" --recursive --region "$REGION" --query 'Parameters[].Name'`
+---
 
-> 💡 **AWS CLI を使いたくない場合**はマネジメントコンソールからでも登録できます。
-> Systems Manager → パラメータストア → 「パラメータの作成」で
-> 名前に `/idol-fansite/dev/turn/urls` のようにフルパスを入力します
-> （`urls` は「文字列」、`username` と `credential` は「安全な文字列」を選択）。
+> 🔴 **値は必ず Cloudflare で取得した実際の値に置き換えてください。**
+> `取得したホスト` や `YOUR-HOST` のまま登録すると、
+> **「設定済みなのに繋がらない」** という一番切り分けにくい状態になります。
+> まだ取得していない場合は、先に「4. TURN サーバーの選び方」を実施してください。
 
 ### 手順 2：サーバーに反映
 
@@ -271,6 +333,9 @@ Wi-Fi のままだとテストになりません（Wi-Fi では TURN 無しで�
 | API に TURN が出ない | 3 つの変数がすべて設定されているか（1 つでも欠けると無効） |
 | API に TURN が出ない | `bash deploy/deploy.sh` で再起動したか（`pm2 restart` では反映されません） |
 | `AccessDeniedException` (`ssm:PutParameter`) | **EC2 上で登録しようとしている**。手元の PC の管理者プロファイルから実行する（EC2 は `cron/*` 以外書き込み不可。仕様です） |
+| `用語 'export' は…認識されません` | **Windows PowerShell で bash の書き方を使っている**。方法 A（コンソール）か方法 B（PowerShell 版）を使う |
+| `単項演算子 '--' の後に式が存在しません` | 行末の `\` を PowerShell で使っている。**1 行にまとめる**か `` ` `` を使う |
+| `argument --region: expected one argument` | `$REGION` が未定義（`$REGION = "ap-northeast-1"` を先に実行する） |
 | `No such file or directory` | アプリのディレクトリ（`cd ~/app` 等）に移動してから実行しているか |
 | `Process or Namespace web not found` | PM2 に未登録。`pm2 start deploy/ecosystem.config.js` で起動する |
 | `relay` 候補が出ない | 認証情報の有効期限切れ、URL のポート番号が正しいか |
