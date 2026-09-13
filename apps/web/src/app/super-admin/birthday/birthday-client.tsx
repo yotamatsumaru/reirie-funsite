@@ -549,6 +549,43 @@ export function BirthdayMailClient({
                 {!runState?.lastRunAt && (
                   <p className="mt-1 text-xs text-slate-500">まだ一度も自動送信は実行されていません。</p>
                 )}
+                {/*
+                  スケジューラ生存確認 (heartbeat)。
+                  lastRunAt は「時刻前でまだ何もしていない」間は更新されないため、
+                  そこだけを見ても「正常に待機中」か「cron/タイマーが死んで誰も
+                  チェックしていない」かを区別できない。lastCheckAt は毎回の確認で
+                  無条件更新される心拍なので、これが古い (目安: 10分以上前) 場合は
+                  スケジューラ自体が止まっている可能性が高いことを示す。
+                */}
+                {runState?.lastCheckAt ? (
+                  (() => {
+                    const checkedAt = new Date(runState.lastCheckAt as string);
+                    const staleMs = Date.now() - checkedAt.getTime();
+                    const stale = staleMs > 10 * 60 * 1000; // 10分
+                    return (
+                      <p
+                        className={`mt-1 flex items-center gap-1 text-xs ${
+                          stale ? 'font-semibold text-red-600' : 'text-slate-400'
+                        }`}
+                      >
+                        {stale ? (
+                          <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
+                        )}
+                        最終チェック (生存確認): {checkedAt.toLocaleString('ja-JP')}
+                        {stale &&
+                          ' — 10分以上更新されていません。OS cron / アプリ内タイマーが停止している可能性があります。'}
+                      </p>
+                    );
+                  })()
+                ) : (
+                  <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-red-600">
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                    スケジューラの生存確認がまだ記録されていません。cron / アプリ内タイマーが
+                    一度も動いていない可能性があります。
+                  </p>
+                )}
               </div>
 
               <div>

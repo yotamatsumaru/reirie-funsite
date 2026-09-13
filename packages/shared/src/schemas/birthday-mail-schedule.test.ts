@@ -247,4 +247,24 @@ describe('BirthdayMailRunStateSchema', () => {
   it('破損した型は拒否する（getter 側で既定値にフォールバックさせる）', () => {
     expect(BirthdayMailRunStateSchema.safeParse({ lastSent: 'many' }).success).toBe(false);
   });
+
+  // 【根本対策】OS cron / アプリ内タイマーの生存確認 (heartbeat) 用フィールド。
+  // 「最後にいつスケジューラが実際にチェックしたか」を lastRunAt とは独立に持つことで、
+  // 「時刻前でまだ何もしていない (正常)」と「スケジューラが停止している (異常)」を
+  // 管理画面から区別できるようにする。
+  it('lastCheckAt の既定値は null', () => {
+    expect(DEFAULT_BIRTHDAY_MAIL_RUN_STATE.lastCheckAt).toBeNull();
+  });
+
+  it('lastCheckAt (ISO 文字列) を受け付ける', () => {
+    const r = BirthdayMailRunStateSchema.safeParse({ lastCheckAt: '2026-09-13T03:00:00.000Z' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.lastCheckAt).toBe('2026-09-13T03:00:00.000Z');
+  });
+
+  it('lastCheckAt を省略しても既定値 (null) で補完される', () => {
+    const r = BirthdayMailRunStateSchema.safeParse({ lastRunDate: '2026-09-13' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.lastCheckAt).toBeNull();
+  });
 });

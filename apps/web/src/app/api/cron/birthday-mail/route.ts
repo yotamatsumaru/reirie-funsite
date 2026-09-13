@@ -2,13 +2,17 @@
  * POST /api/cron/birthday-mail
  *   誕生日メールの自動送信を実行する (冪等)。
  *
- * 呼び出し方は 2 通り:
- *   1. cron から     : ヘッダ `x-cron-secret: $CRON_SECRET` を付けて叩く。
- *                      EC2 の crontab が 5 分おきに localhost を叩く運用
- *                      (deploy/user-data.sh の crontab 設定を参照)。
- *   2. 管理者から     : ログイン済み ADMIN / SUPER_ADMIN の Cookie でも叩ける
- *                      (動作確認用)。`{"force": true}` を付けると時刻ゲートと
- *                      「本日実行済み」判定を無視して即実行する。
+ * 呼び出し方は 3 通り:
+ *   1. cron から       : ヘッダ `x-cron-secret: $CRON_SECRET` を付けて叩く。
+ *                        EC2 の crontab が 5 分おきに localhost を叩く運用
+ *                        (deploy/user-data.sh の crontab 設定を参照)。
+ *   2. 管理者から       : ログイン済み ADMIN / SUPER_ADMIN の Cookie でも叩ける
+ *                        (動作確認用)。`{"force": true}` を付けると時刻ゲートと
+ *                        「本日実行済み」判定を無視して即実行する。
+ *   3. (このエンドポイント自体は経由しないが) アプリプロセス内タイマーからも
+ *      同じ中核関数 (runBirthdayMailAutoSendAndAudit) が直接呼ばれる。
+ *      lib/birthday-scheduler.ts 参照。OS cron の設定漏れ・停止・crond 障害時にも
+ *      「アプリが起動していれば 12:00 に送信を試みる」ための冗長系。
  *
  * 【なぜ 5 分おきに叩く設計なのか】
  *   AWS EventBridge や別の常駐スケジューラを増やさずに、既存の EC2 + PM2 構成の
@@ -24,8 +28,7 @@ import { NextResponse } from 'next/server';
 import { resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
-import { logAudit } from '@/lib/audit';
-import { runBirthdayMailAutoSend } from '@/lib/birthday-mail';
+import { runBirthdayMailAutoSendAndAudit } from '@/lib/birthday-mail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,28 +53,11 @@ export const POST = handle(async (req: Request) => {
   const body = (await req.json().catch(() => null)) as { force?: unknown } | null;
   const force = !validCron && body?.force === true;
 
-  const outcome = await runBirthdayMailAutoSend({ force });
-
-  // 「何もしなかった」正常系 (時刻前 / 本日実行済み) は監査ログに残さない。
-  // 5 分おきに叩かれるため、残すと audit_logs が単調に膨らんでしまう。
-  const noisy = outcome.status === 'not-due' || outcome.status === 'already-ran';
-  if (!noisy) {
-    await logAudit({
-      userId: adminUserId,
-      action: 'birthday.auto_send',
-      resource: `birthday:${outcome.today.year}`,
-      metadata: {
-        via: validCron ? 'cron' : 'admin',
-        force,
-        status: outcome.status,
-        date: `${outcome.today.year}-${outcome.today.month}-${outcome.today.day}`,
-        scheduledAt: `${outcome.schedule.hour}:${String(outcome.schedule.minute).padStart(2, '0')}`,
-        sent: outcome.result?.sent ?? 0,
-        skipped: outcome.result?.skipped ?? 0,
-        failed: outcome.result?.failed ?? 0,
-      },
-    }).catch(() => {});
-  }
+  const outcome = await runBirthdayMailAutoSendAndAudit({
+    force,
+    via: validCron ? 'cron' : 'admin',
+    adminUserId,
+  });
 
   return NextResponse.json(
     {
