@@ -8,34 +8,22 @@
  *  ④ 継続率・離脱予備軍（期末解約予約中の件数）
  * 下部に従来の契約一覧テーブル（強制解約操作つき）を維持する。
  */
-import { prisma } from '@idol/db';
 import type { Metadata } from 'next';
 import { auth } from '@/auth';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { PLAN_LABELS, PLAN_PRICES, type PlanTypeLiteral } from '@idol/shared';
+import { PLAN_LABELS, type PlanTypeLiteral } from '@idol/shared';
 import { SubRowActions } from './sub-row-actions';
 import { ReconcileButton } from './reconcile-button';
 import { SubscriptionHealthPanel } from './health-panel';
+import {
+  LIVE_STATUSES as LIVE_STATUSES_ARR,
+  getSubscriptionAnalytics,
+  listSubscriptionsPage,
+} from '@/lib/subscription-analytics';
 
 export const metadata: Metadata = { title: 'サブスク分析 | Super Admin' };
 export const dynamic = 'force-dynamic';
-
-type SubRow = {
-  id: string;
-  userId: string;
-  planType: PlanTypeLiteral;
-  billingInterval: 'MONTH' | 'YEAR';
-  status: string;
-  cancelAtPeriodEnd: boolean;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  canceledAt: Date | null;
-  createdAt: Date;
-  user?: { id: string; email: string; displayName: string | null } | null;
-  /** この契約に紐づく課金の状態（返金済み判定に使用） */
-  payments?: { status: string }[];
-};
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: '有効',
@@ -48,21 +36,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 /** 有効（=売上に寄与している）とみなすステータス */
-const LIVE_STATUSES = new Set(['ACTIVE', 'TRIALING']);
+const LIVE_STATUSES = new Set<string>(LIVE_STATUSES_ARR);
 
 /** 支払い未完了（=権限が付与されない）ステータス */
 const INCOMPLETE_STATUSES = new Set(['INCOMPLETE', 'INCOMPLETE_EXPIRED']);
 
-/** プラン別・課金サイクル別の「月次換算」単価（円） */
-function monthlyValue(planType: PlanTypeLiteral, interval: 'MONTH' | 'YEAR'): number {
-  const price = PLAN_PRICES[planType];
-  if (!price) return 0;
-  return interval === 'YEAR' ? Math.round(price.yearly / 12) : price.monthly;
-}
-
-function ymKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+/** 契約一覧テーブルの1ページあたり表示件数 */
+const PAGE_SIZE = 30;
 
 function ymLabel(key: string): string {
   const [, m] = key.split('-');
@@ -72,155 +52,62 @@ function ymLabel(key: string): string {
 export default async function SuperAdminSubscriptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; plan?: string }>;
+  searchParams: Promise<{ status?: string; plan?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const statusFilter = sp.status ?? '';
   const planFilter = sp.plan ?? '';
+  const page = Math.max(1, Number(sp.page ?? '1') || 1);
 
   // スタッフ管理者は閲覧のみ (返金/解約/再照合などの書き込み操作は不可)
   const session = await auth();
   const readOnly = session?.user?.role === 'STAFF';
 
-  const subs = (await prisma.subscription.findMany({
-    include: {
-      user: { select: { id: true, email: true, displayName: true } },
-      // 返金済み判定のため、各契約に紐づく課金の状態を取得する。
-      payments: { select: { status: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })) as unknown as SubRow[];
-
-  // ---------------------------------------------------------------------------
-  // 返金済み契約の判定
-  //   返金 (super-admin の返金機能) を実行すると Payment.status が REFUNDED に
-  //   なる。契約に紐づく課金のうち「成功 (SUCCEEDED) が 1 件も無く、返金
-  //   (REFUNDED) が 1 件以上ある」場合、その契約は実質的に返金済みとみなす。
-  //   返金済みの契約は二重契約 (重複) の警告対象から外し、
-  //   一覧では「返金済み」バッジを表示する。
-  // ---------------------------------------------------------------------------
-  const isRefundedSub = (s: SubRow): boolean => {
-    const ps = s.payments ?? [];
-    if (ps.length === 0) return false;
-    const hasSucceeded = ps.some((p) => p.status === 'SUCCEEDED');
-    const hasRefunded = ps.some((p) => p.status === 'REFUNDED');
-    return hasRefunded && !hasSucceeded;
-  };
-  const refundedSubIds = new Set(subs.filter(isRefundedSub).map((s) => s.id));
-
-  // ---------------------------------------------------------------------------
-  // ① KPI 算出
-  // ---------------------------------------------------------------------------
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  // 有効 (=売上に寄与している) 契約。
-  //   返金済み契約は Stripe 側で課金が取り消されており、実質的に売上・
-  //   加入数に寄与していないため、ステータスが ACTIVE/TRIALING のままでも
-  //   有効契約から除外する。これにより有効契約数・MRR・プラン別内訳などの
-  //   KPI が返金後に正しく減る。
-  const liveSubs = subs.filter(
-    (s) => LIVE_STATUSES.has(s.status) && !refundedSubIds.has(s.id),
-  );
-  const activeCount = liveSubs.length;
 
   // ---------------------------------------------------------------------------
-  // 二重契約（重複購入）の検出
-  //   同一ユーザーが有効 (ACTIVE / TRIALING) なサブスクを 2 件以上持っている場合、
-  //   プラン反映バグ等で二重に購入してしまった可能性が高い。
-  //   ここで userId ごとに件数を数え、2 件以上のユーザーを洗い出す。
+  // ① 〜 ④ の分析 (KPI / プラン別内訳 / 12ヶ月推移 / 継続率) は、
+  //    契約テーブルの全行を読み込まず DB 側の groupBy / count / 生SQL集計で行う
+  //    (詳細は lib/subscription-analytics.ts を参照)。
   // ---------------------------------------------------------------------------
-  //   返金済みの契約は liveSubs から除外済みのため、ここでは自然と
-  //   重複カウントの対象外になる (解決済みとして扱われる)。
-  const liveCountByUser = new Map<string, number>();
-  for (const s of liveSubs) {
-    liveCountByUser.set(s.userId, (liveCountByUser.get(s.userId) ?? 0) + 1);
-  }
-  const duplicateUserIds = new Set(
-    [...liveCountByUser.entries()].filter(([, c]) => c >= 2).map(([id]) => id),
-  );
-  // 表示用: 重複ユーザーの情報（メール / 件数）
-  const duplicateUsers = [...duplicateUserIds].map((uid) => {
-    const rows = liveSubs.filter((s) => s.userId === uid);
-    const u = rows[0]?.user;
-    return {
-      userId: uid,
-      email: u?.email ?? '—',
-      displayName: u?.displayName ?? '（不明）',
-      count: rows.length,
-    };
-  });
+  const analytics = await getSubscriptionAnalytics(now);
+  const {
+    kpis: { activeCount, newThisMonth, churnedThisMonth, activeAtMonthStart, churnRate },
+    planStats,
+    totalMrr,
+    trend: trendPoints,
+    scheduledCancels,
+    duplicateUsers,
+    statusCounts,
+    refundedCount,
+    totalSubscriptionCount,
+    refundedSubIds,
+    duplicateUserIds,
+  } = analytics;
 
-  // 今月の新規加入
-  const newThisMonth = subs.filter((s) => new Date(s.createdAt) >= monthStart).length;
-
-  // 今月の解約（離脱）
-  const churnedThisMonth = subs.filter(
-    (s) => s.canceledAt && new Date(s.canceledAt) >= monthStart,
-  ).length;
-
-  // 月初時点の有効契約数 = 現在の有効数 - 今月の新規（今月加入した分は月初にはいなかった）
-  //   + 今月解約した分（今月解約＝月初は有効だった）
-  const activeAtMonthStart = Math.max(0, activeCount - newThisMonth + churnedThisMonth);
-  const churnRate = activeAtMonthStart > 0 ? (churnedThisMonth / activeAtMonthStart) * 100 : 0;
-
-  // ---------------------------------------------------------------------------
-  // ② プラン別内訳（有効契約ベース） + 推定 MRR
-  // ---------------------------------------------------------------------------
-  const planStats: Record<
-    PlanTypeLiteral,
-    { count: number; mrr: number; monthCount: number; yearCount: number }
-  > = {
-    FREE: { count: 0, mrr: 0, monthCount: 0, yearCount: 0 },
-    STANDARD: { count: 0, mrr: 0, monthCount: 0, yearCount: 0 },
-    PREMIUM: { count: 0, mrr: 0, monthCount: 0, yearCount: 0 },
-  };
-  for (const s of liveSubs) {
-    const st = planStats[s.planType];
-    if (!st) continue;
-    st.count += 1;
-    st.mrr += monthlyValue(s.planType, s.billingInterval);
-    if (s.billingInterval === 'YEAR') st.yearCount += 1;
-    else st.monthCount += 1;
-  }
-  const totalMrr = planStats.STANDARD.mrr + planStats.PREMIUM.mrr;
-
-  // ---------------------------------------------------------------------------
-  // ③ 加入・離脱の推移（直近 12 ヶ月）
-  // ---------------------------------------------------------------------------
-  const months: string[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(ymKey(d));
-  }
   const trend: Record<string, { joins: number; churns: number }> = {};
-  for (const m of months) trend[m] = { joins: 0, churns: 0 };
-  for (const s of subs) {
-    const jk = ymKey(new Date(s.createdAt));
-    if (trend[jk]) trend[jk].joins += 1;
-    if (s.canceledAt) {
-      const ck = ymKey(new Date(s.canceledAt));
-      if (trend[ck]) trend[ck].churns += 1;
-    }
+  const months: string[] = [];
+  for (const p of trendPoints) {
+    months.push(p.key);
+    trend[p.key] = { joins: p.joins, churns: p.churns };
   }
-  const maxTrend = Math.max(
-    1,
-    ...months.map((m) => Math.max(trend[m].joins, trend[m].churns)),
-  );
+  const maxTrend = Math.max(1, ...months.map((m) => Math.max(trend[m].joins, trend[m].churns)));
 
   // ---------------------------------------------------------------------------
-  // ④ 継続率・離脱予備軍
+  // 下部「契約一覧 / 操作」テーブル: ステータス・プランで DB レベルに絞り込み、
+  // ページング取得する (分析目的ではなく操作目的のテーブルのため)。
+  // 返金済み判定 / 重複ユーザー判定は analytics で既に計算済みの集合を
+  // 再利用する (二重にクエリを発行しない)。
   // ---------------------------------------------------------------------------
-  const scheduledCancels = liveSubs.filter((s) => s.cancelAtPeriodEnd).length;
-
-  // ---------------------------------------------------------------------------
-  // 下部テーブル用フィルタ
-  // ---------------------------------------------------------------------------
-  const filtered = subs.filter((s) => {
-    if (statusFilter && s.status !== statusFilter) return false;
-    if (planFilter && s.planType !== planFilter) return false;
-    return true;
+  const { rows: filtered, total: filteredTotal } = await listSubscriptionsPage({
+    statusFilter,
+    planFilter,
+    page,
+    pageSize: PAGE_SIZE,
+    refundedSubIds,
+    duplicateUserIds,
   });
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
 
   const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`;
   const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -231,7 +118,7 @@ export default async function SuperAdminSubscriptionsPage({
         <div>
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">サブスク分析</h1>
           <p className="mt-1 text-sm text-slate-500">
-            現在の加入状況・離脱・推移を把握するためのダッシュボードです（全 {subs.length} 件）。
+            現在の加入状況・離脱・推移を把握するためのダッシュボードです（全 {totalSubscriptionCount.toLocaleString('ja-JP')} 件）。
           </p>
           <p className="mt-1 text-xs text-slate-400">
             売上には出ているのに件数が合わない場合は「Stripe と再照合」で最新化できます。
@@ -406,23 +293,15 @@ export default async function SuperAdminSubscriptionsPage({
         <div className="rounded-md border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs font-semibold text-slate-500">ステータス別（全期間）</p>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-            {['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED'].map((st) => {
-              // 有効系ステータスは返金済みを除いた実効件数を表示する
-              const c =
-                st === 'ACTIVE' || st === 'TRIALING'
-                  ? subs.filter((s) => s.status === st && !refundedSubIds.has(s.id)).length
-                  : subs.filter((s) => s.status === st).length;
-              return (
-                <span key={st}>
-                  {STATUS_LABELS[st]}:{' '}
-                  <span className="font-bold text-slate-900">{c}</span>
-                </span>
-              );
-            })}
-            {refundedSubIds.size > 0 && (
+            {['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED'].map((st) => (
+              <span key={st}>
+                {STATUS_LABELS[st]}:{' '}
+                <span className="font-bold text-slate-900">{statusCounts[st] ?? 0}</span>
+              </span>
+            ))}
+            {refundedCount > 0 && (
               <span>
-                返金済み:{' '}
-                <span className="font-bold text-emerald-700">{refundedSubIds.size}</span>
+                返金済み: <span className="font-bold text-emerald-700">{refundedCount}</span>
               </span>
             )}
           </div>
@@ -433,7 +312,8 @@ export default async function SuperAdminSubscriptionsPage({
       <header className="mb-3">
         <h2 className="text-lg font-bold text-slate-900">契約一覧 / 操作</h2>
         <p className="mt-0.5 text-sm text-slate-500">
-          全 {subs.length} 件 / 表示中 {filtered.length} 件
+          全 {totalSubscriptionCount.toLocaleString('ja-JP')} 件 / 表示中{' '}
+          {filteredTotal.toLocaleString('ja-JP')} 件
         </p>
       </header>
 
@@ -505,9 +385,9 @@ export default async function SuperAdminSubscriptionsPage({
                   <tr
                     key={s.id}
                     className={
-                      refundedSubIds.has(s.id)
+                      s.refunded
                         ? 'bg-emerald-50/60 hover:bg-emerald-50'
-                        : duplicateUserIds.has(s.userId) && LIVE_STATUSES.has(s.status)
+                        : s.duplicateLive
                           ? 'bg-rose-50 hover:bg-rose-100'
                           : INCOMPLETE_STATUSES.has(s.status)
                             ? 'bg-slate-50 text-slate-400 hover:bg-slate-100'
@@ -525,7 +405,7 @@ export default async function SuperAdminSubscriptionsPage({
                         >
                           {s.user?.displayName ?? '（不明）'}
                         </p>
-                        {refundedSubIds.has(s.id) ? (
+                        {s.refunded ? (
                           <span
                             className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700"
                             title="この契約の課金は返金済みです"
@@ -533,8 +413,7 @@ export default async function SuperAdminSubscriptionsPage({
                             返金済み
                           </span>
                         ) : (
-                          duplicateUserIds.has(s.userId) &&
-                          LIVE_STATUSES.has(s.status) && (
+                          s.duplicateLive && (
                             <span
                               className="rounded bg-rose-200 px-1.5 py-0.5 text-[10px] font-bold text-rose-800"
                               title="このユーザーは有効な契約を複数持っています（二重契約の可能性）"
@@ -595,6 +474,45 @@ export default async function SuperAdminSubscriptionsPage({
           </div>
         </CardBody>
       </Card>
+
+      {/* ページング */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+          <p>
+            {filteredTotal.toLocaleString('ja-JP')} 件中{' '}
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredTotal)} 件
+          </p>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <a
+                href={`/super-admin/subscriptions?${new URLSearchParams({
+                  ...(statusFilter ? { status: statusFilter } : {}),
+                  ...(planFilter ? { plan: planFilter } : {}),
+                  page: String(page - 1),
+                })}`}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50"
+              >
+                前へ
+              </a>
+            )}
+            <span className="px-2 py-1.5">
+              {page} / {totalPages}
+            </span>
+            {page < totalPages && (
+              <a
+                href={`/super-admin/subscriptions?${new URLSearchParams({
+                  ...(statusFilter ? { status: statusFilter } : {}),
+                  ...(planFilter ? { plan: planFilter } : {}),
+                  page: String(page + 1),
+                })}`}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50"
+              >
+                次へ
+              </a>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
