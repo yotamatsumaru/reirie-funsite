@@ -27,7 +27,7 @@ import { getMemberRanksForUsers } from '@/lib/membership-rank';
 export const metadata: Metadata = { title: 'ファンユーザー管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
 
-type SearchParams = { q?: string; tab?: string };
+type SearchParams = { q?: string; tab?: string; page?: string };
 
 type UserRow = {
   id: string;
@@ -44,6 +44,12 @@ type UserRow = {
   marketingOptIn: boolean;
 };
 
+// 1ページあたりの表示件数。
+//   以前は全ファンユーザーを一括取得してからJSでfilter/pagingしていたため、
+//   会員数が増えるほどページが線形に重くなっていた。DBレベルで絞り込み・
+//   ページングすることで、会員数に関わらず表示件数分のコストで済むようにする。
+const PAGE_SIZE = 30;
+
 export default async function SuperAdminUsersPage({
   searchParams,
 }: {
@@ -51,32 +57,52 @@ export default async function SuperAdminUsersPage({
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() ?? '';
+  const page = Math.max(1, Number(sp.page ?? '1') || 1);
 
   // スタッフ管理者は閲覧のみ (作成/BAN/ランク編集は不可)
   const viewerSession = await auth();
   const readOnly = viewerSession?.user?.role === 'STAFF';
   const tab = sp.tab === 'trash' ? 'trash' : 'active';
 
+  // タブの母数 (アクティブ / ゴミ箱) は検索語に関わらず常に全体件数を表示するため、
+  // 検索条件とは独立に COUNT だけを取る (行データは取得しない)。
+  const tabWhere = {
+    active: { role: 'USER' as const, deletedAt: null },
+    trash: { role: 'USER' as const, deletedAt: { not: null } },
+  };
+
+  // 現在のタブ + 検索語に一致する行を絞り込む WHERE 条件。
   // ファンユーザー (role=USER) のみを対象にする。管理者はこの画面に表示しない。
-  const fanUsers = (await prisma.user.findMany({
-    where: { role: 'USER' },
-    orderBy: { createdAt: 'desc' },
-  })) as unknown as UserRow[];
+  const where = {
+    ...tabWhere[tab],
+    ...(q
+      ? {
+          OR: [
+            { email: { contains: q, mode: 'insensitive' as const } },
+            { displayName: { contains: q, mode: 'insensitive' as const } },
+            { fullName: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : {}),
+  };
 
-  const activeUsers = fanUsers.filter((u) => !u.deletedAt);
-  const trashUsers = fanUsers.filter((u) => !!u.deletedAt);
-  const base = tab === 'trash' ? trashUsers : activeUsers;
-
-  const filtered = base.filter((u) => {
-    if (q) {
-      const needle = q.toLowerCase();
-      const hay = [u.email, u.displayName, u.fullName].filter(Boolean).join(' ').toLowerCase();
-      if (!hay.includes(needle)) return false;
-    }
-    return true;
-  });
+  const [filtered, filteredTotal, activeCount, trashCount] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }) as unknown as Promise<UserRow[]>,
+    prisma.user.count({ where }),
+    prisma.user.count({ where: tabWhere.active }),
+    prisma.user.count({ where: tabWhere.trash }),
+  ]);
+  const fanTotal = activeCount + trashCount;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
 
   // 会員ランク (昇格条件 + 各ユーザーのランク・実績) を集計
+  // ※ filtered は既に「現在ページ分 (最大 PAGE_SIZE 件)」に絞られているため、
+  //   会員数がどれだけ増えても集計コストは一定になる。
   const rankTiers = await getMemberRankTiers();
   const ranksByUser = await getMemberRanksForUsers(
     filtered.map((u) => u.id),
@@ -137,7 +163,8 @@ export default async function SuperAdminUsersPage({
         <div>
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">ファンユーザー管理</h1>
           <p className="mt-1 text-sm text-slate-500">
-            ファン会員 (一般ユーザー) {fanUsers.length} 名 / 検索結果 {filtered.length} 件
+            ファン会員 (一般ユーザー) {fanTotal.toLocaleString('ja-JP')} 名 / 検索結果{' '}
+            {filteredTotal.toLocaleString('ja-JP')} 件
           </p>
         </div>
         <Link
@@ -176,7 +203,7 @@ export default async function SuperAdminUsersPage({
               : 'text-slate-500 hover:text-slate-700'
           }`}
         >
-          アクティブ ({activeUsers.length})
+          アクティブ ({activeCount.toLocaleString('ja-JP')})
         </Link>
         <Link
           href={`/super-admin/users?tab=trash${q ? `&q=${encodeURIComponent(q)}` : ''}`}
@@ -186,7 +213,7 @@ export default async function SuperAdminUsersPage({
               : 'text-slate-500 hover:text-slate-700'
           }`}
         >
-          🗑️ ゴミ箱 ({trashUsers.length})
+          🗑️ ゴミ箱 ({trashCount.toLocaleString('ja-JP')})
         </Link>
       </div>
 
@@ -317,6 +344,45 @@ export default async function SuperAdminUsersPage({
           </div>
         </CardBody>
       </Card>
+
+      {/* ページング */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+          <p>
+            {filteredTotal.toLocaleString('ja-JP')} 件中{' '}
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredTotal)} 件
+          </p>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={`/super-admin/users?${new URLSearchParams({
+                  ...(tab === 'trash' ? { tab } : {}),
+                  ...(q ? { q } : {}),
+                  page: String(page - 1),
+                })}`}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50"
+              >
+                前へ
+              </Link>
+            )}
+            <span className="px-2 py-1.5">
+              {page} / {totalPages}
+            </span>
+            {page < totalPages && (
+              <Link
+                href={`/super-admin/users?${new URLSearchParams({
+                  ...(tab === 'trash' ? { tab } : {}),
+                  ...(q ? { q } : {}),
+                  page: String(page + 1),
+                })}`}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50"
+              >
+                次へ
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }

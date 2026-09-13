@@ -542,6 +542,13 @@ model Subscription {
   @@index([userId])
   @@index([status])
   @@index([stripeCustomerId])
+  // サブスク分析ダッシュボード (/super-admin/subscriptions) の
+  // 「直近12ヶ月の加入・離脱推移」「今月の新規/解約」集計で
+  // createdAt / canceledAt の範囲検索・グルーピングに使う。
+  // 全件フェッチをやめて DB 側で集計するようにしたため、
+  // これらの列にインデックスが無いと逆に全表スキャンで遅くなる。
+  @@index([createdAt])
+  @@index([canceledAt])
   @@map("subscriptions")
 }
 
@@ -1024,6 +1031,9 @@ model Payment {
 
   @@index([userId, createdAt])
   @@index([status])
+  // サブスク分析ページの「返金済み判定」で、契約一覧の各行 (subscriptionId)
+  // に紐づく課金の状態をまとめて引くのに使う (WHERE subscriptionId IN (...))。
+  @@index([subscriptionId])
   @@map("payments")
 }
 
