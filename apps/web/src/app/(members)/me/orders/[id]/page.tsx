@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@idol/db';
-import { ORDER_STATUS_LABELS } from '@idol/shared';
+import { ORDER_STATUS_LABELS, buildVariantLabel } from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
@@ -106,7 +106,7 @@ export default async function MeOrderDetailPage({
                 <div>
                   <p className="text-sm font-medium text-slate-800">{it.productName}</p>
                   <p className="text-xs text-slate-500">
-                    {it.variantName} × {it.quantity}
+                    {buildVariantLabel({ name: it.variantName, optionColor: it.optionColor, optionSize: it.optionSize })} × {it.quantity}
                   </p>
                 </div>
                 <p className="text-sm font-semibold text-slate-800">{formatJpy(it.subtotal)}</p>

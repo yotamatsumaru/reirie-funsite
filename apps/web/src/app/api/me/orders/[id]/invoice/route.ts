@@ -10,7 +10,11 @@
 import { prisma } from '@idol/db';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
-import { ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS } from '@idol/shared';
+import {
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  buildVariantLabel,
+} from '@idol/shared';
 import { renderInvoicePdf, type InvoiceDocument } from '@/lib/invoice-pdf';
 
 export const runtime = 'nodejs';
@@ -30,7 +34,7 @@ function buildOrderInvoiceDocument(order: {
   shippingPrefecture: string;
   shippingAddress1: string;
   shippingAddress2: string | null;
-  items: { productName: string; variantName: string; quantity: number; unitPrice: number; subtotal: number }[];
+  items: { productName: string; variantName: string; optionSize: string | null; optionColor: string | null; quantity: number; unitPrice: number; subtotal: number }[];
   payments: { status: string; amount: number; createdAt: Date }[];
 }): InvoiceDocument {
   const statusLabel =
@@ -54,7 +58,13 @@ function buildOrderInvoiceDocument(order: {
     itemsSectionTitle: 'ご注文内容',
     items: order.items.map((it) => ({
       label: it.productName,
-      detail: it.variantName,
+      // サイズを含める。領収書に «どのサイズか» が無いと
+      // 経理・返品対応で商品を特定できない
+      detail: buildVariantLabel({
+        name: it.variantName,
+        optionColor: it.optionColor,
+        optionSize: it.optionSize,
+      }),
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       subtotal: it.subtotal,
@@ -85,7 +95,7 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: stri
     where: { id },
     include: {
       items: {
-        select: { productName: true, variantName: true, quantity: true, unitPrice: true, subtotal: true },
+        select: { productName: true, variantName: true, optionSize: true, optionColor: true, quantity: true, unitPrice: true, subtotal: true },
       },
       payments: {
         orderBy: { createdAt: 'desc' },

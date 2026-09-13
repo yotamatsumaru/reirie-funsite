@@ -13,7 +13,7 @@ export const GET = handle(async (req: Request) => {
     take: 50,
     include: {
       items: {
-        select: { productName: true, variantName: true, quantity: true, unitPrice: true },
+        select: { productName: true, variantName: true, optionSize: true, optionColor: true, quantity: true, unitPrice: true },
       },
     },
   });

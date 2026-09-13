@@ -76,7 +76,9 @@ export function CartView() {
                 >
                   {item.productName}
                 </Link>
-                <p className="truncate text-xs text-slate-500">{item.variantName}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {item.variantLabel || item.variantName}
+                </p>
                 {item.blocked && (
                   <Badge tone="danger" className="mt-1 self-start">
                     {item.blocked.reason === 'plan_required' ? 'プラン要件未達' : '購入不可'}

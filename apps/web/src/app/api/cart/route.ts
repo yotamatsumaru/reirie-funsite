@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { canAccess } from '@idol/shared';
+import { buildVariantLabel, canAccess } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { handle } from '@/lib/errors';
 import { calculateOrderTotals, effectiveUnitPrice } from '@/lib/pricing';
@@ -50,6 +50,12 @@ export const GET = handle(async (req: Request) => {
     productSlug: string;
     productName: string;
     variantName: string;
+    /** サイズ・カラーを含む表示用ラベル (例: 「ホワイト / L」)。
+     *  variantName だけだとサイズが見えず、購入者が自分の選んだ
+     *  サイズを確認できなかったため追加。 */
+    variantLabel: string;
+    optionSize: string | null;
+    optionColor: string | null;
     quantity: number;
     unitPrice: number;
     subtotal: number;
@@ -96,6 +102,9 @@ export const GET = handle(async (req: Request) => {
       productSlug: v.product.slug,
       productName: v.product.name,
       variantName: v.name,
+      variantLabel: buildVariantLabel(v),
+      optionSize: v.optionSize,
+      optionColor: v.optionColor,
       quantity: item.quantity,
       unitPrice: unit,
       subtotal: lineSubtotal,
