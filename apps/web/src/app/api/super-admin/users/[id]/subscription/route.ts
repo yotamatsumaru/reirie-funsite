@@ -21,71 +21,15 @@
  */
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import type Stripe from 'stripe';
 import { prisma } from '@idol/db';
 import { AdminUserSubscriptionActionSchema } from '@idol/shared';
 import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
-import {
-  getStripe,
-  verifyStripeCustomer,
-  planFromPriceId,
-  intervalFromPriceId,
-} from '@/lib/stripe';
+import { getStripe, verifyStripeCustomer } from '@/lib/stripe';
+import { syncSubscriptionsForCustomer } from '@/lib/subscription-sync';
 
 export const runtime = 'nodejs';
-
-type SubStatus =
-  | 'TRIALING'
-  | 'ACTIVE'
-  | 'PAST_DUE'
-  | 'CANCELED'
-  | 'UNPAID'
-  | 'INCOMPLETE'
-  | 'INCOMPLETE_EXPIRED';
-
-function mapStatus(s: string): SubStatus {
-  switch (s) {
-    case 'trialing':
-      return 'TRIALING';
-    case 'active':
-      return 'ACTIVE';
-    case 'past_due':
-      return 'PAST_DUE';
-    case 'canceled':
-      return 'CANCELED';
-    case 'unpaid':
-      return 'UNPAID';
-    case 'incomplete_expired':
-      return 'INCOMPLETE_EXPIRED';
-    default:
-      return 'INCOMPLETE';
-  }
-}
-
-function toDate(unix: number | null | undefined): Date | null {
-  if (!unix) return null;
-  return new Date(unix * 1000);
-}
-
-function planFromMetadata(
-  metadata: Record<string, string> | null | undefined,
-): 'STANDARD' | 'PREMIUM' | null {
-  const raw = metadata?.plan?.trim().toUpperCase();
-  if (raw === 'STANDARD') return 'STANDARD';
-  if (raw === 'PREMIUM') return 'PREMIUM';
-  return null;
-}
-
-function intervalFromMetadata(
-  metadata: Record<string, string> | null | undefined,
-): 'MONTH' | 'YEAR' | null {
-  const raw = metadata?.interval?.trim().toUpperCase();
-  if (raw === 'MONTH' || raw === 'MONTHLY') return 'MONTH';
-  if (raw === 'YEAR' || raw === 'YEARLY') return 'YEAR';
-  return null;
-}
 
 export const POST = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -186,92 +130,26 @@ export const POST = handle(
       );
     }
 
-    let list: Stripe.ApiList<Stripe.Subscription>;
+    let result: Awaited<ReturnType<typeof syncSubscriptionsForCustomer>>;
     try {
-      list = await stripe.subscriptions.list({
-        customer: customerId,
-        status: 'all',
-        limit: 100,
-      });
+      result = await syncSubscriptionsForCustomer(stripe, userId, customerId);
     } catch (e) {
       throw errors.badRequest(
         `Stripe からサブスクを取得できませんでした: ${(e as Error).message}`,
       );
     }
 
-    if (list.data.length === 0) {
+    if (result.results.length === 0) {
       throw errors.badRequest('この顧客に紐づく Stripe サブスクが見つかりませんでした。');
-    }
-
-    let created = 0;
-    let updated = 0;
-    const results: Array<{ stripeSubscriptionId: string; plan: string; status: SubStatus }> = [];
-
-    for (const sub of list.data) {
-      const item = sub.items.data[0];
-      if (!item) continue;
-      const priceId = item.price.id;
-      const meta = (sub.metadata as Record<string, string> | null) ?? null;
-      const planType =
-        planFromMetadata(meta) ?? (await planFromPriceId(priceId)) ?? 'STANDARD';
-      const billingInterval =
-        intervalFromMetadata(meta) ?? (await intervalFromPriceId(priceId)) ?? 'MONTH';
-      const status = mapStatus(sub.status);
-
-      const periodStart =
-        toDate((sub as unknown as { current_period_start?: number }).current_period_start) ??
-        toDate((item as unknown as { current_period_start?: number }).current_period_start) ??
-        new Date();
-      const periodEnd =
-        toDate((sub as unknown as { current_period_end?: number }).current_period_end) ??
-        toDate((item as unknown as { current_period_end?: number }).current_period_end) ??
-        new Date();
-
-      const existing = await prisma.subscription.findUnique({
-        where: { stripeSubscriptionId: sub.id },
-      });
-
-      await prisma.subscription.upsert({
-        where: { stripeSubscriptionId: sub.id },
-        create: {
-          userId,
-          planType,
-          billingInterval,
-          status,
-          stripeCustomerId: customerId,
-          stripeSubscriptionId: sub.id,
-          stripePriceId: priceId,
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-          canceledAt: toDate(sub.canceled_at),
-          trialEndsAt: toDate(sub.trial_end),
-        },
-        update: {
-          planType,
-          billingInterval,
-          status,
-          stripePriceId: priceId,
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
-          canceledAt: toDate(sub.canceled_at),
-          trialEndsAt: toDate(sub.trial_end),
-        },
-      });
-
-      if (existing) updated++;
-      else created++;
-      results.push({ stripeSubscriptionId: sub.id, plan: planType, status });
     }
 
     await logAudit({
       userId: session.user.id,
       action: 'subscription.sync.single',
       resource: `user:${userId}`,
-      metadata: { customerId, created, updated, results },
+      metadata: { customerId, ...result },
     });
 
-    return NextResponse.json({ ok: true, action: 'sync', created, updated, results });
+    return NextResponse.json({ ok: true, action: 'sync', ...result });
   },
 );
