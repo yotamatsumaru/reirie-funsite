@@ -25,10 +25,12 @@ import {
 import { isAssetStorageConfigured, putAsset } from './s3';
 import { sendEmail } from './email';
 import { env } from './env';
+import { logAudit } from './audit';
 import {
   getBirthdayMailSchedule,
   claimBirthdayMailRun,
   recordBirthdayMailRunResult,
+  recordBirthdayMailCheck,
   releaseBirthdayMailRun,
 } from './app-setting';
 
@@ -644,6 +646,13 @@ export async function runBirthdayMailAutoSend(options?: {
   const now = jstNowTime();
   const schedule = await getBirthdayMailSchedule();
 
+  // 【心拍】due 判定より前に、無条件で「チェックした」ことを記録する。
+  // これにより、実際に送信できなかった原因が「そもそも誰も/何もチェックしていない
+  // (cron・アプリ内タイマーが停止している)」のか、「チェックはしたが時刻前/無効化/
+  // 対象者なしだった」のかを管理画面から区別できる。force 実行でも記録して構わない
+  // (直近のチェックがいつだったかを知りたいだけなので、force かどうかは問わない)。
+  await recordBirthdayMailCheck();
+
   const base = { today, now, schedule, result: null } as const;
   const scheduledAt = formatBirthdayMailTime(schedule);
 
@@ -728,6 +737,52 @@ export async function runBirthdayMailAutoSend(options?: {
     if (!force) await releaseBirthdayMailRun();
     throw e;
   }
+}
+
+/**
+ * runBirthdayMailAutoSend() を実行し、結果を監査ログへ残す共通ラッパー。
+ *
+ * 【なぜ切り出したか】
+ * このロジックは以下の 2 経路から同一の形で呼ばれる:
+ *   1. POST /api/cron/birthday-mail … 外部 (OS cron) からの HTTP トリガー
+ *   2. lib/birthday-scheduler.ts    … アプリプロセス内タイマーからの直接呼び出し
+ *      (OS cron が停止していても、アプリさえ起動していれば送信を試みるための冗長系)
+ * 「何もしなかった」正常系 (time前 / 本日実行済み) を監査ログに残さない判断や、
+ * メタデータの形を 2 箇所に重複させると片方だけ直し忘れる事故につながるため、
+ * 1 箇所に集約する。
+ *
+ * @param via 呼び出し元の種別 (監査ログの metadata.via に記録。切り分け用)。
+ * @param adminUserId 管理者が手動実行した場合の userId (cron / スケジューラなら null)。
+ */
+export async function runBirthdayMailAutoSendAndAudit(params: {
+  force?: boolean;
+  via: 'cron' | 'admin' | 'scheduler';
+  adminUserId?: string | null;
+}): Promise<AutoSendOutcome> {
+  const outcome = await runBirthdayMailAutoSend({ force: params.force });
+
+  // 「何もしなかった」正常系 (時刻前 / 本日実行済み) は監査ログに残さない。
+  // 1〜5 分おきに呼ばれるため、残すと audit_logs が単調に膨らんでしまう。
+  const noisy = outcome.status === 'not-due' || outcome.status === 'already-ran';
+  if (!noisy) {
+    await logAudit({
+      userId: params.adminUserId ?? null,
+      action: 'birthday.auto_send',
+      resource: `birthday:${outcome.today.year}`,
+      metadata: {
+        via: params.via,
+        force: params.force === true,
+        status: outcome.status,
+        date: `${outcome.today.year}-${outcome.today.month}-${outcome.today.day}`,
+        scheduledAt: `${outcome.schedule.hour}:${String(outcome.schedule.minute).padStart(2, '0')}`,
+        sent: outcome.result?.sent ?? 0,
+        skipped: outcome.result?.skipped ?? 0,
+        failed: outcome.result?.failed ?? 0,
+      },
+    }).catch(() => {});
+  }
+
+  return outcome;
 }
 
 /**

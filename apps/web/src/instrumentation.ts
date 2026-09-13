@@ -20,5 +20,16 @@ export async function register() {
           ' AWS SES で検証済みの送信元アドレスを設定しないと、メール送信は必ず失敗します。',
       );
     }
+
+    // 誕生日メール自動送信のアプリ内タイマー (OS cron の冗長系)。
+    //   - 本番のみ (dev/test でタイマーが常駐すると HMR やテスト終了を妨げるため)。
+    //   - デモモードは DB 接続が無い / モックのため対象外。
+    //   - ビルド時 (next build 実行中の register() 呼び出し) は絶対に起動しない。
+    //     Next.js は `next build` 中にも instrumentation を評価することがあり、
+    //     ここでタイマーを張るとビルドプロセスが終了しなくなる事故につながる。
+    if (env.isProduction && !env.demoMode && process.env.NEXT_PHASE !== 'phase-production-build') {
+      const { startBirthdayMailScheduler } = await import('./lib/birthday-scheduler');
+      startBirthdayMailScheduler();
+    }
   }
 }

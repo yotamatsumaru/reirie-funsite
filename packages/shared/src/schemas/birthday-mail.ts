@@ -252,6 +252,18 @@ export const BirthdayMailRunStateSchema = z.object({
   lastSent: z.number().int().nullable().default(null),
   /** 最後の実行で失敗した件数。 */
   lastFailed: z.number().int().nullable().default(null),
+  /**
+   * 「スケジューラ (cron もしくはアプリ内タイマー) が最後に生存確認した時刻」(ISO 文字列)。
+   *
+   * 【なぜ必要か】lastRunAt は「実際に送信/claim を試みた」ときだけ更新されるため、
+   * 送信時刻前 (not-due) が続く間は何時間も更新されない。これだと「スケジューラ自体が
+   * 死んでいて何もチェックしていない」のか「まだ時刻前で正常に待機中」なのかを
+   * 管理画面から区別できない。lastCheckAt は due 判定の前、毎回のチェックで
+   * 無条件に更新するため、「最後にいつ生きていたか」を表す心拍 (heartbeat) になる。
+   * これが更新されていれば、実際に送信されなかった原因は cron/タイマーではなく
+   * アプリ側の判定 (時刻前・無効化・対象者なし等) だと即座に切り分けられる。
+   */
+  lastCheckAt: z.string().nullable().default(null),
 });
 export type BirthdayMailRunState = z.infer<typeof BirthdayMailRunStateSchema>;
 
@@ -261,6 +273,7 @@ export const DEFAULT_BIRTHDAY_MAIL_RUN_STATE: BirthdayMailRunState = {
   lastStatus: null,
   lastSent: null,
   lastFailed: null,
+  lastCheckAt: null,
 };
 
 /** 時刻を 'HH:MM' 表記にする (管理画面 / ログ表示用)。 */

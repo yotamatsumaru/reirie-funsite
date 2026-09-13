@@ -635,6 +635,46 @@ export async function setBirthdayMailSchedule(
   });
 }
 
+/**
+ * 「スケジューラがまだ生きているか」の心拍だけを更新する。
+ *
+ * 【なぜ claim / 実行結果の記録 (recordBirthdayMailRunResult) と別関数にするのか】
+ * 実際に送信を試みたときだけでなく、「時刻前でまだ何もしなかった」
+ * (not-due) ときにも呼ばれる想定のため、lastRunDate 等の実行系フィールドには
+ * 触れず lastCheckAt だけを更新する。頻繁に (最短 1 分おきに) 呼ばれる
+ * 前提のため、advisory lock は取らず単純な upsert に留める
+ * (heartbeat が多少ロストしても実害がなく、送信本体の整合性には影響しないため)。
+ */
+export async function recordBirthdayMailCheck(): Promise<void> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+    });
+    let state: BirthdayMailRunState = DEFAULT_BIRTHDAY_MAIL_RUN_STATE;
+    if (row) {
+      try {
+        const raw = JSON.parse(row.value) as Record<string, unknown>;
+        const parsed = BirthdayMailRunStateSchema.safeParse({
+          ...DEFAULT_BIRTHDAY_MAIL_RUN_STATE,
+          ...raw,
+        });
+        if (parsed.success) state = parsed.data;
+      } catch {
+        // 破損データは既定値から作り直す (heartbeat 自体は失わせたくない)
+      }
+    }
+    const next: BirthdayMailRunState = { ...state, lastCheckAt: new Date().toISOString() };
+    const value = JSON.stringify(next);
+    await prisma.appSetting.upsert({
+      where: { key: BIRTHDAY_MAIL_RUN_STATE_KEY },
+      create: { key: BIRTHDAY_MAIL_RUN_STATE_KEY, value },
+      update: { value },
+    });
+  } catch {
+    // heartbeat の記録失敗は送信処理を止めない (表示用の情報のため)。
+  }
+}
+
 /** 自動送信の実行状況を取得する (管理画面の「最終実行」表示用)。 */
 export async function getBirthdayMailRunState(): Promise<BirthdayMailRunState> {
   try {
