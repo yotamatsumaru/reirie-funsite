@@ -22,7 +22,7 @@ import {
   MAX_REWARD_DIGITAL_ASSETS_PER_ITEM,
 } from '@idol/shared';
 import { requireCapability } from '@/auth';
-import { errors, handle } from '@/lib/errors';
+import { errors, handle, parseMultipartForm } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { isAssetStorageConfigured, putAsset } from '@/lib/s3';
 
@@ -64,7 +64,7 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
     );
   }
 
-  const form = await req.formData().catch(() => null);
+  const form = await parseMultipartForm(req);
   if (!form) throw errors.badRequest('multipart/form-data で送信してください');
 
   const file = form.get('file');

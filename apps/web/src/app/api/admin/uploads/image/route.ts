@@ -12,7 +12,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { requireCapability } from '@/auth';
-import { errors, handle } from '@/lib/errors';
+import { errors, handle, parseMultipartForm } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { isAssetStorageConfigured, putAsset } from '@/lib/s3';
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from '@/lib/product-image';
@@ -30,7 +30,7 @@ export const POST = handle(async (req: Request) => {
     );
   }
 
-  const form = await req.formData().catch(() => null);
+  const form = await parseMultipartForm(req);
   if (!form) throw errors.badRequest('multipart/form-data で送信してください');
 
   const file = form.get('file');

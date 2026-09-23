@@ -23,7 +23,7 @@ import {
   isCharacterImageVariant,
 } from '@idol/shared';
 import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
-import { errors, handle } from '@/lib/errors';
+import { errors, handle, parseMultipartForm } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import {
   listCharacterImages,
@@ -42,7 +42,7 @@ export const GET = handle(async () => {
 export const POST = handle(async (req: Request) => {
   const session = await requireSuperAdmin();
 
-  const form = await req.formData().catch(() => null);
+  const form = await parseMultipartForm(req);
   if (!form) throw errors.badRequest('multipart/form-data で送信してください');
 
   const slot = form.get('slot');

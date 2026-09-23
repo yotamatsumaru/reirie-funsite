@@ -19,7 +19,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { requireCapability } from '@/auth';
-import { errors, handle } from '@/lib/errors';
+import { errors, handle, parseMultipartForm } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { validateThumbnailFile } from '@/lib/video-thumbnail';
 import { saveVideoThumbnail, clearVideoThumbnail } from '@/lib/video-thumbnail-store';
@@ -33,7 +33,7 @@ export const POST = handle(async (req: Request, ctx: { params: Promise<{ id: str
   const video = await prisma.video.findUnique({ where: { id }, select: { id: true } });
   if (!video) throw errors.notFound('動画が見つかりません');
 
-  const form = await req.formData().catch(() => null);
+  const form = await parseMultipartForm(req);
   if (!form) throw errors.badRequest('multipart/form-data で送信してください');
 
   const file = form.get('file');
