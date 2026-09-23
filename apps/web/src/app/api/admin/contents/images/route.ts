@@ -22,7 +22,7 @@
  */
 import { NextResponse } from 'next/server';
 import { requireCapability } from '@/auth';
-import { errors, handle } from '@/lib/errors';
+import { errors, handle, parseMultipartForm } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { validateContentBodyImage } from '@/lib/content-body-image';
 import { saveContentBodyImage } from '@/lib/content-body-image-store';
@@ -32,7 +32,7 @@ export const runtime = 'nodejs';
 export const POST = handle(async (req: Request) => {
   const session = await requireCapability('CONTENT');
 
-  const form = await req.formData().catch(() => null);
+  const form = await parseMultipartForm(req);
   if (!form) throw errors.badRequest('multipart/form-data で送信してください');
 
   const file = form.get('file');

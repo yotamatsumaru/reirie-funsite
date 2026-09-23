@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { AddProductImageSchema, ReorderProductImagesSchema } from '@idol/shared';
 import { requireCapability } from '@/auth';
-import { errors, handle } from '@/lib/errors';
+import { errors, handle, parseMultipartForm } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import {
   ALLOWED_IMAGE_TYPES,
@@ -48,7 +48,7 @@ export const POST = handle(
 
     // ---- (A) multipart/form-data: ファイルを直接アップロード ----
     if (contentTypeHeader.includes('multipart/form-data')) {
-      const form = await req.formData().catch(() => null);
+      const form = await parseMultipartForm(req);
       if (!form) throw errors.badRequest('multipart/form-data の解析に失敗しました');
 
       const file = form.get('file');

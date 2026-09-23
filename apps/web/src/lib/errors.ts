@@ -78,3 +78,42 @@ export function handle<T extends (req: Request, ctx: any) => Promise<Response>>(
     }
   }) as T;
 }
+
+/**
+ * multipart/form-data ボディを解析する共通ヘルパ。
+ *
+ * アップロード系エンドポイント (画像・動画・音声など約10箇所) はどこも
+ *
+ *   const form = await req.formData().catch(() => null);
+ *   if (!form) throw errors.badRequest('multipart/form-data で送信してください');
+ *
+ * という形で `req.formData()` の失敗を握りつぶしていた。この書き方だと
+ * ユーザーには「multipart/form-data で送信してください」としか見えず、
+ * 運営側もクライアントの実装ミスなのか、nginx/CloudFront を経由した
+ * 本番環境固有の要因 (ボディの途中切断・Content-Type 書き換え・タイムアウト等)
+ * で `req.formData()` 自体が reject しているのかを一切区別できなかった。
+ *
+ * `req.formData()` が reject した実際のエラー内容 (message/stack) と、
+ * 原因の切り分けに要るリクエストのメタ情報 (Content-Type, Content-Length)
+ * を必ずサーバーログに残してから null を返す。これにより次回発生時は
+ * `pm2 logs` から本当の原因を追えるようにする (このヘルパ自体は原因を
+ * 修正するものではなく、あくまで診断のためのログ強化)。
+ */
+export async function parseMultipartForm(req: Request): Promise<FormData | null> {
+  try {
+    return await req.formData();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[upload] failed to parse multipart/form-data body', {
+      url: req.url,
+      contentType: req.headers.get('content-type'),
+      contentLength: req.headers.get('content-length'),
+      transferEncoding: req.headers.get('transfer-encoding'),
+      error:
+        err instanceof Error
+          ? { name: err.name, message: err.message, stack: err.stack }
+          : String(err),
+    });
+    return null;
+  }
+}
