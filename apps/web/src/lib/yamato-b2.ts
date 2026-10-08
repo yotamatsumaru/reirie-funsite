@@ -47,6 +47,8 @@ export interface B2ExportOrder {
   itemName: string;
   /** 合計個数 */
   totalQuantity: number;
+  /** 送り状種類コード (配送方法ごと: 0=発払い / 7=ネコポス / 8=宅急便コンパクト)。未設定は 0 */
+  invoiceType?: string | null;
 }
 
 /**
@@ -58,7 +60,7 @@ export function buildB2ExportCsv(orders: B2ExportOrder[]): string {
   for (const o of orders) {
     rows.push([
       o.orderNumber, // お客様管理番号
-      '0', // 送り状種類: 0=発払い
+      o.invoiceType && /^\d+$/.test(o.invoiceType) ? o.invoiceType : '0', // 送り状種類 (配送方法ごと。既定 0=発払い)
       '0', // クール区分: 0=通常
       normalizePostal(o.shippingPostalCode), // お届け先郵便番号
       `${o.shippingPrefecture}${o.shippingAddress1}`, // 都道府県+市区町村番地

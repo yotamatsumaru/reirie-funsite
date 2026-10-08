@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { requireCapabilityPage } from '@/auth';
-import { ProductForm } from '../product-form';
+import { ProductForm, type ShippingMethodOption } from '../product-form';
 import { VariantManager, type VariantItem } from '../variant-manager';
 import { ImageManager, type ProductImageItem } from '../image-manager';
+import { OptionManager, type ProductOptionItem } from '../option-manager';
 
 export const metadata: Metadata = { title: '商品編集' };
 export const dynamic = 'force-dynamic';
@@ -21,22 +22,39 @@ export default async function EditProductPage({
   await requireCapabilityPage('MERCH');
   const { id } = await params;
 
-  const [product, categories] = await Promise.all([
+  const [product, categories, shippingRows] = await Promise.all([
     prisma.product.findUnique({
       where: { id },
       include: {
         category: true,
         images: { orderBy: { sortOrder: 'asc' } },
         variants: { orderBy: { createdAt: 'asc' }, include: { inventory: true } },
+        options: { orderBy: { sortOrder: 'asc' } },
+        shippingMethods: { select: { shippingMethodId: true } },
       },
     }),
     prisma.productCategory.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       select: { id: true, name: true },
     }),
+    prisma.shippingMethod.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { fee: 'asc' }],
+      select: { id: true, name: true, fee: true, isDefault: true, isActive: true },
+    }),
   ]);
 
   if (!product) notFound();
+
+  const shippingMethods: ShippingMethodOption[] = shippingRows;
+  const productOptions: ProductOptionItem[] = product.options.map((o) => ({
+    id: o.id,
+    name: o.name,
+    helpText: o.helpText,
+    maxLength: o.maxLength,
+    price: o.price,
+    isRequired: o.isRequired,
+    sortOrder: o.sortOrder,
+  }));
 
   const productImages: ProductImageItem[] = product.images.map((img) => ({
     id: img.id,
@@ -77,6 +95,7 @@ export default async function EditProductPage({
         mode="edit"
         productId={product.id}
         categories={categories}
+        shippingMethods={shippingMethods}
         initial={{
           slug: product.slug,
           name: product.name,
@@ -88,12 +107,17 @@ export default async function EditProductPage({
           isActive: product.isActive,
           isMembersOnly: product.isMembersOnly,
           isPremiumExclusive: product.isPremiumExclusive,
+          saleStartsAt: product.saleStartsAt?.toISOString() ?? null,
+          saleEndsAt: product.saleEndsAt?.toISOString() ?? null,
+          shippingMethodIds: product.shippingMethods.map((s) => s.shippingMethodId),
         }}
       />
 
       <ImageManager productId={product.id} images={productImages} />
 
       <VariantManager productId={product.id} variants={variants} />
+
+      <OptionManager productId={product.id} options={productOptions} />
     </div>
   );
 }

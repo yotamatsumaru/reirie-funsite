@@ -21,6 +21,10 @@ export interface CartLineItem {
   variantLabel?: string;
   optionSize?: string | null;
   optionColor?: string | null;
+  /** 商品オプション (宛名など) の入力値 */
+  optionValues?: { optionId: string; name: string; value: string; price: number }[];
+  /** 表示用: 「宛名: れいり / 言葉: ありがとう」 */
+  optionLabel?: string;
   quantity: number;
   unitPrice: number;
   subtotal: number;
@@ -37,17 +41,40 @@ export interface CartTotals {
   totalAmount: number;
 }
 
+/** カート内の全商品が対応する配送方法 (購入者が選ぶ) */
+export interface CartShippingOption {
+  id: string;
+  name: string;
+  description: string | null;
+  fee: number;
+}
+
+export interface CartShipping {
+  candidates: CartShippingOption[];
+  /** 現在選択中 (サーバーが確定した) 配送方法 id */
+  selectedId: string | null;
+  /** 送料無料になる小計 (0 = 常時無料) */
+  freeShippingThreshold: number;
+}
+
 interface CartState {
   cartId: string | null;
   items: CartLineItem[];
   totals: CartTotals;
+  shipping: CartShipping;
   loading: boolean;
   error: string | null;
   // actions
   fetchCart: () => Promise<void>;
-  addItem: (variantId: string, quantity: number) => Promise<void>;
+  addItem: (
+    variantId: string,
+    quantity: number,
+    options?: Record<string, string>,
+  ) => Promise<void>;
   updateItem: (itemId: string, quantity: number) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
+  /** 配送方法を選ぶ (サーバーで送料を再計算する) */
+  selectShipping: (shippingMethodId: string) => Promise<void>;
   clear: () => void;
 }
 
@@ -58,21 +85,37 @@ const emptyTotals: CartTotals = {
   totalAmount: 0,
 };
 
+const emptyShipping: CartShipping = {
+  candidates: [],
+  selectedId: null,
+  freeShippingThreshold: 0,
+};
+
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       cartId: null,
       items: [],
       totals: emptyTotals,
+      shipping: emptyShipping,
       loading: false,
       error: null,
 
       fetchCart: async () => {
         set({ loading: true, error: null });
         try {
-          const res = await fetch('/api/cart', { credentials: 'include' });
+          // 選択済みの配送方法を維持したまま再取得する (数量変更で選択がリセットされないように)
+          const selected = get().shipping.selectedId;
+          const qs = selected ? `?shippingMethodId=${encodeURIComponent(selected)}` : '';
+          const res = await fetch(`/api/cart${qs}`, { credentials: 'include' });
           if (res.status === 401) {
-            set({ cartId: null, items: [], totals: emptyTotals, loading: false });
+            set({
+              cartId: null,
+              items: [],
+              totals: emptyTotals,
+              shipping: emptyShipping,
+              loading: false,
+            });
             return;
           }
           if (!res.ok) throw new Error('カート取得に失敗しました');
@@ -86,6 +129,7 @@ export const useCartStore = create<CartState>()(
               shippingFee: data.shippingFee,
               totalAmount: data.totalAmount,
             },
+            shipping: data.shipping ?? emptyShipping,
             loading: false,
           });
         } catch (e) {
@@ -93,14 +137,14 @@ export const useCartStore = create<CartState>()(
         }
       },
 
-      addItem: async (variantId, quantity) => {
+      addItem: async (variantId, quantity, options) => {
         set({ loading: true, error: null });
         try {
           const res = await fetch('/api/cart/items', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ variantId, quantity }),
+            body: JSON.stringify({ variantId, quantity, ...(options ? { options } : {}) }),
           });
           if (!res.ok) {
             const json = await res.json().catch(() => ({}));
@@ -156,13 +200,31 @@ export const useCartStore = create<CartState>()(
         }
       },
 
-      clear: () => set({ cartId: null, items: [], totals: emptyTotals, error: null }),
+      selectShipping: async (shippingMethodId) => {
+        // 先にローカルの選択を更新してからサーバーで送料を再計算する
+        set({ shipping: { ...get().shipping, selectedId: shippingMethodId } });
+        await get().fetchCart();
+      },
+
+      clear: () =>
+        set({
+          cartId: null,
+          items: [],
+          totals: emptyTotals,
+          shipping: emptyShipping,
+          error: null,
+        }),
     }),
     {
       name: 'idol-cart',
       storage: createJSONStorage(() => localStorage),
-      // persist は totals と items のみ (loading/error は除外)
-      partialize: (s) => ({ cartId: s.cartId, items: s.items, totals: s.totals }),
+      // persist は totals / items / shipping のみ (loading/error は除外)
+      partialize: (s) => ({
+        cartId: s.cartId,
+        items: s.items,
+        totals: s.totals,
+        shipping: s.shipping,
+      }),
     },
   ),
 );

@@ -8,7 +8,12 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { prisma } from '@idol/db';
-import { ORDER_STATUS_LABELS, buildVariantLabel } from '@idol/shared';
+import {
+  ORDER_STATUS_LABELS,
+  buildVariantLabel,
+  formatOptionValues,
+  parseOptionValues,
+} from '@idol/shared';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { formatJpy } from '@/lib/pricing';
@@ -108,6 +113,12 @@ export default async function MeOrderDetailPage({
                   <p className="text-xs text-slate-500">
                     {buildVariantLabel({ name: it.variantName, optionColor: it.optionColor, optionSize: it.optionSize })} × {it.quantity}
                   </p>
+                  {/* 宛名などの入力内容 (購入者が後から確認できるように) */}
+                  {formatOptionValues(parseOptionValues(it.optionValues)) && (
+                    <p className="mt-0.5 text-xs text-brand-700">
+                      {formatOptionValues(parseOptionValues(it.optionValues))}
+                    </p>
+                  )}
                 </div>
                 <p className="text-sm font-semibold text-slate-800">{formatJpy(it.subtotal)}</p>
               </li>
@@ -123,7 +134,7 @@ export default async function MeOrderDetailPage({
               <span>{formatJpy(order.taxAmount)}</span>
             </div>
             <div className="flex justify-between text-slate-600">
-              <span>配送料</span>
+              <span>配送料{order.shippingMethodName ? `（${order.shippingMethodName}）` : ''}</span>
               <span>{formatJpy(order.shippingFee)}</span>
             </div>
             {order.discountAmount > 0 && (

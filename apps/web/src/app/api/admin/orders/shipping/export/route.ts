@@ -33,7 +33,10 @@ export const GET = handle(async (req: Request) => {
   // 古い注文から発送したいので createdAt asc。
   const orders = await prisma.order.findMany({
     where: { status: { in: ['PAID', 'PROCESSING'] } },
-    include: { items: { select: { productName: true, quantity: true } } },
+    include: {
+      items: { select: { productName: true, quantity: true } },
+      shippingMethod: { select: { b2InvoiceType: true } },
+    },
     orderBy: { createdAt: 'asc' },
     take: EXPORT_LIMIT,
   });
@@ -48,6 +51,8 @@ export const GET = handle(async (req: Request) => {
     shippingPhone: o.shippingPhone,
     itemName: representativeItemName(o.items),
     totalQuantity: o.items.reduce((sum, it) => sum + it.quantity, 0),
+    // 購入者が選んだ配送方法 (ネコポス等) に応じた送り状種類を出力する
+    invoiceType: o.shippingMethod?.b2InvoiceType ?? null,
   }));
 
   const body = buildB2ExportCsv(exportOrders);

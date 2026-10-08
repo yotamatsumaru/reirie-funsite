@@ -10,6 +10,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/stores/ui-store';
 import { formatJpy } from '@/lib/pricing';
+import { ShippingSelector } from './ShippingSelector';
 
 const PREFS = [
   '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県',
@@ -22,7 +23,7 @@ const PREFS = [
 export function CheckoutForm() {
   const router = useRouter();
   const { status } = useSession();
-  const { items, totals, fetchCart } = useCartStore();
+  const { items, totals, shipping, fetchCart } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +75,8 @@ export function CheckoutForm() {
             addressLine1: form.addressLine1,
             addressLine2: form.addressLine2 || undefined,
           },
+          // カートで選んだ配送方法。サーバー側でも候補内か検証する。
+          shippingMethodId: shipping.selectedId ?? undefined,
           notes: form.notes || undefined,
           successUrl: `${origin}/checkout/success`,
           cancelUrl: `${origin}/cart`,
@@ -182,13 +185,22 @@ export function CheckoutForm() {
         </CardHeader>
         <CardBody className="space-y-2 text-sm">
           {items.map((i) => (
-            <div key={i.id} className="flex justify-between text-xs">
-              <span className="line-clamp-1">
-                {i.productName} × {i.quantity}
-              </span>
-              <span>{formatJpy(i.subtotal)}</span>
+            <div key={i.id} className="text-xs">
+              <div className="flex justify-between">
+                <span className="line-clamp-1">
+                  {i.productName}
+                  {i.variantLabel ? ` (${i.variantLabel})` : ''} × {i.quantity}
+                </span>
+                <span>{formatJpy(i.subtotal)}</span>
+              </div>
+              {/* 宛名など: 決済直前にもう一度確認できるように出す */}
+              {i.optionLabel && (
+                <p className="line-clamp-2 text-[11px] text-brand-700">{i.optionLabel}</p>
+              )}
             </div>
           ))}
+          <hr className="my-2" />
+          <ShippingSelector compact />
           <hr className="my-2" />
           <Row label="小計" value={formatJpy(totals.subtotal)} />
           <Row label="消費税" value={formatJpy(totals.taxAmount)} />

@@ -9,9 +9,15 @@ export const ListProductsQuerySchema = z.object({
 });
 export type ListProductsQuery = z.infer<typeof ListProductsQuerySchema>;
 
+/** 商品オプションの入力 (optionId → 入力文字列)。未入力は省略可。 */
+export const OptionInputsSchema = z.record(z.uuid(), z.string().max(500)).optional();
+
 export const AddToCartSchema = z.object({
   variantId: z.uuid(),
   quantity: z.number().int().min(1).max(99),
+  // 宛名付きチェキ等の「商品オプション」入力値。商品にオプションが定義されている場合、
+  // 必須項目が欠けているとサーバー側で 400 を返す。
+  options: OptionInputsSchema,
 });
 export type AddToCartInput = z.infer<typeof AddToCartSchema>;
 
@@ -32,6 +38,8 @@ export type ShippingAddress = z.infer<typeof ShippingAddressSchema>;
 
 export const CheckoutSchema = z.object({
   shipping: ShippingAddressSchema,
+  /** 購入者が選んだ配送方法。未指定なら候補の先頭 (最安) を採用する。 */
+  shippingMethodId: z.uuid().optional(),
   notes: z.string().max(500).optional(),
   successUrl: z.url(),
   cancelUrl: z.url(),
@@ -55,8 +63,46 @@ export const CreateProductSchema = z.object({
   isActive: z.boolean().default(true),
   isMembersOnly: z.boolean().default(false),
   isPremiumExclusive: z.boolean().default(false),
+  // ---- 販売期間 (null = 制限なし) ----
+  saleStartsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  saleEndsAt: z.iso.datetime({ offset: true }).nullable().optional(),
+  // ---- 配送方法の割り当て (省略 = 変更しない / [] = 全解除 → 基本配送に戻る) ----
+  shippingMethodIds: z.array(z.uuid()).max(50).optional(),
 });
 export type CreateProductInput = z.infer<typeof CreateProductSchema>;
+
+/** 複数商品の販売期間を一括設定する (一斉発売用) */
+export const BulkSalePeriodSchema = z.object({
+  productIds: z.array(z.uuid()).min(1).max(200),
+  saleStartsAt: z.iso.datetime({ offset: true }).nullable(),
+  saleEndsAt: z.iso.datetime({ offset: true }).nullable(),
+  /** true なら同時に isActive=true にする (非公開のまま予約したい場合は false) */
+  activate: z.boolean().default(true),
+});
+export type BulkSalePeriodInput = z.infer<typeof BulkSalePeriodSchema>;
+
+// ---- 配送方法 (管理) ----
+export const ShippingMethodInputSchema = z.object({
+  name: z.string().min(1).max(60),
+  description: z.string().max(200).nullable().optional(),
+  fee: z.number().int().min(0).max(100000),
+  isDefault: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+  b2InvoiceType: z.string().max(4).nullable().optional(),
+});
+export type ShippingMethodInput = z.infer<typeof ShippingMethodInputSchema>;
+
+// ---- 商品オプション (管理) ----
+export const ProductOptionInputSchema = z.object({
+  name: z.string().min(1).max(60),
+  helpText: z.string().max(300).nullable().optional(),
+  maxLength: z.number().int().min(1).max(500).default(20),
+  price: z.number().int().min(0).max(100000).default(0),
+  isRequired: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+});
+export type ProductOptionInput = z.infer<typeof ProductOptionInputSchema>;
 
 export const UpdateInventorySchema = z.object({
   quantity: z.number().int().min(0),

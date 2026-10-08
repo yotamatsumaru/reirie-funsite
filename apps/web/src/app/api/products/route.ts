@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { ListProductsQuerySchema, canAccess } from '@idol/shared';
+import { ListProductsQuerySchema, canAccess, getSaleStatus } from '@idol/shared';
 import { resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { effectiveUnitPrice } from '@/lib/pricing';
@@ -94,6 +94,10 @@ export const GET = handle(async (req: Request) => {
       isPremiumExclusive: p.isPremiumExclusive,
       category: p.category,
       thumbnailUrl: p.images[0]?.url ?? null,
+      // 発売前 (UPCOMING) / 販売終了 (ENDED) も一覧には出す (予告表示)
+      saleStatus: getSaleStatus(p),
+      saleStartsAt: p.saleStartsAt,
+      saleEndsAt: p.saleEndsAt,
       inStock: variant?.inventory
         ? variant.inventory.quantity - variant.inventory.reserved > 0
         : false,
