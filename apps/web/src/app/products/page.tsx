@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
-import { canAccess, canUseShop } from '@idol/shared';
+import { canAccess, canUseShop, formatJstDateTimeShort, getSaleStatus } from '@idol/shared';
 import type { Prisma } from '@idol/db';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -67,6 +67,7 @@ export default async function ProductsPage() {
                 )
               : p.basePrice;
             const inStock = v?.inventory ? v.inventory.quantity - v.inventory.reserved > 0 : false;
+            const saleStatus = getSaleStatus(p);
             return (
               <Link key={p.id} href={`/products/${p.slug}`}>
                 <Card className="h-full transition-shadow hover:shadow-md">
@@ -86,12 +87,19 @@ export default async function ProductsPage() {
                       {p.isMembersOnly && !p.isPremiumExclusive && (
                         <Badge tone="info">会員限定</Badge>
                       )}
-                      {!inStock && <Badge tone="gray">在庫切れ</Badge>}
+                      {saleStatus === 'UPCOMING' && <Badge tone="warning">発売前</Badge>}
+                      {saleStatus === 'ENDED' && <Badge tone="gray">販売終了</Badge>}
+                      {saleStatus === 'ON_SALE' && !inStock && <Badge tone="gray">在庫切れ</Badge>}
                     </div>
                     <h2 className="mb-1 line-clamp-2 text-sm font-semibold text-slate-800">
                       {p.name}
                     </h2>
                     <p className="text-base font-bold text-brand-600">{formatJpy(price)}</p>
+                    {saleStatus === 'UPCOMING' && p.saleStartsAt && (
+                      <p className="mt-0.5 text-[11px] text-amber-700">
+                        {formatJstDateTimeShort(p.saleStartsAt)} 発売
+                      </p>
+                    )}
                   </CardBody>
                 </Card>
               </Link>

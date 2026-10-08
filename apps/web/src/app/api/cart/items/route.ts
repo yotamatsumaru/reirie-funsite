@@ -1,10 +1,19 @@
 /**
  * POST /api/cart/items
- *  - カートにアイテムを追加 (既存があれば数量加算)
+ *  - カートにアイテムを追加 (同じバリエーション + 同じオプション入力なら数量加算)
+ *  - 商品オプション (宛名など) は必須/文字数をサーバー側で検証し、
+ *    入力値をスナップショットとしてカート明細に保存する
  */
 import { NextResponse } from 'next/server';
-import { prisma } from '@idol/db';
-import { AddToCartSchema, canAccess, canUseShop } from '@idol/shared';
+import { prisma, type Prisma } from '@idol/db';
+import {
+  AddToCartSchema,
+  buildOptionsKey,
+  canAccess,
+  canUseShop,
+  getSaleStatus,
+  validateOptionInputs,
+} from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 
@@ -32,10 +41,22 @@ export const POST = handle(async (req: Request) => {
 
   const variant = await prisma.productVariant.findUnique({
     where: { id: body.variantId },
-    include: { product: true, inventory: true },
+    include: {
+      product: { include: { options: { orderBy: { sortOrder: 'asc' } } } },
+      inventory: true,
+    },
   });
   if (!variant || !variant.isActive || !variant.product.isActive) {
     throw errors.notFound('商品が見つかりません');
+  }
+
+  // 販売期間チェック (発売前 / 販売終了)
+  const saleStatus = getSaleStatus(variant.product);
+  if (saleStatus === 'UPCOMING') {
+    throw errors.conflict('この商品はまだ発売前です');
+  }
+  if (saleStatus === 'ENDED') {
+    throw errors.conflict('この商品の販売は終了しました');
   }
 
   // プランチェック
@@ -45,6 +66,13 @@ export const POST = handle(async (req: Request) => {
   if (variant.product.isMembersOnly && !canAccess(plan, 'MEMBERS')) {
     throw errors.planRequired('スタンダード');
   }
+
+  // 商品オプション (宛名など) の検証
+  const optionResult = validateOptionInputs(variant.product.options, body.options);
+  if (!optionResult.ok) {
+    throw errors.badRequest(optionResult.message);
+  }
+  const optionsKey = buildOptionsKey(optionResult.values);
 
   // 在庫チェック
   const available = variant.inventory
@@ -60,9 +88,20 @@ export const POST = handle(async (req: Request) => {
   const cart = await getOrCreateCart(session.user.id);
 
   const item = await prisma.cartItem.upsert({
-    where: { cartId_variantId: { cartId: cart.id, variantId: variant.id } },
+    where: {
+      cartId_variantId_optionsKey: { cartId: cart.id, variantId: variant.id, optionsKey },
+    },
     update: { quantity: { increment: body.quantity } },
-    create: { cartId: cart.id, variantId: variant.id, quantity: body.quantity },
+    create: {
+      cartId: cart.id,
+      variantId: variant.id,
+      quantity: body.quantity,
+      optionsKey,
+      optionValues:
+        optionResult.values.length > 0
+          ? (optionResult.values as unknown as Prisma.InputJsonValue)
+          : undefined,
+    },
   });
 
   // 上限チェック

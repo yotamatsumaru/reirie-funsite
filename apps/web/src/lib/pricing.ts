@@ -46,12 +46,19 @@ export function freeShippingThresholdFor(plan: PlanTypeLiteral | null | undefine
 export function calculateOrderTotals(
   itemsSubtotal: number,
   plan: PlanTypeLiteral | null | undefined = 'FREE',
+  /**
+   * 配送方法から決まった送料 (送料無料判定前の値)。
+   * 省略時は従来の一律送料 (SHIPPING_FEE_DEFAULT) を使う。
+   * 商品ごとに配送方法 (ネコポス / 宅急便コンパクト / 宅急便) が違うため、
+   * 呼び出し側 (lib/shipping.ts) で解決した送料を渡せるようにした。
+   */
+  baseShippingFee: number = SHIPPING_FEE_DEFAULT,
 ) {
   const taxAmount = Math.floor(itemsSubtotal * TAX_RATE);
   const threshold = freeShippingThresholdFor(plan);
   // threshold === 0 は「常時無料」の意味
   const shippingFee =
-    threshold === 0 || itemsSubtotal >= threshold ? 0 : SHIPPING_FEE_DEFAULT;
+    threshold === 0 || itemsSubtotal >= threshold ? 0 : baseShippingFee;
   const totalAmount = itemsSubtotal + taxAmount + shippingFee;
   return { subtotal: itemsSubtotal, taxAmount, shippingFee, totalAmount };
 }

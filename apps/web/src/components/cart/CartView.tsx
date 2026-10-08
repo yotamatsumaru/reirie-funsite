@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { toast } from '@/stores/ui-store';
 import { formatJpy } from '@/lib/pricing';
+import { ShippingSelector } from './ShippingSelector';
 
 export function CartView() {
   const { data: session, status } = useSession();
@@ -79,9 +80,17 @@ export function CartView() {
                 <p className="truncate text-xs text-slate-500">
                   {item.variantLabel || item.variantName}
                 </p>
+                {/* 宛名などの商品オプション入力値。購入者が自分の入力を確認できるように出す */}
+                {item.optionLabel && (
+                  <p className="mt-0.5 line-clamp-2 text-xs text-brand-700">{item.optionLabel}</p>
+                )}
                 {item.blocked && (
                   <Badge tone="danger" className="mt-1 self-start">
-                    {item.blocked.reason === 'plan_required' ? 'プラン要件未達' : '購入不可'}
+                    {item.blocked.reason === 'plan_required'
+                      ? 'プラン要件未達'
+                      : item.blocked.reason === 'not_on_sale'
+                        ? '発売前または販売終了'
+                        : '購入不可'}
                   </Badge>
                 )}
                 {!item.blocked && !item.inStock && (
@@ -138,6 +147,8 @@ export function CartView() {
 
       <Card className="h-fit lg:sticky lg:top-20">
         <CardBody className="space-y-2 text-sm">
+          <ShippingSelector />
+          <hr className="my-2" />
           <Row label="小計" value={formatJpy(totals.subtotal)} />
           <Row label="消費税" value={formatJpy(totals.taxAmount)} />
           <Row label="送料" value={formatJpy(totals.shippingFee)} />

@@ -4,7 +4,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { CreateProductSchema, ListProductsQuerySchema } from '@idol/shared';
+import { CreateProductSchema, ListProductsQuerySchema, validateSalePeriod } from '@idol/shared';
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
@@ -100,6 +100,17 @@ export const POST = handle(async (req: Request) => {
     if (!cat) throw errors.badRequest('カテゴリが見つかりません');
   }
 
+  const periodError = validateSalePeriod(body.saleStartsAt, body.saleEndsAt);
+  if (periodError) throw errors.badRequest(periodError);
+
+  const shippingIds = Array.from(new Set(body.shippingMethodIds ?? []));
+  if (shippingIds.length > 0) {
+    const found = await prisma.shippingMethod.count({ where: { id: { in: shippingIds } } });
+    if (found !== shippingIds.length) {
+      throw errors.badRequest('存在しない配送方法が含まれています');
+    }
+  }
+
   const created = await prisma.product.create({
     data: {
       slug,
@@ -112,6 +123,11 @@ export const POST = handle(async (req: Request) => {
       isActive: body.isActive,
       isMembersOnly: body.isMembersOnly,
       isPremiumExclusive: body.isPremiumExclusive,
+      saleStartsAt: body.saleStartsAt ? new Date(body.saleStartsAt) : null,
+      saleEndsAt: body.saleEndsAt ? new Date(body.saleEndsAt) : null,
+      ...(shippingIds.length > 0
+        ? { shippingMethods: { create: shippingIds.map((smId) => ({ shippingMethodId: smId })) } }
+        : {}),
     },
   });
 

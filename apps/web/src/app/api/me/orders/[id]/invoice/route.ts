@@ -14,6 +14,8 @@ import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
   buildVariantLabel,
+  formatOptionValues,
+  parseOptionValues,
 } from '@idol/shared';
 import { renderInvoicePdf, type InvoiceDocument } from '@/lib/invoice-pdf';
 
@@ -34,7 +36,8 @@ function buildOrderInvoiceDocument(order: {
   shippingPrefecture: string;
   shippingAddress1: string;
   shippingAddress2: string | null;
-  items: { productName: string; variantName: string; optionSize: string | null; optionColor: string | null; quantity: number; unitPrice: number; subtotal: number }[];
+  shippingMethodName: string | null;
+  items: { productName: string; variantName: string; optionSize: string | null; optionColor: string | null; optionValues: unknown; quantity: number; unitPrice: number; subtotal: number }[];
   payments: { status: string; amount: number; createdAt: Date }[];
 }): InvoiceDocument {
   const statusLabel =
@@ -60,11 +63,17 @@ function buildOrderInvoiceDocument(order: {
       label: it.productName,
       // サイズを含める。領収書に «どのサイズか» が無いと
       // 経理・返品対応で商品を特定できない
-      detail: buildVariantLabel({
-        name: it.variantName,
-        optionColor: it.optionColor,
-        optionSize: it.optionSize,
-      }),
+      detail: [
+        buildVariantLabel({
+          name: it.variantName,
+          optionColor: it.optionColor,
+          optionSize: it.optionSize,
+        }),
+        // 宛名などの入力内容も明細書に残す (返品・問い合わせ時に商品を特定できるように)
+        formatOptionValues(parseOptionValues(it.optionValues)),
+      ]
+        .filter(Boolean)
+        .join(' / '),
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       subtotal: it.subtotal,
@@ -72,7 +81,10 @@ function buildOrderInvoiceDocument(order: {
     summary: [
       { label: '小計', amount: order.subtotal },
       { label: '消費税', amount: order.taxAmount },
-      { label: '配送料', amount: order.shippingFee },
+      {
+        label: order.shippingMethodName ? `配送料 (${order.shippingMethodName})` : '配送料',
+        amount: order.shippingFee,
+      },
       ...(order.discountAmount > 0
         ? [{ label: '割引', amount: order.discountAmount, negative: true }]
         : []),
@@ -95,7 +107,7 @@ export const GET = handle(async (req: Request, ctx: { params: Promise<{ id: stri
     where: { id },
     include: {
       items: {
-        select: { productName: true, variantName: true, optionSize: true, optionColor: true, quantity: true, unitPrice: true, subtotal: true },
+        select: { productName: true, variantName: true, optionSize: true, optionColor: true, optionValues: true, quantity: true, unitPrice: true, subtotal: true },
       },
       payments: {
         orderBy: { createdAt: 'desc' },

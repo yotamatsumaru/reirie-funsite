@@ -13,10 +13,16 @@ export const dynamic = 'force-dynamic';
 export default async function NewProductPage() {
   await requireCapabilityPage('MERCH');
 
-  const categories = await prisma.productCategory.findMany({
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    select: { id: true, name: true },
-  });
+  const [categories, shippingMethods] = await Promise.all([
+    prisma.productCategory.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true },
+    }),
+    prisma.shippingMethod.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { fee: 'asc' }],
+      select: { id: true, name: true, fee: true, isDefault: true, isActive: true },
+    }),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -29,7 +35,7 @@ export default async function NewProductPage() {
           ← 商品一覧へ
         </Link>
       </div>
-      <ProductForm mode="create" categories={categories} />
+      <ProductForm mode="create" categories={categories} shippingMethods={shippingMethods} />
     </div>
   );
 }

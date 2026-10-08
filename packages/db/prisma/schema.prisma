@@ -787,17 +787,110 @@ model Product {
   isActive           Boolean  @default(true) @map("is_active")
   isMembersOnly      Boolean  @default(false) @map("is_members_only")
   isPremiumExclusive Boolean  @default(false) @map("is_premium_exclusive")
+
+  // ---- 販売期間 (BASE の「販売期間」相当) ----
+  // 「公開/非公開」だけだと複数商品を同じ時刻に一斉発売するには
+  // 運営が手動で公開ボタンを押して回る必要があり、事前に商品ページを
+  // 見せておくこともできなかった。そこで
+  //   isActive=true + saleStartsAt が未来 → ページは見えるが「発売前」で購入不可
+  //   saleEndsAt を過ぎた             → ページは見えるが「販売終了」で購入不可
+  // とし、時刻になれば自動で購入可能になる (手動操作不要)。
+  // どちらも NULL なら従来どおり isActive だけで判定する。
+  saleStartsAt       DateTime? @map("sale_starts_at")
+  saleEndsAt         DateTime? @map("sale_ends_at")
+
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
-  category   ProductCategory? @relation(fields: [categoryId], references: [id])
-  variants   ProductVariant[]
-  images     ProductImage[]
-  orderItems OrderItem[]
+  category        ProductCategory?        @relation(fields: [categoryId], references: [id])
+  variants        ProductVariant[]
+  images          ProductImage[]
+  orderItems      OrderItem[]
+  // この商品で選べる配送方法 (未設定なら「基本配送」= isDefault の配送方法が適用)
+  shippingMethods ProductShippingMethod[]
+  // 購入時に入力してもらう追加項目 (チェキの宛名など)
+  options         ProductOption[]
 
   @@index([categoryId, isActive])
   @@index([slug])
+  @@index([saleStartsAt])
   @@map("products")
+}
+
+// =====================================================================
+// EC: 配送方法 (BASE「送料詳細設定 App」相当)
+// =====================================================================
+
+/// 配送方法マスタ (ネコポス / 宅急便コンパクト / 宅急便 など)。
+///
+/// 商品のサイズによって発送方法 (= 送料) が変わるため、
+/// 「商品ごとに使える配送方法」を割り当て、カートでは
+/// カート内の全商品が対応している配送方法だけを購入者が選べるようにする。
+model ShippingMethod {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  /// 全国一律送料 (円)
+  fee         Int
+  /// true なら、配送方法が 1 つも設定されていない商品にも自動で適用される
+  /// (BASE の「基本配送の設定」)。複数の基本配送があってもよい。
+  isDefault   Boolean  @default(false) @map("is_default")
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  /// ヤマト B2クラウド取込CSV の「送り状種類」コード。
+  /// 0=発払い(宅急便) / 7=ネコポス / 8=宅急便コンパクト。未設定は 0。
+  b2InvoiceType String? @map("b2_invoice_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  products ProductShippingMethod[]
+  orders   Order[]
+
+  @@index([isActive, sortOrder])
+  @@map("shipping_methods")
+}
+
+/// 商品 ⇔ 配送方法 の多対多
+model ProductShippingMethod {
+  productId        String @map("product_id") @db.Uuid
+  shippingMethodId String @map("shipping_method_id") @db.Uuid
+
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shippingMethod ShippingMethod @relation(fields: [shippingMethodId], references: [id], onDelete: Cascade)
+
+  @@id([productId, shippingMethodId])
+  @@index([shippingMethodId])
+  @@map("product_shipping_methods")
+}
+
+// =====================================================================
+// EC: 商品オプション (BASE「商品オプション App」相当)
+// =====================================================================
+
+/// 購入時に購入者へ入力してもらう追加項目 (例: 宛名付きチェキの「宛名」)。
+/// 入力内容はカート明細 (CartItem.optionValues) と注文明細
+/// (OrderItem.optionValues) に «その時点の値» としてスナップショット保存する。
+model ProductOption {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  /// 項目名 (例: 「宛名(ニックネーム)」「書いてほしい言葉」)
+  name        String
+  /// 入力欄の下に出す案内文 (例: 「無記入を希望の方は "なし" とご入力ください」)
+  helpText    String?  @map("help_text")
+  /// 最大文字数 (全角換算ではなく文字数)
+  maxLength   Int      @default(20) @map("max_length")
+  /// 追加料金 (円)。入力があれば 1 個につき加算する。0 なら無料
+  price       Int      @default(0)
+  /// 必須入力か
+  isRequired  Boolean  @default(true) @map("is_required")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+  @@map("product_options")
 }
 
 model ProductImage {
@@ -877,12 +970,18 @@ model CartItem {
   cartId    String   @map("cart_id") @db.Uuid
   variantId String   @map("variant_id") @db.Uuid
   quantity  Int      @default(1)
+  /// 商品オプションの入力値。[{ optionId, name, value, price }] の JSON。
+  /// 宛名が違えば別の明細として扱いたいため optionsKey で一意性を分ける。
+  optionValues Json?   @map("option_values")
+  /// optionValues を正規化した文字列 (同一 variant でも宛名違いを別行にするためのキー)。
+  /// オプション未入力は空文字。
+  optionsKey   String  @default("") @map("options_key")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
-  @@unique([cartId, variantId])
+  @@unique([cartId, variantId, optionsKey])
   @@map("cart_items")
 }
 
@@ -903,6 +1002,10 @@ model Order {
   shippingPrefecture String      @map("shipping_prefecture")
   shippingAddress1   String      @map("shipping_address_1")
   shippingAddress2   String?     @map("shipping_address_2")
+  /// 購入者が選んだ配送方法 (マスタ参照。削除されても注文は残すので SetNull)
+  shippingMethodId   String?     @map("shipping_method_id") @db.Uuid
+  /// 配送方法名のスナップショット (後からマスタを変更しても注文内容が変わらないように)
+  shippingMethodName String?     @map("shipping_method_name")
   trackingNumber     String?     @map("tracking_number")
   paidAt             DateTime?   @map("paid_at")
   shippedAt          DateTime?   @map("shipped_at")
@@ -912,9 +1015,10 @@ model Order {
   createdAt          DateTime    @default(now()) @map("created_at")
   updatedAt          DateTime    @updatedAt @map("updated_at")
 
-  user     User        @relation(fields: [userId], references: [id])
-  items    OrderItem[]
-  payments Payment[]
+  user           User            @relation(fields: [userId], references: [id])
+  items          OrderItem[]
+  payments       Payment[]
+  shippingMethod ShippingMethod? @relation(fields: [shippingMethodId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([status])
@@ -935,6 +1039,9 @@ model OrderItem {
   // 参照ではなくスナップショットとして保持する。
   optionSize  String? @map("option_size")
   optionColor String? @map("option_color")
+  /// 商品オプション (宛名など) の入力値スナップショット。
+  /// [{ optionId, name, value, price }] の JSON。発送担当がチェキに書く内容を確認するために使う。
+  optionValues Json?  @map("option_values")
   unitPrice   Int    @map("unit_price")
   quantity    Int
   subtotal    Int

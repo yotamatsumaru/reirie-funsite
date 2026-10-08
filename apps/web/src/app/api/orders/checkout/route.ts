@@ -6,16 +6,22 @@
  *  - 決済確定は Stripe Webhook (checkout.session.completed) 側で実施
  */
 import { NextResponse } from 'next/server';
-import { prisma } from '@idol/db';
+import { prisma, type Prisma } from '@idol/db';
 import {
   CheckoutSchema,
   buildOrderLineLabel,
   canAccess,
   canUseShop,
+  formatOptionValues,
+  getSaleStatus,
+  parseOptionValues,
+  sumOptionExtra,
+  type OptionValueSnapshot,
 } from '@idol/shared';
 import { requireApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { calculateOrderTotals, effectiveUnitPrice, generateOrderNumber } from '@/lib/pricing';
+import { resolveShippingForCart } from '@/lib/shipping';
 import { getStripe, verifyStripeCustomer } from '@/lib/stripe';
 import { env } from '@/lib/env';
 import { logAudit } from '@/lib/audit';
@@ -70,6 +76,8 @@ export const POST = handle(async (req: Request) => {
      *  注文内容が変わらないようスナップショットとして保存する。 */
     optionSize: string | null;
     optionColor: string | null;
+    /** 商品オプション (宛名など) の入力値スナップショット */
+    optionValues: OptionValueSnapshot[];
     unitPrice: number;
     quantity: number;
     subtotal: number;
@@ -81,6 +89,14 @@ export const POST = handle(async (req: Request) => {
     const v = vMap.get(item.variantId);
     if (!v || !v.isActive || !v.product.isActive) {
       throw errors.conflict(`商品が販売停止になっています: ${v?.product.name ?? item.variantId}`);
+    }
+    // 販売期間: カートに入れた後に発売前に戻された / 販売終了した商品は決済させない
+    const saleStatus = getSaleStatus(v.product);
+    if (saleStatus === 'UPCOMING') {
+      throw errors.conflict(`まだ発売前の商品があります: ${v.product.name}`);
+    }
+    if (saleStatus === 'ENDED') {
+      throw errors.conflict(`販売が終了した商品があります: ${v.product.name}`);
     }
     if (v.product.isPremiumExclusive && !canAccess(plan, 'PREMIUM')) {
       throw errors.planRequired('プレミアム');
@@ -97,15 +113,17 @@ export const POST = handle(async (req: Request) => {
     if (available < item.quantity) {
       throw errors.conflict(`在庫不足: ${v.product.name} / ${v.name}`);
     }
-    const unit = effectiveUnitPrice(
-      {
-        basePrice: v.product.basePrice,
-        memberPrice: v.product.memberPrice,
-        premiumPrice: v.product.premiumPrice,
-      },
-      v.priceDelta,
-      plan,
-    );
+    const optionValues = parseOptionValues(item.optionValues);
+    const unit =
+      effectiveUnitPrice(
+        {
+          basePrice: v.product.basePrice,
+          memberPrice: v.product.memberPrice,
+          premiumPrice: v.product.premiumPrice,
+        },
+        v.priceDelta,
+        plan,
+      ) + sumOptionExtra(optionValues);
     const sub = unit * item.quantity;
     subtotal += sub;
     snapshots.push({
@@ -115,13 +133,31 @@ export const POST = handle(async (req: Request) => {
       variantName: v.name,
       optionSize: v.optionSize,
       optionColor: v.optionColor,
+      optionValues,
       unitPrice: unit,
       quantity: item.quantity,
       subtotal: sub,
     });
   }
 
-  const totals = calculateOrderTotals(subtotal, plan);
+  // 配送方法: カート内の全商品が対応するものから購入者の選択 (未選択なら最安) を採用。
+  // 候補外の id が送られてきた場合は改ざ・古い画面の可能性があるのでエラーにする。
+  const shipping = await resolveShippingForCart(
+    snapshots.map((s) => s.productId),
+    subtotal,
+    plan,
+    body.shippingMethodId,
+  );
+  if (
+    body.shippingMethodId &&
+    !shipping.candidates.some((m) => m.id === body.shippingMethodId)
+  ) {
+    throw errors.badRequest(
+      '選択された配送方法はこのカートではご利用いただけません。カート画面で配送方法を選び直してください。',
+    );
+  }
+
+  const totals = calculateOrderTotals(subtotal, plan, shipping.selected?.fee);
 
   // 4) ユーザー (Stripe customerId 取得 or 生成)
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -168,6 +204,8 @@ export const POST = handle(async (req: Request) => {
         shippingPrefecture: body.shipping.prefecture,
         shippingAddress1: body.shipping.addressLine1,
         shippingAddress2: body.shipping.addressLine2 ?? null,
+        shippingMethodId: shipping.selected?.id ?? null,
+        shippingMethodName: shipping.selected?.name ?? null,
         notes: body.notes ?? null,
         items: {
           create: snapshots.map((s) => ({
@@ -177,6 +215,10 @@ export const POST = handle(async (req: Request) => {
             variantName: s.variantName,
             optionSize: s.optionSize,
             optionColor: s.optionColor,
+            optionValues:
+              s.optionValues.length > 0
+                ? (s.optionValues as unknown as Prisma.InputJsonValue)
+                : undefined,
             unitPrice: s.unitPrice,
             quantity: s.quantity,
             subtotal: s.subtotal,
@@ -210,14 +252,15 @@ export const POST = handle(async (req: Request) => {
             // サイズを含める。決済画面で «何を買うのか» が分からないと
             // 購入直前の不安につながるため
             description: snapshots
-              .map(
-                (s) =>
-                  `${buildOrderLineLabel(s.productName, {
-                    name: s.variantName,
-                    optionColor: s.optionColor,
-                    optionSize: s.optionSize,
-                  })} × ${s.quantity}`,
-              )
+              .map((s) => {
+                const label = buildOrderLineLabel(s.productName, {
+                  name: s.variantName,
+                  optionColor: s.optionColor,
+                  optionSize: s.optionSize,
+                });
+                const opt = formatOptionValues(s.optionValues);
+                return `${label}${opt ? ` (${opt})` : ''} × ${s.quantity}`;
+              })
               .slice(0, 5)
               .join('\n'),
           },
@@ -249,7 +292,11 @@ export const POST = handle(async (req: Request) => {
     userId,
     action: 'order.checkout.created',
     resource: `order:${order.id}`,
-    metadata: { orderNumber, totalAmount: totals.totalAmount },
+    metadata: {
+      orderNumber,
+      totalAmount: totals.totalAmount,
+      shippingMethod: shipping.selected?.name ?? null,
+    },
   });
 
   return NextResponse.json({

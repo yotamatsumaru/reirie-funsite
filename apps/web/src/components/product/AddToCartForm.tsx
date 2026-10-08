@@ -24,15 +24,17 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 import { useCartStore } from '@/stores/cart-store';
 import { toast } from '@/stores/ui-store';
 import { formatJpy } from '@/lib/pricing';
 import {
   buildVariantLabel,
+  countChars,
   hasColorOptions,
   hasSizeOptions,
   sortBySize,
+  validateOptionInputs,
 } from '@idol/shared';
 
 interface VariantInfo {
@@ -42,6 +44,19 @@ interface VariantInfo {
   optionSize: string | null;
   effectivePrice: number;
   stockQuantity: number;
+}
+
+/**
+ * 商品オプション (購入時に入力してもらう項目)。
+ * 宛名付きチェキの「宛名」「書いてほしい言葉」など (BASE の商品オプション App 相当)。
+ */
+export interface ProductOptionInfo {
+  id: string;
+  name: string;
+  helpText: string | null;
+  maxLength: number;
+  price: number;
+  isRequired: boolean;
 }
 
 /** 重複を除いた順序付きリスト */
@@ -57,14 +72,29 @@ function uniq(values: (string | null)[]): string[] {
 export function AddToCartForm({
   variants,
   loggedIn,
+  options = [],
 }: {
   variants: VariantInfo[];
   loggedIn: boolean;
+  options?: ProductOptionInfo[];
 }) {
   const router = useRouter();
   const addItem = useCartStore((s) => s.addItem);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  // 商品オプションの入力値 (optionId → 文字列)
+  const [optionInputs, setOptionInputs] = useState<Record<string, string>>({});
+  const [optionError, setOptionError] = useState<string | null>(null);
+  const optionDefs = useMemo(
+    () => options.map((o, i) => ({ ...o, sortOrder: i })),
+    [options],
+  );
+  /** 入力済みオプションの追加料金 (1 個あたり) — 価格表示へ反映する */
+  const optionExtra = useMemo(() => {
+    const r = validateOptionInputs(optionDefs, optionInputs);
+    return r.ok ? r.extraPerUnit : 0;
+  }, [optionDefs, optionInputs]);
 
   // サイズ順に整列しておく (S → M → L → XL)
   const ordered = useMemo(() => sortBySize(variants), [variants]);
@@ -121,10 +151,27 @@ export function AddToCartForm({
       return;
     }
     if (!selected) return;
+    // オプションの必須 / 文字数を先にクライアントで検証 (サーバーでも再検証する)
+    const check = validateOptionInputs(optionDefs, optionInputs);
+    if (!check.ok) {
+      setOptionError(check.message);
+      toast.error(check.message);
+      return;
+    }
+    setOptionError(null);
     setLoading(true);
     try {
-      await addItem(selected.id, Math.min(quantity, maxQty));
-      toast.success(`カートに追加しました（${buildVariantLabel(selected)}）`);
+      await addItem(
+        selected.id,
+        Math.min(quantity, maxQty),
+        optionDefs.length > 0 ? optionInputs : undefined,
+      );
+      const label = [buildVariantLabel(selected), ...check.values.map((v) => `${v.name}: ${v.value}`)]
+        .filter(Boolean)
+        .join(' / ');
+      toast.success(`カートに追加しました（${label}）`);
+      // 次の宛名を入れやすいよう入力をクリア (同じ宛名を二重に入れる事故を防ぐ)
+      if (optionDefs.length > 0) setOptionInputs({});
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -252,11 +299,43 @@ export function AddToCartForm({
         </Select>
       )}
 
+      {/* --- 商品オプション (宛名など) --- */}
+      {optionDefs.length > 0 && (
+        <div className="space-y-3 rounded-md border border-brand-100 bg-brand-50/40 p-3">
+          {optionDefs.map((o) => {
+            const value = optionInputs[o.id] ?? '';
+            const len = countChars(value);
+            const over = len > o.maxLength;
+            return (
+              <div key={o.id}>
+                <Input
+                  label={`${o.name}${o.isRequired ? '' : '（任意）'}${o.price > 0 ? ` +${formatJpy(o.price)}` : ''}`}
+                  value={value}
+                  required={o.isRequired}
+                  maxLength={o.maxLength * 2}
+                  onChange={(e) => {
+                    setOptionError(null);
+                    setOptionInputs((s) => ({ ...s, [o.id]: e.target.value }));
+                  }}
+                  placeholder={o.isRequired ? '必須' : ''}
+                  error={over ? `${o.maxLength} 文字以内で入力してください` : undefined}
+                  hint={o.helpText ?? undefined}
+                />
+                <p className={`mt-0.5 text-right text-[11px] ${over ? 'text-rose-600' : 'text-slate-400'}`}>
+                  {len} / {o.maxLength}
+                </p>
+              </div>
+            );
+          })}
+          {optionError && <p className="text-xs text-rose-600">{optionError}</p>}
+        </div>
+      )}
+
       {/* --- 価格・在庫 --- */}
       {selected && (
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-bold text-brand-600">
-            {formatJpy(selected.effectivePrice)}
+            {formatJpy(selected.effectivePrice + optionExtra)}
           </span>
           <span className="text-xs text-slate-500">税込</span>
           {selected.stockQuantity > 0 ? (
@@ -303,7 +382,7 @@ export function AddToCartForm({
           {selected && (
             <div className="flex flex-col leading-tight">
               <span className="text-base font-bold text-brand-600">
-                {formatJpy(selected.effectivePrice)}
+                {formatJpy(selected.effectivePrice + optionExtra)}
               </span>
               {/* 選択中のサイズをボタンの隣に出す。
                   スマホは選択部分が画面外に出やすく «何を買うのか» を見失うため */}

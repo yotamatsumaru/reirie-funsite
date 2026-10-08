@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { CreateProductSchema } from '@idol/shared';
+import { CreateProductSchema, validateSalePeriod } from '@idol/shared';
 import { requireCapability } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
@@ -28,10 +28,15 @@ export const GET = handle(
           orderBy: { createdAt: 'asc' },
           include: { inventory: true },
         },
+        options: { orderBy: { sortOrder: 'asc' } },
+        shippingMethods: { select: { shippingMethodId: true } },
       },
     });
     if (!product) throw errors.notFound('商品が見つかりません');
-    return NextResponse.json(product);
+    return NextResponse.json({
+      ...product,
+      shippingMethodIds: product.shippingMethods.map((s) => s.shippingMethodId),
+    });
   },
 );
 
@@ -49,9 +54,42 @@ export const PATCH = handle(
       if (!cat) throw errors.badRequest('カテゴリが見つかりません');
     }
 
+    // 販売期間の整合性 (片方だけ渡されたときは保存済みの値と組み合わせて検証)
+    const nextStart =
+      body.saleStartsAt !== undefined ? body.saleStartsAt : exists.saleStartsAt;
+    const nextEnd = body.saleEndsAt !== undefined ? body.saleEndsAt : exists.saleEndsAt;
+    const periodError = validateSalePeriod(nextStart, nextEnd);
+    if (periodError) throw errors.badRequest(periodError);
+
+    if (body.shippingMethodIds && body.shippingMethodIds.length > 0) {
+      const found = await prisma.shippingMethod.count({
+        where: { id: { in: body.shippingMethodIds } },
+      });
+      if (found !== new Set(body.shippingMethodIds).size) {
+        throw errors.badRequest('存在しない配送方法が含まれています');
+      }
+    }
+
     const updated = await prisma.product.update({
       where: { id },
       data: {
+        ...(body.saleStartsAt !== undefined
+          ? { saleStartsAt: body.saleStartsAt ? new Date(body.saleStartsAt) : null }
+          : {}),
+        ...(body.saleEndsAt !== undefined
+          ? { saleEndsAt: body.saleEndsAt ? new Date(body.saleEndsAt) : null }
+          : {}),
+        // 配送方法の割り当ては「全置き換え」(渡されたときのみ)
+        ...(body.shippingMethodIds !== undefined
+          ? {
+              shippingMethods: {
+                deleteMany: {},
+                create: Array.from(new Set(body.shippingMethodIds)).map((smId) => ({
+                  shippingMethodId: smId,
+                })),
+              },
+            }
+          : {}),
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.basePrice !== undefined ? { basePrice: body.basePrice } : {}),
