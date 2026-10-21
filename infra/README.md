@@ -150,6 +150,11 @@ pnpm run destroy
 `*-storage` の S3 バケットは `autoDeleteObjects: true` (dev のみ) で空にしてから削除。
 RDS は `RemovalPolicy.SNAPSHOT` でスナップショット保管。
 
+> ⚠️ `cdk.json` の context `destroyOnRemove: false` により、envName=dev でも本番データ
+> (RDS / S3) は削除保護・RETAIN になっている。`pnpm run destroy` は確認プロンプトが出る。
+> バックアップ (`*-backup` / `*-backup-copy`) と WAF (`*-waf`) については
+> [`docs/SECURITY_BACKUP.md`](../docs/SECURITY_BACKUP.md) を参照。
+
 ## 設計上の留意点
 
 - **VPC 構成**: NAT × 2 (prod) で AZ 障害耐性。dev は NAT × 1 でコスト最小化。

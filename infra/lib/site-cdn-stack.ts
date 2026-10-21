@@ -36,6 +36,8 @@ export interface SiteCdnStackProps extends StackProps {
   certificate: acm.ICertificate;
   /** EC2 の Elastic IP (Ec2Stack.elasticIp.ref) */
   originIp: string;
+  /** WafStack (us-east-1) の Web ACL ARN。未指定なら WAF なし */
+  webAclArn?: string;
 }
 
 export class SiteCdnStack extends Stack {
@@ -43,7 +45,7 @@ export class SiteCdnStack extends Stack {
 
   constructor(scope: Construct, id: string, props: SiteCdnStackProps) {
     super(scope, id, props);
-    const { config, domainName, hostedZone, certificate, originIp } = props;
+    const { config, domainName, hostedZone, certificate, originIp, webAclArn } = props;
 
     for (const [k, v] of Object.entries(commonTags(config))) {
       this.tags.setTag(k, v);
@@ -103,6 +105,10 @@ function handler(event) {
       certificate,
       priceClass: cloudfront.PriceClass[config.cloudfrontPriceClass],
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      // ビューワー側 TLS は 1.2 以上に限定
+      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
+      // WAF (レート制限 + AWS マネージドルール)。lib/waf-stack.ts 参照
+      ...(webAclArn ? { webAclId: webAclArn } : {}),
       defaultBehavior: {
         origin: httpOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,

@@ -13,6 +13,8 @@
 #     1. 誕生日メール自動送信トリガー (5 分おき)
 #        送信時刻の判断はアプリ側 (DB 設定) が行うため、時刻を管理画面で
 #        変更しても この cron を変える必要はない。
+#     2. オリジン TLS 証明書 (Let's Encrypt) の自動更新 (毎日 1 回)
+#        2026-10-10 に証明書失効で reirie.com が 502 になった再発防止。
 #
 #   使い方:
 #     sudo bash deploy/install-cron.sh
@@ -40,6 +42,17 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 #   送信時刻は管理画面 (/super-admin/birthday) の設定で決まる。既定 12:00 JST。
 #   エンドポイントは冪等で、時刻前 / 本日実行済みなら何もしない。
 */5 * * * * ${APP_USER} APP_DIR=${APP_DIR} bash ${APP_DIR}/deploy/cron-birthday-mail.sh >/dev/null 2>&1
+
+# オリジン TLS 証明書 (Let's Encrypt) の自動更新 (毎日 04:17 JST = 19:17 UTC)
+#   期限 30 日前になると certbot が更新し、成功時のみ nginx を reload する。
+#   証明書が失効すると CloudFront → EC2 の接続が失敗し、サイト全体が 502 になる。
+17 19 * * * root bash ${APP_DIR}/deploy/renew-tls.sh >> /var/log/renew-tls.log 2>&1
+
+# DB 論理バックアップ (pg_dump → Object Lock 付き S3) (毎日 03:30 JST = 18:30 UTC)
+#   RDS 自動バックアップ窓 (JST 02:00-03:00) の後。保存先は SSM
+#   /<app>/<env>/backup/dump-bucket (*-backup スタックが作成)。
+#   26 時間成功しないと CloudWatch アラーム (db-dump-missing) が通知する。
+30 18 * * * ${APP_USER} APP_DIR=${APP_DIR} bash ${APP_DIR}/deploy/backup-db.sh >/dev/null 2>&1
 CRONEOF
 
 chown root:root "$CRON_FILE"
@@ -50,6 +63,11 @@ chmod 0644 "$CRON_FILE"
 if [ -f "${APP_DIR}/deploy/cron-birthday-mail.sh" ]; then
   chmod 0755 "${APP_DIR}/deploy/cron-birthday-mail.sh" || true
 fi
+for s in renew-tls.sh backup-db.sh restore-db-dump.sh; do
+  if [ -f "${APP_DIR}/deploy/${s}" ]; then
+    chmod 0755 "${APP_DIR}/deploy/${s}" || true
+  fi
+done
 
 echo "[install-cron] enabling crond ..."
 systemctl enable crond >/dev/null 2>&1 || true
