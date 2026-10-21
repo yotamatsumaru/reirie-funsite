@@ -29,6 +29,10 @@
     "account": "700918785224",
     "appRepoUrl": "https://github.com/yotamatsumaru/reirie-funsite.git",
     "appBranch": "main",
-    "alertEmail": ""
+    "alertEmail": "yotamatsumaru@gmail.com",
+    "destroyOnRemove": false,
+    "backupCopyRegion": "ap-northeast-3",
+    "backupVaultLockMode": "governance",
+    "wafManagedRulesAction": "count"
   }
 }

@@ -68,18 +68,29 @@ export class NetworkStack extends Stack {
       description: 'Idol fansite EC2 (Next.js + PM2)',
       allowAllOutbound: true,
     });
-    // Cloudflare からのみ 80/443 を受ける想定 (実運用では CF の IP レンジを参照)
-    // 開発・MVP では一旦 Anywhere
+    // 80: nginx は https へのリダイレクトと Let's Encrypt (HTTP-01) の応答しか返さないので
+    //     全開放のままにする (証明書更新が止まると 2026-10-10 のような 502 障害になる)。
     this.ec2SecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'HTTP from Cloudflare (or anywhere in dev)',
+      'HTTP (redirect to HTTPS + ACME HTTP-01)',
     );
-    this.ec2SecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS from Cloudflare (or anywhere in dev)',
-    );
+    // 443: context cloudFrontPrefixListId を指定した場合は CloudFront からのみ許可する。
+    //      オリジン IP に直接アクセスされると WAF / レート制限を迂回されるため。
+    //      (未指定なら従来どおり全開放 — 既存環境の挙動を変えない)
+    if (config.cloudFrontPrefixListId) {
+      this.ec2SecurityGroup.addIngressRule(
+        ec2.Peer.prefixList(config.cloudFrontPrefixListId),
+        ec2.Port.tcp(443),
+        'HTTPS from CloudFront origin-facing only (WAF bypass prevention)',
+      );
+    } else {
+      this.ec2SecurityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(443),
+        'HTTPS from anywhere (set cloudFrontPrefixListId to restrict)',
+      );
+    }
 
     // RDS (PostgreSQL 15)
     this.rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSg', {

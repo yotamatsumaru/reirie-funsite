@@ -245,7 +245,24 @@ fields @timestamp, duration
 
 ### 自動バックアップ
 
-RDS 自動スナップショット (7日間保持)、PITR (Point-in-Time Recovery) 5分粒度。
+> 詳細設計・復元手順の全体は [`SECURITY_BACKUP.md`](SECURITY_BACKUP.md) を参照。
+
+| 系統 | 内容 |
+|---|---|
+| RDS 自動バックアップ | PITR 5分粒度 / 14 日保持 (prod 35 日)。削除保護 ON |
+| AWS Backup | 日次 35 日 + 月次 1 年。Vault Lock (削除不可) + 大阪リージョンへ自動コピー |
+| pg_dump | EC2 cron 毎日 03:30 JST → S3 Object Lock バケット (30 日 WORM)。`deploy/backup-db.sh` |
+
+失敗時アラーム: AWS Backup ジョブ失敗 (Vault 通知) / `*-db-dump-missing` (26 時間 pg_dump 成功なし)。
+
+```bash
+# pg_dump の手動実行・ログ確認 (EC2 上)
+sudo -u ec2-user bash /home/ec2-user/app/deploy/backup-db.sh
+tail -n 50 /home/ec2-user/logs/backup-db.log
+
+# pg_dump から別 DB に復元 (本番 DB は触らない)
+bash /home/ec2-user/app/deploy/restore-db-dump.sh /tmp/<file>.dump
+```
 
 ### 手動スナップショット
 
@@ -276,3 +293,37 @@ aws rds restore-db-instance-from-db-snapshot \
 - 緊急: PagerDuty (P1: 15分以内応答)
 - AWS サポート: ビジネスサポート (24/7)
 - Stripe サポート: dashboard.stripe.com/support
+
+
+## 障害: reirie.com が 502 Bad Gateway (CloudFront「Error from cloudfront」)
+
+### 症状
+- `https://reirie.com` / `https://www.reirie.com` が 502。レスポンスヘッダに `x-cache: Error from cloudfront`
+- `https://origin-app.reirie.com` (EC2 直) は 200 で正常
+
+### 原因 (2026-10-10 に発生)
+オリジン (EC2 nginx) の Let's Encrypt 証明書が失効。CloudFront はオリジンへ `HTTPS_ONLY` で
+接続するため、証明書が無効だと接続を拒否して 502 を返す。アプリ・DB は正常。
+
+### 確認
+```bash
+echo | openssl s_client -connect 52.196.151.93:443 -servername origin-app.reirie.com 2>/dev/null \
+  | openssl x509 -noout -dates
+# notAfter が過去なら失効
+```
+
+### 復旧 (1 コマンド)
+```bash
+# SSM Session Manager で EC2 に接続して
+sudo FORCE=1 bash /home/ec2-user/app/deploy/renew-tls.sh
+
+# または AWS CLI から
+aws ssm send-command \
+  --document-name "AWS-RunShellScript" \
+  --targets "Key=tag:Application,Values=idol-fansite" \
+  --parameters commands='["sudo certbot renew --force-renewal && sudo systemctl reload nginx"]'
+```
+
+### 再発防止
+`deploy/install-cron.sh` が毎日 `deploy/renew-tls.sh` を cron 登録する (deploy.sh 実行時に自動反映)。
+ログは `/var/log/renew-tls.log`。

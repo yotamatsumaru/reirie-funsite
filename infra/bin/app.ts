@@ -17,6 +17,9 @@
  *    8. MonitoringStack     (depends on Ec2, Database, Webhook)
  *    9. VideoEncodeStack    (独立。MediaConvert 完了通知 Lambda + EventBridge)
  *   10. SiteCdnStack        (depends on Ec2Stack, DnsStack。domainName 指定時のみ作成)
+ *   11. BackupCopyStack     (別リージョン。AWS Backup のコピー先 Vault)
+ *   12. BackupStack         (depends on Database, Monitoring, Ec2, BackupCopy)
+ *   13. WafStack            (us-east-1 固定。domainName 指定時のみ。SiteCdn にアタッチ)
  */
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -32,6 +35,8 @@ import { MonitoringStack } from '../lib/monitoring-stack';
 import { VideoEncodeStack } from '../lib/video-encode-stack';
 import { DnsStack } from '../lib/dns-stack';
 import { SiteCdnStack } from '../lib/site-cdn-stack';
+import { BackupStack, BackupCopyStack } from '../lib/backup-stack';
+import { WafStack } from '../lib/waf-stack';
 import { IamDescriptionAsciiAspect } from '../lib/iam-description-aspect';
 
 const app = new cdk.App();
@@ -211,6 +216,17 @@ if (webAppBaseUrl) {
 // 10. Site CDN (domainName が context で指定された場合のみ作成)
 // dns は上の 3.5 で (domainName 指定時のみ) 既に作成済みなのでそれを再利用する。
 // 例: cdk deploy '*-dns' '*-site-cdn' --context domainName=reirie.com
+// 10.5 WAF (us-east-1 固定。CloudFront 用 Web ACL は us-east-1 でしか作れない)
+let waf: WafStack | undefined;
+if (config.domainName && config.waf.enabled) {
+  waf = new WafStack(app, `${stackPrefix}-waf`, {
+    env: usEast1Env,
+    crossRegionReferences: true,
+    config,
+    description: 'WAF Web ACL for main site CloudFront (rate limit + AWS managed rules)',
+  });
+}
+
 if (config.domainName && dns) {
   const siteCdn = new SiteCdnStack(app, `${stackPrefix}-site-cdn`, {
     env,
@@ -220,10 +236,42 @@ if (config.domainName && dns) {
     hostedZone: dns.hostedZone,
     certificate: dns.certificate,
     originIp: ec2Stack.elasticIp.ref,
+    webAclArn: waf?.webAclArn,
     description: 'CloudFront distribution (main domain) + Route 53 ALIAS records',
   });
   siteCdn.addDependency(dns);
   siteCdn.addDependency(ec2Stack);
+  if (waf) siteCdn.addDependency(waf);
+}
+
+// 11/12. Backup (AWS Backup Vault Lock + 別リージョンコピー + pg_dump 用 Object Lock S3)
+// destroyOnRemove=true (使い捨て環境) では既定で作らない。
+if (config.backup.enabled) {
+  let backupCopy: BackupCopyStack | undefined;
+  if (config.backup.copyRegion) {
+    if (config.backup.copyRegion === config.region) {
+      throw new Error('backupCopyRegion must differ from the main region');
+    }
+    backupCopy = new BackupCopyStack(app, `${stackPrefix}-backup-copy`, {
+      env: { account: env.account, region: config.backup.copyRegion },
+      config,
+      description: `AWS Backup copy-destination vault (${config.backup.copyRegion}, Vault Lock)`,
+    });
+  }
+  const backupStack = new BackupStack(app, `${stackPrefix}-backup`, {
+    env,
+    config,
+    dbInstance: database.dbInstance,
+    alertTopic: monitoring.alertTopic,
+    dbSubnetGroupName: database.dbSubnetGroupName,
+    dbSecurityGroupId: database.dbSecurityGroupId,
+    description: 'AWS Backup plan (Vault Lock, cross-region copy) + Object Lock bucket for pg_dump',
+  });
+  backupStack.addDependency(database);
+  backupStack.addDependency(monitoring);
+  // EC2 ロールに名前参照でポリシーを付与するため、ロール作成後にデプロイする
+  backupStack.addDependency(ec2Stack);
+  if (backupCopy) backupStack.addDependency(backupCopy);
 }
 
 // 共通タグ (アプリ全体)

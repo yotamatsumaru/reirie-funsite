@@ -65,7 +65,14 @@ export class StorageStack extends Stack {
       enforceSSL: true,
       removalPolicy,
       autoDeleteObjects: config.destroyOnRemove,
+      // バージョニング: 誤削除・上書き・ランサムウェアによる暗号化上書きから
+      // 直前の版を復元できるようにする (旧版は下の lifecycle で自動削除)。
+      versioned: true,
       lifecycleRules: [
+        {
+          id: 'expire-noncurrent',
+          noncurrentVersionExpiration: Duration.days(14),
+        },
         {
           id: 'transition-source',
           prefix: 'source/',
@@ -138,6 +145,18 @@ export class StorageStack extends Stack {
       enforceSSL: true,
       removalPolicy,
       autoDeleteObjects: config.destroyOnRemove,
+      // バージョニング (画像などユーザーアップロード資産の誤削除・改ざん対策)
+      versioned: true,
+      lifecycleRules: [
+        {
+          id: 'expire-noncurrent',
+          noncurrentVersionExpiration: Duration.days(30),
+        },
+        {
+          id: 'abort-multipart',
+          abortIncompleteMultipartUploadAfter: Duration.days(7),
+        },
+      ],
       cors: [
         {
           allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.PUT, s3.HttpMethods.POST],

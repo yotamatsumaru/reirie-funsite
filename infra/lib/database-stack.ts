@@ -21,6 +21,10 @@ export interface DatabaseStackProps extends StackProps {
 export class DatabaseStack extends Stack {
   public readonly dbInstance: rds.DatabaseInstance;
   public readonly dbSecret: secretsmanager.ISecret;
+  /** DB サブネットグループ名 (AWS Backup の自動復元テストで復元先に使う) */
+  public readonly dbSubnetGroupName: string;
+  /** RDS のセキュリティグループ ID (同上) */
+  public readonly dbSecurityGroupId: string;
 
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
@@ -40,6 +44,12 @@ export class DatabaseStack extends Stack {
         'rds.force_ssl': '1',
         timezone: 'Asia/Tokyo',
         log_min_duration_statement: '1000', // 1秒超のクエリをログ
+        // 監査: 接続/切断と DDL (DROP/ALTER/TRUNCATE 等) を CloudWatch Logs に残す。
+        // 不正アクセスや破壊操作があったときに「いつ・どこから」を追跡するため。
+        // (いずれも dynamic パラメータなので再起動不要)
+        log_connections: '1',
+        log_disconnections: '1',
+        log_statement: 'ddl',
       },
     });
 
@@ -83,7 +93,11 @@ export class DatabaseStack extends Stack {
       maxAllocatedStorage: config.rdsAllocatedStorage * 5,
       storageType: rds.StorageType.GP3,
       storageEncrypted: true,
-      backupRetention: Duration.days(config.envName === 'prod' ? 14 : 7),
+      // PITR の保持期間。ランサムウェアや設定ミスに「数日後に気付く」ケースに備えて
+      // 長めに取る (config.rdsBackupRetentionDays / 既定: prod 35 日, 保護環境 14 日)。
+      // これとは別に BackupStack が改ざん不能な Vault に日次/月次コピーを取る。
+      backupRetention: Duration.days(config.rdsBackupRetentionDays),
+      copyTagsToSnapshot: true,
       preferredBackupWindow: '17:00-18:00', // JST 02:00-03:00
       preferredMaintenanceWindow: 'sun:18:00-sun:19:00', // JST 日曜 03:00-04:00
       deleteAutomatedBackups: config.destroyOnRemove,
@@ -95,6 +109,12 @@ export class DatabaseStack extends Stack {
       autoMinorVersionUpgrade: true,
       publiclyAccessible: false,
     });
+
+    // DatabaseInstance が内部で作るサブネットグループ (construct id: 'SubnetGroup')
+    this.dbSubnetGroupName = (
+      this.dbInstance.node.findChild('SubnetGroup') as rds.ISubnetGroup
+    ).subnetGroupName;
+    this.dbSecurityGroupId = rdsSecurityGroup.securityGroupId;
 
     // ---- Outputs ----
     new CfnOutput(this, 'DbEndpoint', {
