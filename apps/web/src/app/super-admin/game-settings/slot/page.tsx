@@ -10,9 +10,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { gameThumbnailSlot, type SiteImageSlot } from '@idol/shared';
-import { getSlotSettings } from '@/lib/app-setting';
+import { getSlotSettings, getSlotThemeMode } from '@/lib/app-setting';
 import { listSiteImages } from '@/lib/site-image';
 import { SlotSettingsClient } from '../slot-settings-client';
+import { SlotThemeClient } from '../slot-theme-client';
 import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 import {
   GameThumbnailClient,
@@ -25,9 +26,10 @@ export const dynamic = 'force-dynamic';
 const THUMBNAIL_SLOT = gameThumbnailSlot('slot') as SiteImageSlot;
 
 export default async function SlotGameSettingsPage() {
-  const [slotSettings, siteImages] = await Promise.all([
+  const [slotSettings, siteImages, themeMode] = await Promise.all([
     getSlotSettings(),
     listSiteImages(),
+    getSlotThemeMode(),
   ]);
 
   const thumb = siteImages.find((s) => s.slot === THUMBNAIL_SLOT);
@@ -52,13 +54,18 @@ export default async function SlotGameSettingsPage() {
         </Link>
         <h1 className="mt-2 text-xl font-bold text-slate-900 sm:text-2xl">スロット 設定</h1>
         <p className="mt-1 text-sm text-slate-500">
-          出玉設定 (当選確率) とサムネイルの設定。売上・統計は「ゲーム経済」で確認できます。
+          見た目テーマ (ハロウィン等)・出玉設定 (当選確率)・サムネイルの設定。売上・統計は「ゲーム経済」で確認できます。
         </p>
       </header>
 
       {/* ゲームサムネイル (ゲーム一覧カードの画像) */}
       <SuperAdminWriteGate silent>
         <GameThumbnailClient slot={THUMBNAIL_SLOT} initial={thumbnailItem} />
+      </SuperAdminWriteGate>
+
+      {/* 見た目テーマ (通常 / ハロウィン) */}
+      <SuperAdminWriteGate label="ゲーム設定の変更はスーパー管理者のみ実行できます">
+        <SlotThemeClient initial={themeMode} />
       </SuperAdminWriteGate>
 
       {/* 出玉設定 (1〜6) */}

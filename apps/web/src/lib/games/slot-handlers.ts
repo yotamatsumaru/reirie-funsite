@@ -28,6 +28,7 @@ import {
   resolveSlotSettingForPlan,
   isPromoActive,
   PROMO_EFFECTIVE_PLAN,
+  resolveSlotTheme,
   type PlanTypeLiteral,
 } from '@idol/shared';
 import { errors } from '@/lib/errors';
@@ -42,7 +43,7 @@ import {
   safeGetPromoUntil,
 } from '@/lib/points';
 import { resolveSlotPlay } from '@/lib/games/slot';
-import { getSlotSettings } from '@/lib/app-setting';
+import { getSlotSettings, getSlotThemeMode } from '@/lib/app-setting';
 import { requireGameVisible } from '@/lib/game-visibility';
 
 /**
@@ -76,7 +77,7 @@ export async function handleSlotGet(req: Request): Promise<Response> {
   await requireGameVisible(req, 'slot');
   const principal = await requireApiPrincipal(req);
 
-  const [playedToday, purchasedExtra, user, promoUntil] = await Promise.all([
+  const [playedToday, purchasedExtra, user, promoUntil, themeMode] = await Promise.all([
     getSlotPlayCountToday(principal.userId),
     getSlotExtraPlaysToday(principal.userId),
     prisma.user.findUnique({
@@ -84,6 +85,7 @@ export async function handleSlotGet(req: Request): Promise<Response> {
       select: { pui: true },
     }),
     safeGetPromoUntil(prisma, principal.userId),
+    getSlotThemeMode(),
   ]);
 
   // プロモ/デモアカウントは回数無制限。remaining は大きな値を返し、
@@ -93,6 +95,9 @@ export async function handleSlotGet(req: Request): Promise<Response> {
 
   return NextResponse.json({
     date: jstDateKey(),
+    // 見た目テーマ ('default' | 'halloween')。絵柄 ID・役・配当はテーマに関係なく共通なので、
+    // クライアントはこれを見て表示だけを差し替えればよい (追加フィールド・後方互換)。
+    theme: resolveSlotTheme(themeMode),
     promoActive,
     baseMaxPerDay: SLOT_MAX_PLAYS_PER_DAY,
     maxPerDay,

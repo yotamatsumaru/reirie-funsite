@@ -18,6 +18,9 @@ import {
   DEFAULT_SLOT_SETTINGS,
   SlotSettingsByPlanSchema,
   type SlotSettingsByPlan,
+  SLOT_THEME_KEY,
+  parseSlotThemeMode,
+  type SlotThemeMode,
   MEMBER_RANK_TIERS_KEY,
   DEFAULT_MEMBER_RANK_TIERS,
   MemberRankTiersSchema,
@@ -209,6 +212,32 @@ export async function setSlotSettings(
     update: { value },
   });
   return validated;
+}
+
+/**
+ * スロットの見た目テーマのモード (auto / default / halloween) を取得する。
+ * 未設定・破損・DB 障害時は auto (期間で自動切替) を返す。
+ * テーマは表示だけを変え、確率・配当には一切影響しない (packages/shared/src/slot-theme.ts)。
+ */
+export async function getSlotThemeMode(): Promise<SlotThemeMode> {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: SLOT_THEME_KEY } });
+    if (!row) return parseSlotThemeMode(undefined);
+    return parseSlotThemeMode(JSON.parse(row.value));
+  } catch {
+    return parseSlotThemeMode(undefined);
+  }
+}
+
+/** スロットの見た目テーマのモードを保存する (SUPER_ADMIN 限定で呼び出すこと) */
+export async function setSlotThemeMode(mode: SlotThemeMode): Promise<SlotThemeMode> {
+  const value = JSON.stringify(mode);
+  await prisma.appSetting.upsert({
+    where: { key: SLOT_THEME_KEY },
+    create: { key: SLOT_THEME_KEY, value },
+    update: { value },
+  });
+  return mode;
 }
 
 /**

@@ -16,22 +16,28 @@
  *
  * ※ API のレスポンスが早すぎると演出が一瞬で終わってしまうため、
  *   最低でも MIN_SPIN_MS は回してから停止処理に入る。
+ *
+ * 見た目テーマ (通常 / ハロウィン) はサーバーが解決して initial.theme で渡す。
+ * テーマで変わるのは絵柄の絵文字・名前・文言・配色だけで、役・確率・配当は共通。
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  SLOT_OUTCOME_LABEL,
-  SLOT_SYMBOL_EMOJI,
-  SLOT_SYMBOL_LABEL,
+  SLOT_SYMBOLS,
+  SLOT_THEME_DEFINITIONS,
   SLOT_TRIPLE_SYMBOL,
   type SlotOutcome,
   type SlotSymbol,
+  type SlotTheme,
+  type SlotThemeDefinition,
 } from '@idol/shared';
 import { Button } from '@/components/ui/Button';
 import { SlotReel } from './SlotReel';
 
 type Initial = {
   date: string;
+  /** 見た目テーマ (サーバーが管理画面の設定 + 期間から解決) */
+  theme: SlotTheme;
   baseMaxPerDay: number;
   maxPerDay: number;
   playedToday: number;
@@ -78,16 +84,95 @@ const PAYOUT_ROWS: Exclude<SlotOutcome, 'LOSE'>[] = [
 ];
 
 /** 役の見た目 (配当表の絵柄欄) */
-function outcomeSymbols(outcome: Exclude<SlotOutcome, 'LOSE'>): string {
+function outcomeSymbols(
+  outcome: Exclude<SlotOutcome, 'LOSE'>,
+  def: SlotThemeDefinition,
+): ReactNode {
   if (outcome === 'CHERRY_SINGLE') {
-    return `${SLOT_SYMBOL_EMOJI.CHERRY} が1つ以上`;
+    return (
+      <>
+        {def.symbolEmoji.CHERRY}
+        <span className="ml-1 text-xs text-slate-500">が1つ以上</span>
+      </>
+    );
   }
-  const s = SLOT_SYMBOL_EMOJI[SLOT_TRIPLE_SYMBOL[outcome]];
+  const s = def.symbolEmoji[SLOT_TRIPLE_SYMBOL[outcome]];
   return `${s}${s}${s}`;
+}
+
+/** テーマごとの画面の配色 (Tailwind クラス) */
+const THEME_STYLE: Record<
+  SlotTheme,
+  {
+    header: string;
+    cabinet: string;
+    winTitle: string;
+    winBadge: string;
+    card: string;
+    cardTitle: string;
+    /** レバー (メインボタン) の上書き配色。空なら Button の既定 */
+    lever: string;
+  }
+> = {
+  default: {
+    header:
+      'border-black bg-twilight-amethyst text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)]',
+    cabinet:
+      'border-black bg-gradient-to-b from-slate-800 to-slate-900 shadow-[6px_6px_0_rgba(0,0,0,0.9)]',
+    winTitle: 'text-amber-300',
+    winBadge: 'bg-amber-300 text-amber-950',
+    card: 'border-slate-200 bg-white',
+    cardTitle: 'text-slate-800',
+    lever: '',
+  },
+  halloween: {
+    header:
+      'border-black bg-gradient-to-br from-orange-500 via-orange-600 to-purple-800 text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)]',
+    cabinet:
+      'border-black bg-gradient-to-b from-indigo-950 via-purple-950 to-black shadow-[6px_6px_0_rgba(0,0,0,0.9)]',
+    winTitle: 'text-orange-300',
+    winBadge: 'bg-orange-400 text-purple-950',
+    card: 'border-orange-200 bg-orange-50/60',
+    cardTitle: 'text-purple-900',
+    lever:
+      '!bg-gradient-to-b !from-orange-400 !to-orange-600 !text-purple-950 font-bold hover:!from-orange-300 hover:!to-orange-500 border-2 border-black',
+  },
+};
+
+/** ハロウィンの筐体に浮かべる飾り (装飾のみ。スクリーンリーダーからは隠す) */
+function HalloweenDecorations() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {/* 満月 */}
+      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-amber-100/90 shadow-[0_0_40px_12px_rgba(253,230,138,0.35)]" />
+      {/* 飛び回るコウモリ */}
+      <span className="animate-halloween-bat absolute left-[14%] top-0.5 text-sm">🦇</span>
+      <span
+        className="animate-halloween-bat absolute right-[26%] top-0.5 text-xs"
+        style={{ animationDelay: '-1.4s' }}
+      >
+        🦇
+      </span>
+      {/* 足元のかぼちゃ */}
+      <span className="animate-halloween-float absolute bottom-1 left-2 text-2xl">🎃</span>
+      <span
+        className="animate-halloween-float absolute bottom-1 right-2 text-2xl"
+        style={{ animationDelay: '-1.1s' }}
+      >
+        🎃
+      </span>
+      {/* 蜘蛛の巣 */}
+      <span className="absolute -left-1 -top-1 text-3xl opacity-60">🕸️</span>
+    </div>
+  );
 }
 
 export function SlotGameClient({ initial }: { initial: Initial }) {
   const router = useRouter();
+  const theme: SlotTheme = initial.theme ?? 'default';
+  const def = SLOT_THEME_DEFINITIONS[theme];
+  const ts = THEME_STYLE[theme];
+  const isHalloween = theme === 'halloween';
 
   const [remaining, setRemaining] = useState(initial.remaining);
   const [maxPerDay, setMaxPerDay] = useState(initial.maxPerDay);
@@ -256,11 +341,22 @@ export function SlotGameClient({ initial }: { initial: Initial }) {
   return (
     <div>
       {/* ヘッダー */}
-      <div className="mb-6 rounded-2xl border-2 border-black bg-twilight-amethyst p-6 text-white shadow-[6px_6px_0_rgba(0,0,0,0.9)]">
-        <h1 className="text-2xl font-bold">スロット</h1>
-        <p className="mt-1 text-sm text-white/80">
-          絵柄が揃うと Pui ゲット！最高{' '}
-          <span className="font-bold text-amber-300">{initial.maxPayout} Pui</span>
+      <div className={`relative mb-6 overflow-hidden rounded-2xl border-2 p-6 ${ts.header}`}>
+        {isHalloween ? (
+          <span
+            className="animate-halloween-float pointer-events-none absolute right-3 top-2 text-4xl"
+            aria-hidden
+          >
+            👻
+          </span>
+        ) : null}
+        <h1 className="text-2xl font-bold">
+          {isHalloween ? '🎃 ' : ''}
+          {def.title}
+        </h1>
+        <p className="mt-1 text-sm text-white/85">
+          {def.tagline}{' '}
+          <span className="font-bold text-amber-200">{initial.maxPayout} Pui</span>
         </p>
         <div className="mt-4 flex items-center justify-between text-sm">
           <span className="rounded-full bg-white/15 px-3 py-1">
@@ -284,8 +380,9 @@ export function SlotGameClient({ initial }: { initial: Initial }) {
       </div>
 
       {/* 筐体 */}
-      <div className="rounded-2xl border-2 border-black bg-gradient-to-b from-slate-800 to-slate-900 p-5 shadow-[6px_6px_0_rgba(0,0,0,0.9)]">
-        <div className="flex items-center justify-center gap-2 sm:gap-3">
+      <div className={`relative overflow-hidden rounded-2xl border-2 p-5 ${ts.cabinet}`}>
+        {isHalloween ? <HalloweenDecorations /> : null}
+        <div className="relative mt-2 flex items-center justify-center gap-2 sm:gap-3">
           {[0, 1, 2].map((i) => (
             <SlotReel
               key={i}
@@ -293,44 +390,46 @@ export function SlotGameClient({ initial }: { initial: Initial }) {
               spinning={spinning[i]}
               fast={fastSpin}
               highlight={highlightIndex(i)}
+              theme={theme}
             />
           ))}
         </div>
 
         {/* 結果表示 (全リール停止後) */}
-        <div className="mt-4 min-h-[64px] text-center" aria-live="polite">
+        <div className="relative mt-4 min-h-[64px] text-center" aria-live="polite">
           {isSpinning ? (
-            <p className="text-sm font-medium text-white/60">回転中…</p>
+            <p className="text-sm font-medium text-white/60">{def.spinningMessage}</p>
           ) : result ? (
             win ? (
               <div className="animate-acchi-pop">
-                <p className="text-lg font-bold text-amber-300">
-                  {SLOT_OUTCOME_LABEL[result.outcome]}！
+                <p className={`text-lg font-bold ${ts.winTitle}`}>
+                  {def.outcomeLabel[result.outcome]}
+                  {def.winSuffix}
                 </p>
-                <p className="mt-1 inline-block rounded-full bg-amber-300 px-4 py-1.5 font-bold text-amber-950">
+                <p className={`mt-1 inline-block rounded-full px-4 py-1.5 font-bold ${ts.winBadge}`}>
                   +{result.reward} Pui 獲得！
                 </p>
               </div>
             ) : (
               <div>
-                <p className="text-lg font-bold text-white/70">はずれ…</p>
-                <p className="mt-1 text-sm text-white/50">次こそ揃えよう！</p>
+                <p className="text-lg font-bold text-white/70">{def.loseTitle}</p>
+                <p className="mt-1 text-sm text-white/50">{def.loseMessage}</p>
               </div>
             )
           ) : (
-            <p className="text-sm text-white/50">レバーを押してスタート！</p>
+            <p className="text-sm text-white/60">{def.idleMessage}</p>
           )}
         </div>
 
         {/* レバー */}
-        <div className="mt-2 flex flex-col items-center gap-2">
+        <div className="relative mt-2 flex flex-col items-center gap-2">
           {canPlay ? (
             <Button
               onClick={spin}
               variant="primary"
               size="lg"
               disabled={isSpinning}
-              className="w-full max-w-xs"
+              className={`w-full max-w-xs ${ts.lever}`}
             >
               {isSpinning ? '回転中…' : result ? 'もう一度回す' : 'レバーを押す'}
             </Button>
@@ -372,8 +471,10 @@ export function SlotGameClient({ initial }: { initial: Initial }) {
       ) : null}
 
       {/* 配当表 */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm font-bold text-slate-800">配当表</h2>
+      <div className={`mt-4 rounded-2xl border p-4 shadow-sm ${ts.card}`}>
+        <h2 className={`mb-2 text-sm font-bold ${ts.cardTitle}`}>
+          {isHalloween ? '🎃 配当表' : '配当表'}
+        </h2>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-slate-400">
@@ -385,8 +486,8 @@ export function SlotGameClient({ initial }: { initial: Initial }) {
           <tbody>
             {PAYOUT_ROWS.map((o) => (
               <tr key={o} className="border-t border-slate-100">
-                <td className="py-1.5 text-lg">{outcomeSymbols(o)}</td>
-                <td className="py-1.5 text-slate-600">{SLOT_OUTCOME_LABEL[o]}</td>
+                <td className="whitespace-nowrap py-1.5 pr-2 text-lg">{outcomeSymbols(o, def)}</td>
+                <td className="py-1.5 text-slate-600">{def.outcomeLabel[o]}</td>
                 <td className="py-1.5 text-right font-bold text-slate-800">
                   {initial.payouts[o]}
                 </td>
@@ -400,9 +501,7 @@ export function SlotGameClient({ initial }: { initial: Initial }) {
         </p>
         <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
           ※ 絵柄:{' '}
-          {(Object.keys(SLOT_SYMBOL_EMOJI) as SlotSymbol[])
-            .map((s) => `${SLOT_SYMBOL_EMOJI[s]}${SLOT_SYMBOL_LABEL[s]}`)
-            .join(' / ')}
+          {SLOT_SYMBOLS.map((s) => `${def.symbolEmoji[s]}${def.symbolLabel[s]}`).join(' / ')}
         </p>
       </div>
 

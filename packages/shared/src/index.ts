@@ -18,6 +18,7 @@ export * from './newsletter-shipping';
 export * from './maintenance';
 export * from './mini-game';
 export * from './slot-game';
+export * from './slot-theme';
 export * from './memory-game';
 export * from './promo';
 export * from './game-audio';
