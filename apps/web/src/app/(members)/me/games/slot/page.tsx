@@ -19,6 +19,7 @@ import {
   SLOT_PAYOUT,
   EXTRA_PLAY_COST_PUI,
   MAX_EXTRA_PLAYS_PER_DAY,
+  resolveSlotTheme,
 } from '@idol/shared';
 import { prisma } from '@idol/db';
 import { auth } from '@/auth';
@@ -29,6 +30,7 @@ import {
   safeGetPromoUntil,
 } from '@/lib/points';
 import { resolveGameVisibility } from '@/lib/game-visibility';
+import { getSlotThemeMode } from '@/lib/app-setting';
 import { GamePreviewBanner } from '@/components/game/GamePreviewBanner';
 import { SlotGameClient } from './slot-client';
 
@@ -45,7 +47,7 @@ export default async function SlotGamePage() {
     redirect('/signin?callbackUrl=/me/games/slot');
   }
 
-  const [playedToday, purchasedExtra, user, promoUntil] = await Promise.all([
+  const [playedToday, purchasedExtra, user, promoUntil, themeMode] = await Promise.all([
     getSlotPlayCountToday(session.user.id),
     getSlotExtraPlaysToday(session.user.id),
     prisma.user.findUnique({
@@ -54,6 +56,8 @@ export default async function SlotGamePage() {
     }),
     // promo_until はカラム未追加でも落ちないよう安全に読む (未適用なら null)。
     safeGetPromoUntil(prisma, session.user.id),
+    // 見た目テーマ (auto ならハロウィン期間だけハロウィン)。表示のみで確率・配当は不変。
+    getSlotThemeMode(),
   ]);
 
   const promoActive = isPromoActive(promoUntil);
@@ -65,6 +69,7 @@ export default async function SlotGamePage() {
       <SlotGameClient
         initial={{
           date: jstDateKey(),
+          theme: resolveSlotTheme(themeMode),
           baseMaxPerDay: SLOT_MAX_PLAYS_PER_DAY,
           maxPerDay,
           playedToday,

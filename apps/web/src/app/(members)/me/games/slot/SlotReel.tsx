@@ -11,17 +11,42 @@
  * 停止時はアニメーションを外し、サーバーが確定した絵柄を 1 つだけ表示する。
  * 表示する絵柄は必ず props (= サーバーのレスポンス) から来るので、
  * クライアント側の乱数で見た目が決まることはない。
+ *
+ * === テーマ ===
+ * theme (通常 / ハロウィン) で変わるのは絵文字と枠の配色だけ。
+ * 絵柄 ID (symbol) はテーマに関係なく共通 (packages/shared/src/slot-theme.ts)。
  */
-import { SLOT_SYMBOLS, SLOT_SYMBOL_EMOJI, SLOT_SYMBOL_LABEL, type SlotSymbol } from '@idol/shared';
+import { SLOT_SYMBOLS, SLOT_THEME_DEFINITIONS, type SlotSymbol, type SlotTheme } from '@idol/shared';
 
 /** 回転中に流れるストリップ (絵柄列を 2 周分並べる) */
 const STRIP: SlotSymbol[] = [...SLOT_SYMBOLS, ...SLOT_SYMBOLS];
+
+/** テーマごとのリール枠の配色 */
+const REEL_STYLE: Record<
+  SlotTheme,
+  { frame: string; frameWin: string; payline: string }
+> = {
+  default: {
+    frame: 'border-black bg-white shadow-[3px_3px_0_rgba(0,0,0,0.9)]',
+    frameWin: 'animate-slot-win-glow border-black bg-amber-50 shadow-[3px_3px_0_rgba(0,0,0,0.9)]',
+    payline: 'bg-rose-400/40',
+  },
+  halloween: {
+    // 夜空のような濃紫の窓 + オレンジの縁。当たり時はかぼちゃ色に灯る。
+    frame:
+      'border-orange-500 bg-gradient-to-b from-violet-950 via-purple-900 to-violet-950 shadow-[3px_3px_0_rgba(0,0,0,0.9)]',
+    frameWin:
+      'animate-slot-win-glow-halloween border-orange-400 bg-gradient-to-b from-orange-900 via-amber-700 to-orange-900 shadow-[3px_3px_0_rgba(0,0,0,0.9)]',
+    payline: 'bg-orange-400/50',
+  },
+};
 
 export function SlotReel({
   symbol,
   spinning,
   fast = false,
   highlight = false,
+  theme = 'default',
 }: {
   /** 停止時に表示する絵柄。回転中 (spinning) は無視される。 */
   symbol: SlotSymbol | null;
@@ -31,12 +56,17 @@ export function SlotReel({
   fast?: boolean;
   /** 当たりの一部として光らせるか */
   highlight?: boolean;
+  /** 見た目テーマ */
+  theme?: SlotTheme;
 }) {
+  const def = SLOT_THEME_DEFINITIONS[theme];
+  const style = REEL_STYLE[theme];
+
   return (
     <div
       className={[
-        'relative h-24 w-20 overflow-hidden rounded-xl border-4 border-black bg-white shadow-[3px_3px_0_rgba(0,0,0,0.9)] sm:h-28 sm:w-24',
-        highlight ? 'animate-slot-win-glow bg-amber-50' : '',
+        'relative h-24 w-20 overflow-hidden rounded-xl border-4 sm:h-28 sm:w-24',
+        highlight ? style.frameWin : style.frame,
       ].join(' ')}
       // 回転中は絵柄が読み取れないので、スクリーンリーダーには状態だけを伝える。
       role="img"
@@ -44,7 +74,7 @@ export function SlotReel({
         spinning
           ? 'リール回転中'
           : symbol
-            ? `リール: ${SLOT_SYMBOL_LABEL[symbol]}`
+            ? `リール: ${def.symbolLabel[symbol]}`
             : 'リール: 停止'
       }
     >
@@ -55,7 +85,7 @@ export function SlotReel({
               key={`${s}-${i}`}
               className="flex h-24 w-full items-center justify-center text-4xl sm:h-28 sm:text-5xl"
             >
-              {SLOT_SYMBOL_EMOJI[s]}
+              {def.symbolEmoji[s]}
             </div>
           ))}
         </div>
@@ -63,15 +93,20 @@ export function SlotReel({
         <div
           // key を絵柄にしておくと、絵柄が変わるたびに停止バウンドが再生される。
           key={symbol ?? 'empty'}
-          className="animate-slot-stop flex h-full w-full items-center justify-center text-4xl sm:text-5xl"
+          className={[
+            'animate-slot-stop flex h-full w-full items-center justify-center text-4xl sm:text-5xl',
+            theme === 'halloween' && !symbol ? 'text-orange-300/60' : '',
+          ].join(' ')}
           aria-hidden
         >
-          {symbol ? SLOT_SYMBOL_EMOJI[symbol] : '—'}
+          {symbol ? def.symbolEmoji[symbol] : '—'}
         </div>
       )}
 
       {/* 中央のペイライン (見た目だけ。判定には影響しない) */}
-      <div className="pointer-events-none absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2 bg-rose-400/40" />
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2 ${style.payline}`}
+      />
     </div>
   );
 }

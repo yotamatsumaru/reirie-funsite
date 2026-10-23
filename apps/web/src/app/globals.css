@@ -390,6 +390,31 @@ button {
 }
 .animate-slot-win-glow { animation: slot-win-glow 0.9s ease-in-out 3; }
 
+/* ===== スロット: ハロウィンテーマ ===== */
+/* 当たり演出 (かぼちゃ色に灯る) */
+@keyframes slot-win-glow-halloween {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.9); }
+  50% { box-shadow: 0 0 26px 8px rgba(249, 115, 22, 0.85), 0 0 10px 2px rgba(168, 85, 247, 0.6); }
+}
+.animate-slot-win-glow-halloween { animation: slot-win-glow-halloween 0.9s ease-in-out 3; }
+
+/* おばけ・かぼちゃがふわふわ浮く */
+@keyframes halloween-float {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-6px) rotate(4deg); }
+}
+.animate-halloween-float { animation: halloween-float 2.6s ease-in-out infinite; }
+
+/* コウモリがはばたきながら左右に飛ぶ */
+@keyframes halloween-bat {
+  0% { transform: translate(0, 0) scaleX(1); }
+  25% { transform: translate(18px, -4px) scaleX(1); }
+  50% { transform: translate(36px, 2px) scaleX(-1); }
+  75% { transform: translate(18px, -6px) scaleX(-1); }
+  100% { transform: translate(0, 0) scaleX(1); }
+}
+.animate-halloween-bat { animation: halloween-bat 3.2s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   /*
    * 回転アニメーションを完全に止めるとリールが「止まった状態」で固定され、
@@ -399,7 +424,10 @@ button {
   .animate-slot-spin,
   .animate-slot-spin-fast,
   .animate-slot-stop,
-  .animate-slot-win-glow {
+  .animate-slot-win-glow,
+  .animate-slot-win-glow-halloween,
+  .animate-halloween-float,
+  .animate-halloween-bat {
     animation: none;
     transform: translateY(0);
   }

@@ -171,11 +171,14 @@ let slotSettings: Record<string, SlotSetting> = {
   PREMIUM: 6,
 };
 
+let slotThemeMode: 'auto' | 'default' | 'halloween' = 'default';
+
 jest.mock('@/lib/app-setting', () => ({
   getSlotSettings: async () => {
     calls.push('getSlotSettings');
     return slotSettings;
   },
+  getSlotThemeMode: async () => slotThemeMode,
 }));
 
 jest.mock('@/lib/audit', () => ({
@@ -284,6 +287,13 @@ describe('ゲーム非公開中のガード', () => {
 });
 
 describe('GET /games/slot', () => {
+  it('見た目テーマを返す (管理画面の設定に従う。Unity 等も表示を合わせられる)', async () => {
+    slotThemeMode = 'halloween';
+    expect((await (await handleSlotGet(req())).json()).theme).toBe('halloween');
+    slotThemeMode = 'default';
+    expect((await (await handleSlotGet(req())).json()).theme).toBe('default');
+  });
+
   it('配当表をサーバーから返す (クライアントにハードコードさせない)', async () => {
     const res = await handleSlotGet(req());
     const body = await res.json();
