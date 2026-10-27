@@ -510,29 +510,74 @@ button {
 .ticket-embed a:not([style]),
 .ticket-embed button:not([style]),
 .ticket-embed input[type='submit']:not([style]) {
+  /* ブラウザ標準のボタン装飾 (枠線・グラデーション等) を消してから整える */
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 10px 22px;
-  border: 2px solid #000;
+  gap: 0.4em;
+  min-width: 200px;
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 28px;
+  border: 0;
   border-radius: 9999px;
-  background: var(--color-twilight-amethyst);
+  /* サイト共通の主要ボタン色 (components/ui/Button.tsx の primary と同じ) */
+  background: var(--color-brand-600);
   color: #fff;
+  font: inherit;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
   text-decoration: none;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.9);
+  box-shadow: 0 2px 6px rgba(168, 79, 137, 0.35);
   cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
 }
 .ticket-embed a:not([style]):hover,
 .ticket-embed button:not([style]):hover,
 .ticket-embed input[type='submit']:not([style]):hover {
-  transform: translate(1px, 1px);
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
+  background: var(--color-brand-700);
+  box-shadow: 0 4px 12px rgba(168, 79, 137, 0.4);
 }
-.ticket-embed a:not([style])::after {
-  content: '↗';
-  margin-left: 0.35em;
-  font-size: 0.85em;
+.ticket-embed a:not([style]):active,
+.ticket-embed button:not([style]):active,
+.ticket-embed input[type='submit']:not([style]):active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(168, 79, 137, 0.35);
+}
+/* 外部サイトへ移動することが分かるよう、矢印を付ける (input は疑似要素不可) */
+.ticket-embed a:not([style])::after,
+.ticket-embed button:not([style])::after {
+  content: '→';
+  font-size: 0.95em;
+  transition: transform 0.15s ease;
+}
+.ticket-embed a:not([style]):hover::after,
+.ticket-embed button:not([style]):hover::after {
+  transform: translateX(2px);
+}
+/* input は flex 表示が効かないブラウザがあるため、ブロック + 中央寄せで同じ見た目にする */
+.ticket-embed input[type='submit']:not([style]) {
+  display: inline-block;
+  text-align: center;
+}
+/* スマホでは押しやすいよう横幅いっぱいにする */
+@media (max-width: 639px) {
+  .ticket-embed form,
+  .ticket-embed a:not([style]),
+  .ticket-embed button:not([style]),
+  .ticket-embed input[type='submit']:not([style]) {
+    display: flex;
+    width: 100%;
+  }
+  .ticket-embed input[type='submit']:not([style]) {
+    display: block;
+  }
 }
