@@ -64,11 +64,13 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
               "connect-src 'self' https://api.stripe.com https://*.amazonaws.com wss: https:",
-              "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+              // Ticket Dive: お知らせに埋め込む申込タグ (iframe 型) 用。lib/ticket-embed.ts と同じドメイン
+              "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://ticketdive.com https://*.ticketdive.com",
               "media-src 'self' blob: https:",
               "object-src 'none'",
               "base-uri 'self'",
-              "form-action 'self'",
+              // Ticket Dive: お知らせに埋め込む申込タグ (フォーム型) の送信先
+              "form-action 'self' https://ticketdive.com https://*.ticketdive.com",
               "frame-ancestors 'self'",
             ].join('; '),
           },

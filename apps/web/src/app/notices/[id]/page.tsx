@@ -10,6 +10,7 @@ import { getAnnouncement } from '@/lib/announcements';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { LinkifiedText } from '@/components/ui/LinkifiedText';
+import { TicketEmbed } from '@/components/ui/TicketEmbed';
 import { env } from '@/lib/env';
 import { resolveAnnouncementVisibility } from '@/lib/announcement-visibility';
 import {
@@ -222,6 +223,17 @@ export default async function NoticeDetailPage({
             <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 sm:text-base">
               <LinkifiedText text={a.body} selfOrigin={env.appBaseUrl} />
             </div>
+
+            {/*
+              チケットサイトの申込タグ (Ticket Dive のルート限定タグ等)。
+              このページ上のタグから遷移した人だけが申し込めるので、
+              配信対象 (会員限定等) の閲覧制限の内側に置いている。
+            */}
+            {a.embedHtml ? (
+              <div className="mt-6 border-t border-slate-200 pt-5">
+                <TicketEmbed html={a.embedHtml} />
+              </div>
+            ) : null}
           </CardBody>
         </Card>
       </article>

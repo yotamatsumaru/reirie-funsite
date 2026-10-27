@@ -47,6 +47,7 @@ import { resolveAnnouncementVisibility } from '@/lib/announcement-visibility';
 import { requiredPlanForAudience } from '@/lib/announcement-audience';
 import type { AnnouncementAudienceLiteral } from '@/lib/announcement-audience';
 import { errors, handle } from '@/lib/errors';
+import { sanitizeTicketEmbed } from '@/lib/ticket-embed';
 import { PLAN_LABELS } from '@idol/shared';
 
 export const runtime = 'nodejs';
@@ -112,6 +113,11 @@ export const GET = handle(
         id: announcement.id,
         title: announcement.title,
         body: announcement.body,
+        // チケットサイトの申込タグ (サニタイズ済み HTML / 無ければ null)。
+        // 表示時は Referer を送る WebView で開くこと (ルート限定の判定に必要)。
+        embedHtml: announcement.embedHtml
+          ? sanitizeTicketEmbed(announcement.embedHtml).html || null
+          : null,
         audience: announcement.audience,
         publishedAt: announcement.publishedAt,
       },

@@ -6,11 +6,12 @@ import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { linkify } from '@/lib/linkify';
 import type { AnnouncementAudienceLiteral } from '@/lib/announcement-audience';
 import { AudienceSelect } from './audience-select';
+import { TicketEmbedField } from './ticket-embed-field';
 
 type Audience = AnnouncementAudienceLiteral;
 type Status = 'DRAFT' | 'PUBLISHED';
 
-export function AnnouncementForm() {
+export function AnnouncementForm({ origin }: { origin?: string } = {}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,9 @@ export function AnnouncementForm() {
   const [audience, setAudience] = useState<Audience>('ALL');
   const [status, setStatus] = useState<Status>('DRAFT');
   const [sendEmail, setSendEmail] = useState(false);
+  const [embedHtml, setEmbedHtml] = useState('');
+  /** 保存時にサーバーが取り除いた部分 (あれば作成後に知らせる) */
+  const [embedRemoved, setEmbedRemoved] = useState<string[]>([]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +43,7 @@ export function AnnouncementForm() {
         body: JSON.stringify({
           title: title.trim(),
           body: body.trim(),
+          embedHtml: embedHtml.trim() || null,
           audience,
           status,
           sendEmail,
@@ -51,8 +56,11 @@ export function AnnouncementForm() {
         setError(j.error?.message ?? `HTTP ${res.status}`);
         return;
       }
+      const okJson = (await res.json().catch(() => ({}))) as { embedRemoved?: string[] };
+      setEmbedRemoved(okJson.embedRemoved ?? []);
       setTitle('');
       setBody('');
+      setEmbedHtml('');
       setAudience('ALL');
       setStatus('DRAFT');
       setSendEmail(false);
@@ -104,6 +112,7 @@ export function AnnouncementForm() {
             <br />
             リンクにしたい場合は URL をそのまま貼り付けてください。
             HTML タグは使えません（そのまま文字として表示されます）。
+            チケットサイトの申込タグは下の「申込タグを埋め込む」欄に貼ってください。
           </p>
           <p className="shrink-0 text-[10px] text-slate-400">
             {body.length} / 4000
@@ -113,6 +122,14 @@ export function AnnouncementForm() {
         {/* 本文プレビュー: 実際にどうリンク化されるかを投稿前に確認できる */}
         {body.trim().length > 0 && <BodyLinkPreview body={body} />}
       </div>
+
+      <TicketEmbedField
+        id="new-announcement-embed"
+        value={embedHtml}
+        onChange={setEmbedHtml}
+        disabled={pending}
+        origin={origin}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <AudienceSelect
@@ -167,6 +184,11 @@ export function AnnouncementForm() {
       {success && (
         <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           <p>✓ お知らせを作成しました</p>
+          {embedRemoved.length > 0 && (
+            <p className="mt-1 text-xs text-amber-700">
+              ⚠ 申込タグの一部は安全のため取り除かれました: {embedRemoved.join(' / ')}
+            </p>
+          )}
           <p className="mt-1 text-xs text-emerald-600">
             下書きで保存した場合は、下の一覧の「プレビュー」ボタンから
             公開後と同じ見た目で確認できます（他の方には表示されません）。

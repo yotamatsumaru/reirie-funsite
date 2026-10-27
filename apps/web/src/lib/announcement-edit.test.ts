@@ -76,6 +76,28 @@ describe('validateAnnouncementFields', () => {
 });
 
 describe('diffAnnouncementFields', () => {
+  describe('申込タグ (embedHtml)', () => {
+    const tag = '<a href="https://ticketdive.com/event/x">FC先行</a>';
+
+    it('追加したときだけ送る (他は送らない = メール再送を誘発しない)', () => {
+      expect(diffAnnouncementFields(base, { ...base, embedHtml: tag })).toEqual({ embedHtml: tag });
+    });
+    it('未指定と空文字は同じ扱い (変更なし)', () => {
+      expect(diffAnnouncementFields({ ...base, embedHtml: '' }, { ...base })).toEqual({});
+      expect(diffAnnouncementFields(base, { ...base, embedHtml: '   ' })).toEqual({});
+    });
+    it('削除すると空文字を送る (API 側で null として保存)', () => {
+      expect(
+        diffAnnouncementFields({ ...base, embedHtml: tag }, { ...base, embedHtml: '' }),
+      ).toEqual({ embedHtml: '' });
+    });
+    it('前後の空白だけの違いは変更扱いしない', () => {
+      expect(
+        diffAnnouncementFields({ ...base, embedHtml: tag }, { ...base, embedHtml: `  ${tag}\n` }),
+      ).toEqual({});
+    });
+  });
+
   it('変更が無ければ空オブジェクト', () => {
     const patch = diffAnnouncementFields(base, { ...base });
     expect(patch).toEqual({});

@@ -181,7 +181,7 @@ export function AnnouncementListItem({
       {canEdit && editing && (
         <SuperAdminWriteGate silent>
           <AnnouncementEditForm
-            key={`${id}-${initial.title}-${initial.body}-${initial.audience}-${initial.sendEmail}`}
+            key={`${id}-${initial.title}-${initial.body}-${initial.embedHtml ?? ''}-${initial.audience}-${initial.sendEmail}`}
             id={id}
             status={status}
             emailStatus={emailStatus}
