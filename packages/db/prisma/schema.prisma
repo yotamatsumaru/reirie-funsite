@@ -2190,6 +2190,9 @@ model Announcement {
   id       String               @id @default(uuid()) @db.Uuid
   title    String
   body     String
+  /// チケットサイトの申込タグ (Ticket Dive のルート限定タグ等)。サニタイズ済み HTML。
+  /// 本文 (プレーンテキスト) の下に表示する。lib/ticket-embed.ts 参照
+  embedHtml String? @map("embed_html")
   audience AnnouncementAudience @default(ALL)
   status   AnnouncementStatus   @default(DRAFT)
 

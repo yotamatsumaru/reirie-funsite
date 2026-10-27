@@ -499,3 +499,40 @@ button {
 .ProseMirror video {
   cursor: pointer;
 }
+
+/* ===== お知らせ: チケットサイトの申込タグ (components/ui/TicketEmbed.tsx) ===== */
+/*
+ * Ticket Dive 等が発行するタグは装飾なしの <a> / <button> のことが多い。
+ * そのままだと本文中の小さな文字リンクに見えて押されにくいので、
+ * style 属性が付いていない要素にだけ「申込ボタン」らしい見た目を付ける
+ * (発行元が style を付けている場合はそちらを尊重する)。
+ */
+.ticket-embed a:not([style]),
+.ticket-embed button:not([style]),
+.ticket-embed input[type='submit']:not([style]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 22px;
+  border: 2px solid #000;
+  border-radius: 9999px;
+  background: var(--color-twilight-amethyst);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.9);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.ticket-embed a:not([style]):hover,
+.ticket-embed button:not([style]):hover,
+.ticket-embed input[type='submit']:not([style]):hover {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
+}
+.ticket-embed a:not([style])::after {
+  content: '↗';
+  margin-left: 0.35em;
+  font-size: 0.85em;
+}

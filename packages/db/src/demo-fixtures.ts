@@ -440,6 +440,28 @@ const playerProgress = [
 // =====================================================================
 const announcement = [
   {
+    id: 'ann-ticket',
+    title: '【FC先行】ReiRie ワンマンライブ 2026 チケット受付開始',
+    body: 'ファンクラブ会員の皆さま限定で、ワンマンライブのチケット先行受付を開始しました。\n\n■ 受付期間\n10月27日(火) 12:00 〜 11月3日(火) 23:59\n\n下のボタンからお申し込みください（このページからのみお申し込みいただけます）。',
+    // Ticket Dive のルート限定タグ (デモ用のダミー URL)
+    embedHtml:
+      '<a href="https://ticketdive.com/event/reirie-oneman-2026?route=demo">FC先行のお申し込みはこちら</a>',
+    audience: 'STANDARD',
+    status: 'PUBLISHED',
+    sendEmail: false,
+    emailStatus: 'NOT_REQUESTED',
+    emailRecipientCount: null,
+    emailSentCount: null,
+    emailFailedCount: null,
+    emailStartedAt: null,
+    emailCompletedAt: null,
+    emailError: null,
+    publishedAt: hoursAgo(1),
+    createdAt: hoursAgo(1),
+    updatedAt: hoursAgo(1),
+    authorId: DEMO_SUPER_ID,
+  },
+  {
     id: 'ann-001',
     title: '【重要】システムメンテナンスのお知らせ',
     body: '6月15日 2:00 - 5:00 にメンテナンスを実施します。\n\n■ 影響範囲\n・全機能停止\n\nご不便をおかけしますが、ご理解の程よろしくお願いいたします。',

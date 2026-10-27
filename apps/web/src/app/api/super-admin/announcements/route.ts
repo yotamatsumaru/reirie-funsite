@@ -2,7 +2,9 @@
  * POST /api/super-admin/announcements
  *   - SUPER_ADMIN 限定: お知らせを新規作成
  *
- * body: { title, body, audience, status, sendEmail }
+ * body: { title, body, embedHtml?, audience, status, sendEmail }
+ *
+ * embedHtml (チケットサイトの申込タグ) は lib/ticket-embed.ts で必ずサニタイズしてから保存する。
  *
  * status=PUBLISHED かつ sendEmail=true で作成した場合、作成直後に
  * 会員への一斉メール送信をバックグラウンドでキックする
@@ -16,12 +18,15 @@ import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendAnnouncementEmails, shouldTriggerEmail } from '@/lib/bulk-email';
 import { ANNOUNCEMENT_AUDIENCES } from '@/lib/announcement-audience';
+import { sanitizeTicketEmbed, TICKET_EMBED_MAX_LENGTH } from '@/lib/ticket-embed';
 
 export const runtime = 'nodejs';
 
 const Schema = z.object({
   title: z.string().min(1).max(200),
   body: z.string().min(1).max(4000),
+  // チケットサイトの申込タグ (任意)。空文字 / null は「なし」
+  embedHtml: z.string().max(TICKET_EMBED_MAX_LENGTH).nullish(),
   // 配信対象の一覧は announcement-audience.ts から取る。
   // ここに直接 union を書くと対象を追加したときに 422 になる。
   audience: z.enum(ANNOUNCEMENT_AUDIENCES),
@@ -38,11 +43,15 @@ export const POST = handle(async (req: Request) => {
     throw errors.unprocessable('入力値が不正です', parsed.error.flatten());
   }
 
+  // 書き込み前に必ずサニタイズ (許可外のタグ・宛先はここで落ちる)
+  const embed = sanitizeTicketEmbed(parsed.data.embedHtml);
+
   const now = new Date();
   const created = await prisma.announcement.create({
     data: {
       title: parsed.data.title,
       body: parsed.data.body,
+      embedHtml: embed.html || null,
       audience: parsed.data.audience,
       status: parsed.data.status,
       sendEmail: parsed.data.sendEmail,
@@ -61,6 +70,8 @@ export const POST = handle(async (req: Request) => {
       audience: created.audience,
       status: created.status,
       sendEmail: created.sendEmail,
+      hasEmbed: !!created.embedHtml,
+      embedRemoved: embed.removed,
     },
   });
 
@@ -69,5 +80,5 @@ export const POST = handle(async (req: Request) => {
     void sendAnnouncementEmails(created.id);
   }
 
-  return NextResponse.json({ ok: true, announcement: created });
+  return NextResponse.json({ ok: true, announcement: created, embedRemoved: embed.removed });
 });

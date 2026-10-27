@@ -21,6 +21,11 @@ export type AnnouncementStatusLiteral = 'DRAFT' | 'PUBLISHED';
 export type AnnouncementEditableFields = {
   title: string;
   body: string;
+  /**
+   * チケットサイトの申込タグ (Ticket Dive のルート限定タグ等)。空文字 = なし。
+   * 省略可能なのは既存の呼び出し (テスト等) との互換のため。省略時は「なし」と同じ扱い。
+   */
+  embedHtml?: string;
   audience: AnnouncementAudienceLiteral;
   sendEmail: boolean;
 };
@@ -32,6 +37,8 @@ export type AnnouncementEditableFields = {
  */
 export const TITLE_MAX_LENGTH = 200;
 export const BODY_MAX_LENGTH = 4000;
+/** 申込タグの上限 (lib/ticket-embed.ts の TICKET_EMBED_MAX_LENGTH と同じ) */
+export const EMBED_MAX_LENGTH = 4000;
 
 /**
  * 送信前の入力チェック。問題がなければ null を返す。
@@ -52,6 +59,9 @@ export function validateAnnouncementFields(
   }
   if (body.length > BODY_MAX_LENGTH) {
     return `本文は ${BODY_MAX_LENGTH} 文字以内で入力してください`;
+  }
+  if ((fields.embedHtml ?? '').length > EMBED_MAX_LENGTH) {
+    return `申込タグは ${EMBED_MAX_LENGTH} 文字以内で入力してください`;
   }
   return null;
 }
@@ -86,6 +96,9 @@ export function diffAnnouncementFields(
 
   if (nextTitle !== original.title) patch.title = nextTitle;
   if (nextBody !== original.body) patch.body = nextBody;
+  // 申込タグも trim して比較。空にした場合は '' を送る (API 側で「削除」として扱う)
+  const nextEmbed = (next.embedHtml ?? '').trim();
+  if (nextEmbed !== (original.embedHtml ?? '').trim()) patch.embedHtml = nextEmbed;
   if (next.audience !== original.audience) patch.audience = next.audience;
   if (next.sendEmail !== original.sendEmail) patch.sendEmail = next.sendEmail;
 

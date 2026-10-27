@@ -132,7 +132,7 @@ export default async function SuperAdminAnnouncementsPage() {
         </CardHeader>
         <CardBody>
           <SuperAdminWriteGate label="お知らせの作成はスーパー管理者のみ実行できます">
-            <AnnouncementForm />
+            <AnnouncementForm origin={baseUrl} />
           </SuperAdminWriteGate>
         </CardBody>
       </Card>
@@ -164,6 +164,7 @@ export default async function SuperAdminAnnouncementsPage() {
                     initial={{
                       title: a.title,
                       body: a.body,
+                      embedHtml: a.embedHtml ?? '',
                       audience: a.audience,
                       sendEmail: a.sendEmail,
                     }}
@@ -178,6 +179,7 @@ export default async function SuperAdminAnnouncementsPage() {
                         <Badge tone={AUDIENCE_TONES[a.audience]}>
                           {AUDIENCE_SHORT_LABELS[a.audience]}
                         </Badge>
+                        {a.embedHtml && <Badge tone="info">🎫 申込タグあり</Badge>}
                         {a.sendEmail && (
                           <Badge tone={EMAIL_STATUS_TONES[a.emailStatus]}>
                             ✉️ {EMAIL_STATUS_LABELS[a.emailStatus]}

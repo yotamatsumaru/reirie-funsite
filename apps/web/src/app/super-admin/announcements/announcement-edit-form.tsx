@@ -34,6 +34,7 @@ import {
   audienceRank,
 } from '@/lib/announcement-audience';
 import { AudienceSelect } from './audience-select';
+import { TicketEmbedField } from './ticket-embed-field';
 
 type EmailStatus =
   | 'NOT_REQUESTED'
@@ -65,10 +66,12 @@ export function AnnouncementEditForm({
     initial.audience,
   );
   const [sendEmail, setSendEmail] = useState(initial.sendEmail);
+  const [embedHtml, setEmbedHtml] = useState(initial.embedHtml ?? '');
 
   const current: AnnouncementEditableFields = {
     title,
     body,
+    embedHtml,
     audience,
     sendEmail,
   };
@@ -223,6 +226,13 @@ export function AnnouncementEditForm({
             </details>
           )}
         </div>
+
+        <TicketEmbedField
+          id={`embed-${id}`}
+          value={embedHtml}
+          onChange={setEmbedHtml}
+          disabled={pending}
+        />
 
         <AudienceSelect
           id={`audience-${id}`}
