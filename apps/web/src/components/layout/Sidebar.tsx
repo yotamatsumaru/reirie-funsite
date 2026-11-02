@@ -387,7 +387,7 @@ function SidebarContent({
         ) : (
           <div className="space-y-2">
             <NavLink
-              item={{ href: '/signin', label: 'ログイン', icon: LogIn }}
+              item={{ href: signinHrefFor(pathname), label: 'ログイン', icon: LogIn }}
               active={pathname.startsWith('/signin')}
               cartCount={cartCount}
             />
@@ -515,6 +515,31 @@ function NavTreeItem({
       )}
     </div>
   );
+}
+
+/**
+ * メニューの「ログイン」リンク先。今見ているページを callbackUrl に付け、
+ * ログイン後にそのページへ戻れるようにする。
+ * (例: HP の記事から会員限定のお知らせに来た人が、メニューからログインしたあと
+ *  マイページに飛ばされてお知らせを探し直す、という遠回りを防ぐ)
+ *
+ * トップ / 認証まわりのページ (ログイン・登録・パスワード再設定等) からは付けない。
+ * そこへ戻しても意味が無い (ログイン画面に戻るとループに見える) ため、従来どおりマイページへ。
+ */
+const NO_RETURN_PREFIXES = [
+  '/signin',
+  '/signup',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/maintenance',
+];
+function signinHrefFor(pathname: string | null): string {
+  if (!pathname || pathname === '/') return '/signin';
+  if (NO_RETURN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return '/signin';
+  }
+  return `/signin?callbackUrl=${encodeURIComponent(pathname)}`;
 }
 
 /* ===== ナビリンク（アイコン + ラベル + アクティブ表示 + カートバッジ） ===== */
