@@ -96,12 +96,18 @@ export default async function NoticeDetailPage({
     notFound();
   }
   if (decision.kind === 'signin-required') {
-    redirect(`/signin?callbackUrl=/notices/${id}`);
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/notices/${id}`)}`);
   }
 
   const isPreview = decision.kind === 'preview';
 
   if (decision.kind === 'upgrade-required') {
+    // 未ログインの場合、実は有料会員なのにログインしていないだけ、ということが多い
+    // (HP・SNS の記事からリンクで来た人、Instagram 等のアプリ内ブラウザで開いた人)。
+    // 「プランを見る」しか無いと、戻ってメニューからログイン → マイページ → お知らせを探し直す、
+    // という遠回りになるため、ログイン後にこのお知らせへ戻るボタンを一番目立つ位置に出す。
+    const isLoggedIn = !!session?.user?.id;
+    const signinHref = `/signin?callbackUrl=${encodeURIComponent(`/notices/${id}`)}`;
     return (
       <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
         <Link
@@ -119,15 +125,39 @@ export default async function NoticeDetailPage({
             <h1 className="mt-3 text-xl font-bold text-slate-900">
               {upgradeHeadingForAudience(a.audience)}
             </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              プランをアップグレードすると、限定お知らせを閲覧できます。
-            </p>
-            <Link
-              href="/plans"
-              className="mt-6 inline-block rounded-md bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
-            >
-              プランを見る
-            </Link>
+            {isLoggedIn ? (
+              <>
+                <p className="mt-2 text-sm text-slate-600">
+                  プランをアップグレードすると、限定お知らせを閲覧できます。
+                </p>
+                <Link
+                  href="/plans"
+                  className="mt-6 inline-block rounded-md bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+                >
+                  プランを見る
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-slate-600">
+                  会員の方はログインすると、このページに戻ってそのままお読みいただけます。
+                </p>
+                <div className="mx-auto mt-6 flex max-w-xs flex-col gap-3">
+                  <Link
+                    href={signinHref}
+                    className="inline-block rounded-md bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+                  >
+                    ログインして読む
+                  </Link>
+                  <Link
+                    href="/plans"
+                    className="inline-block rounded-md border border-brand-600 bg-white px-6 py-2.5 text-sm font-semibold text-brand-600 hover:bg-brand-50"
+                  >
+                    まだ会員でない方はプランを見る
+                  </Link>
+                </div>
+              </>
+            )}
           </CardBody>
         </Card>
       </div>
