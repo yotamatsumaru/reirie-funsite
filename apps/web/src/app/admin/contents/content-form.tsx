@@ -119,6 +119,9 @@ export function ContentForm({
   const [autoSlug, setAutoSlug] = useState(mode === 'create');
   // ブログ本文の編集モード: ビジュアル(WYSIWYG) / HTMLソース / プレビュー
   const [bodyMode, setBodyMode] = useState<'visual' | 'html' | 'preview'>('visual');
+  // プレビュー用に、保存時と同じサニタイズを通した本文 (サーバーで整形)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   // 保存済みの内容。離脱ガード (beforeunload) の比較元に使う。
   const [saved, setSaved] = useState(() => JSON.stringify(base));
 
@@ -126,6 +129,34 @@ export function ContentForm({
     setForm((s) => ({ ...s, [k]: v }));
 
   const dirty = JSON.stringify(form) !== saved;
+
+  /**
+   * プレビュータブを開いたら、本文を保存時と同じサニタイズに通してから表示する。
+   * 入力中の HTML をそのまま描画すると、HTML タブに貼り付けたスクリプトが
+   * 管理画面で実行されてしまうため (sanitize-html はサーバー側で実行)。
+   */
+  useEffect(() => {
+    if (bodyMode !== 'preview' || form.body.trim() === '') return;
+    let cancelled = false;
+    setPreviewHtml(null);
+    setPreviewError(null);
+    fetch('/api/admin/contents/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: form.body }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { html: string };
+        if (!cancelled) setPreviewHtml(data.html);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewError('プレビューを作成できませんでした。もう一度お試しください。');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bodyMode, form.body]);
 
   /**
    * 書きかけの記事をタブを閉じて失う事故を防ぐ。
@@ -465,17 +496,20 @@ export function ContentForm({
                   {bodyMode === 'preview' && (
                     /* 公開ページと同じ prose クラスで描画して、
                        保存前に読者からの見え方を確認できるようにする。
-                       ここに出る HTML はエディタ由来 (= 管理者が自分で書いたもの) で、
-                       保存時に sanitizeContentBody() が改めて無害化する。 */
+                       保存時と同じ sanitizeContentBody() をサーバーで通した結果を表示する。 */
                     <div className="min-h-[320px] rounded-md border border-slate-300 bg-white px-4 py-3">
                       {form.body.trim() === '' ? (
                         <p className="text-sm text-slate-400">
                           本文がまだ空です。「ビジュアル」タブで入力してください。
                         </p>
+                      ) : previewError ? (
+                        <p className="text-sm text-rose-700">{previewError}</p>
+                      ) : previewHtml === null ? (
+                        <p className="text-sm text-slate-400">プレビューを作成しています…</p>
                       ) : (
                         <div
                           className="prose prose-slate max-w-none prose-headings:font-bold prose-a:text-brand-600 prose-img:rounded-lg"
-                          dangerouslySetInnerHTML={{ __html: form.body }}
+                          dangerouslySetInnerHTML={{ __html: previewHtml }}
                         />
                       )}
                     </div>

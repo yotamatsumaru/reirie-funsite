@@ -525,10 +525,25 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
     iceServersRef.current = await fetchIceServers();
     pcRef.current = createPeerConnection();
 
+    // 入室できるか先に確認する (未加入・順番前など)。
+    // EventSource は拒否されたときのステータスや理由を読めないため、
+    // 入室しない確認専用リクエスト (?check=1) で理由を受け取って表示する。
+    const eventsUrl = `/api/call/${encodeURIComponent(roomId)}/events?role=${encodeURIComponent(role)}`;
+    try {
+      const pre = await fetch(`${eventsUrl}&check=1`, { credentials: 'same-origin', cache: 'no-store' });
+      if (!pre.ok) {
+        const text = (await pre.text()).slice(0, 200);
+        stream.getTracks().forEach((t) => t.stop());
+        setErrorMsg(text || '通話ルームに入れませんでした。');
+        updateStatus('error');
+        return;
+      }
+    } catch {
+      // ネットワーク断などは下の EventSource 側の挙動に任せる
+    }
+
     // SSE 接続
-    const es = new EventSource(
-      `/api/call/${encodeURIComponent(roomId)}/events?role=${encodeURIComponent(role)}`,
-    );
+    const es = new EventSource(eventsUrl);
     eventSourceRef.current = es;
 
     es.onmessage = async (ev) => {
@@ -576,11 +591,28 @@ export function CallRoom({ roomId, role, peerLabel }: CallRoomProps) {
       }
     };
 
+    // 入室上限を超えたときにサーバーが送る `event: error`
+    es.addEventListener('error', (ev) => {
+      const data = (ev as MessageEvent).data;
+      if (typeof data !== 'string') return;
+      try {
+        const reason = (JSON.parse(data) as { reason?: string }).reason;
+        es.close();
+        setErrorMsg(
+          reason === 'too many connections'
+            ? '同じアカウントで開いている通話画面が多すぎます。他のタブを閉じてから再度お試しください。'
+            : 'このルームは混み合っています。しばらくしてから再度お試しください。',
+        );
+        updateStatus('error');
+      } catch {
+        // ignore
+      }
+    });
+
     es.onerror = () => {
       // 通常は ended 後の close で発火するので、active な場合のみエラー扱い
-      if (statusRef.current !== 'ended') {
-        console.warn('[call] SSE error / closed');
-      }
+      if (statusRef.current === 'ended') return;
+      console.warn('[call] SSE error / closed');
     };
   }, [createPeerConnection, handleSignal, makeOffer, refreshDevices, role, roomId, updateStatus]);
 

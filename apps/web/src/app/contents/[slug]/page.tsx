@@ -10,6 +10,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { getSiteSectionVisibility } from '@/lib/app-setting';
 import { GalleryGrid } from '@/components/gallery/GalleryGrid';
 import { isContentPublished, isContentScheduled } from '@/lib/content-visibility';
+import { sanitizeContentBody } from '@/lib/sanitize-html';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,9 +163,10 @@ export default async function ContentDetailPage({
           {content.body?.trim() ? (
             <div
               className="prose prose-slate mt-8 max-w-none text-slate-800"
-              // 管理API (POST/PATCH /api/admin/contents) の書き込み時に
-              // sanitizeContentBody() でサニタイズ済みの HTML (RBAC + サニタイズの多層防御)
-              dangerouslySetInnerHTML={{ __html: content.body }}
+              // 書き込み時 (POST/PATCH /api/admin/contents) にもサニタイズしているが、
+              // 古いデータや DB を直接書き換えた場合に備えて表示時にも必ず通す (多層防御)。
+              // sanitizeContentBody は同じ入力に対して冪等なので、既存記事の見た目は変わらない。
+              dangerouslySetInnerHTML={{ __html: sanitizeContentBody(content.body) }}
             />
           ) : null}
 

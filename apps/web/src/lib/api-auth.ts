@@ -19,6 +19,7 @@
 import { auth } from '@/auth';
 import { errors } from '@/lib/errors';
 import { verifyApiToken } from '@/lib/api-token';
+import { isAccountActiveCached } from '@/lib/account-status';
 import { canAccess, hasCapability, ADMIN_CAPABILITY_LABELS } from '@idol/shared';
 import type {
   UserRoleLiteral,
@@ -67,6 +68,8 @@ export async function resolveApiPrincipal(req: Request): Promise<ApiPrincipal | 
   if (bearer) {
     const payload = await verifyApiToken(bearer, 'access');
     if (!payload?.sub) return null; // トークンが付いているのに無効 → 認証失敗扱い
+    // BAN / 退会済みならトークンの期限内でも拒否する (1 分キャッシュ)
+    if (!(await isAccountActiveCached(payload.sub))) return null;
     return {
       userId: payload.sub,
       email: payload.email ?? '',

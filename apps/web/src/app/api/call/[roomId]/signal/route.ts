@@ -14,7 +14,7 @@
 import { NextResponse } from 'next/server';
 import { resolveApiSession } from '@/lib/api-auth';
 import { getClientRole, relaySignal } from '@/lib/call-hub';
-import { checkCallRoomAccess } from '@/lib/call-room-access';
+import { checkCallRoomAccess } from '@/lib/call-access';
 import type { SignalMessage } from '@/lib/call-types';
 
 export const runtime = 'nodejs';
@@ -74,12 +74,21 @@ export async function POST(
   if (!sender || sender.userId !== session.user.id) {
     return NextResponse.json({ error: 'sender not in room' }, { status: 403 });
   }
-  const access = await checkCallRoomAccess(session, roomId, sender.role);
+  const access = await checkCallRoomAccess(
+    roomId,
+    {
+      userId: session.user.id,
+      role: session.user.role,
+      plan: session.user.plan,
+      capabilities: session.user.capabilities ?? [],
+    },
+    sender.role,
+  );
   if (!access.ok) {
-    return NextResponse.json({ error: access.reason }, { status: access.status });
+    return NextResponse.json({ error: access.message }, { status: access.status });
   }
 
-  const result = relaySignal(roomId, from, to, payload);
+  const result = relaySignal(roomId, from, to, payload, session.user.id);
   if (!result.ok) {
     return NextResponse.json({ error: result.reason ?? 'relay failed' }, { status: 400 });
   }

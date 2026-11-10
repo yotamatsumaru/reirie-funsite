@@ -182,4 +182,31 @@ export function assertProductionSecrets(): void {
         ' AUTH_SECRET (および必要なら API_TOKEN_SECRET) を必ず環境変数で設定してください。',
     );
   }
+  assertNoDemoModeInProduction();
+}
+
+/**
+ * 本番 (NODE_ENV=production) でデモモードが有効なら起動を止める。
+ *
+ * デモモードでは DB の代わりにモックを使い、ログイン情報も DB で確認しない
+ * (auth.ts の jwt callback は DB を見ずにトークンの値をそのまま信じる)。
+ * 本番で誤って DEMO_MODE=1 / NEXT_PUBLIC_DEMO_MODE=1 が入ると、
+ * BAN の反映やプラン確認が効かない状態で公開されてしまうため、起動時に落とす。
+ * (本番モードで動かしているデモサイトは無い前提。deploy/user-data.sh も DEMO_MODE=0 を書く)
+ *
+ * `next build` 中 (NEXT_PHASE=phase-production-build) は対象外。
+ */
+export function assertNoDemoModeInProduction(
+  opts: { production?: boolean; demo?: boolean; phase?: string | undefined } = {},
+): void {
+  const production = opts.production ?? isProductionEnv;
+  const demo = opts.demo ?? env.demoMode;
+  const phase = 'phase' in opts ? opts.phase : process.env.NEXT_PHASE;
+  if (!production || !demo) return;
+  if (phase === 'phase-production-build') return;
+  throw new Error(
+    '[FATAL] 本番環境 (NODE_ENV=production) でデモモード (DEMO_MODE / NEXT_PUBLIC_DEMO_MODE) が有効です。' +
+      ' デモモードでは DB を使わずログイン情報も検証しないため、本番では起動できません。' +
+      ' 環境変数 DEMO_MODE=0 / NEXT_PUBLIC_DEMO_MODE=0 を設定してください。',
+  );
 }

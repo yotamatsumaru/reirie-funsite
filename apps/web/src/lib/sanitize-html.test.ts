@@ -113,3 +113,23 @@ describe('sanitizeContentBody', () => {
     expect(clean).not.toContain('<audio');
   });
 });
+
+describe('sanitizeContentBody: 表示時にもう一度通しても既存記事が変わらない (冪等性)', () => {
+  // 表示時サニタイズ (contents/[slug]・管理画面プレビュー) を追加した際、
+  // 保存時にサニタイズ済みの記事の見た目が変わらないことを保証する。
+  const samples = [
+    '<h2>見出し</h2><p>本文 <strong>太字</strong> <em>斜体</em> <u>下線</u></p>',
+    '<p style="text-align: center">中央揃え</p><ul><li>a</li><li>b</li></ul>',
+    '<p><a href="https://example.com" target="_blank">外部リンク</a> <a href="/notices/1">内部</a></p>',
+    '<p><img src="/api/media/abc.jpg" alt="写真" class="editor-img editor-img--center" width="480"></p>',
+    '<video src="/api/media/clip.mp4" controls preload="metadata" playsinline muted loop></video>',
+    '<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>',
+    '<blockquote>引用</blockquote><pre><code>code</code></pre><hr>',
+    // 悪意ある入力も、1 回目で無害化された後は 2 回目で変わらない
+    '<p onclick="x()">t</p><script>alert(1)</script><a href="javascript:alert(1)">x</a>',
+  ];
+  it.each(samples)('%s', (html) => {
+    const once = sanitizeContentBody(html);
+    expect(sanitizeContentBody(once)).toBe(once);
+  });
+});
