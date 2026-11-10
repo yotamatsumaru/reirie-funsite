@@ -106,27 +106,27 @@ export function canViewSuperAdmin(role: UserRoleLiteral | undefined | null): boo
  *
  *  CONTENT: コンテンツ / 動画 / ライブ配信の管理
  *  MERCH:   グッズ(商品) / 在庫 / 注文の管理
- *  GAME:    恋愛ゲーム(キャラ/シナリオ/アイテム/プレイヤー)の管理
  *  CALL:    1on1コール / 特典会イベントの管理
  */
-export const ADMIN_CAPABILITIES = ['CONTENT', 'MERCH', 'GAME', 'CALL'] as const;
+export const ADMIN_CAPABILITIES = ['CONTENT', 'MERCH', 'CALL'] as const;
 export type AdminCapabilityLiteral = (typeof ADMIN_CAPABILITIES)[number];
 
 export const ADMIN_CAPABILITY_LABELS: Record<AdminCapabilityLiteral, string> = {
   CONTENT: 'コンテンツ',
   MERCH: 'グッズ・EC',
-  GAME: 'ゲーム',
   CALL: '1on1コール',
 };
 
 export const ADMIN_CAPABILITY_DESCRIPTIONS: Record<AdminCapabilityLiteral, string> = {
   CONTENT: 'ブログ・ギャラリー・動画・ライブ配信の管理',
   MERCH: '商品(グッズ)・在庫・注文の管理',
-  GAME: '恋愛ゲームのキャラ・シナリオ・アイテム・プレイヤーの管理',
   CALL: '1on1コール・特典会イベントの管理',
 };
 
-/** 文字列配列を AdminCapabilityLiteral[] に正規化（未知の値は除外） */
+/**
+ * 文字列配列を AdminCapabilityLiteral[] に正規化（未知の値は除外）。
+ * 恋愛 ADV 提供終了で廃止した 'GAME' が DB に残っていても、ここで捨てられる。
+ */
 export function normalizeAdminCapabilities(
   values: readonly string[] | undefined | null,
 ): AdminCapabilityLiteral[] {

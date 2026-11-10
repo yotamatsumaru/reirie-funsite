@@ -30,17 +30,15 @@ import { isAdmin, type UserRoleLiteral } from './constants';
 export const GAME_VISIBILITY_KEY = 'game.visibility';
 
 /**
- * 公開 / 非公開を個別に切り替えられるゲームの識別子。
+ * 公開 / 非公開を個別に切り替えられるゲームの識別子 (すべてミニゲーム: /me/games/<key>)。
  *
- * - 'acchi' / 'slot' はミニゲーム (/me/games/<key>)。
- * - 'story' は恋愛 ADV 全体 (/game/[characterSlug], /game/play/[scenarioId] と
- *   /api/game/* 一式)。キャラクター単位の公開は既存の GameCharacter.status
- *   (PUBLISHED / DRAFT) で行うため、ここでは「恋愛 ADV というゲーム 1 本」として扱う。
+ * ※ 以前あった 'story' (恋愛 ADV) は提供終了により削除した。DB に保存済みの
+ *   'story' キーは normalizeGameVisibility が未知のキーとして捨てる。
  *
  * 【ゲームを追加するとき】この配列にキーを足し、GAME_VISIBILITY_ITEMS に
  * 表示情報を足すだけで、管理画面のトグルと各ゲートに自動で反映される。
  */
-export const GAME_KEYS = ['acchi', 'slot', 'memory', 'story'] as const;
+export const GAME_KEYS = ['acchi', 'slot', 'memory'] as const;
 
 export type GameKey = (typeof GAME_KEYS)[number];
 
@@ -69,13 +67,6 @@ export const GAME_VISIBILITY_ITEMS: {
     emoji: '🃏',
     description:
       'ミニゲーム (/me/games/memory)。REIRIE の写真でペアを揃えると Pui がもらえます。カードに使う写真はギャラリーの公開範囲に従います。',
-  },
-  {
-    key: 'story',
-    label: '恋愛 ADV ストーリー',
-    emoji: '💗',
-    description:
-      'キャラ詳細・シナリオ再生 (/game/<キャラ>, /game/play/<章>)。キャラ単位の公開は各キャラの公開状態で管理します。',
   },
 ];
 
@@ -123,7 +114,6 @@ export const DEFAULT_GAME_VISIBILITY: GameVisibilityMap = {
    * 管理者は非公開中もプレビューで遊べる。
    */
   memory: false,
-  story: true,
 };
 
 /** 文字列が既知のゲームキーか */

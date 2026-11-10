@@ -177,141 +177,6 @@
     "doc": "ブログ記事本文に挿入する「短い動画」をアップロードし、挿入用の URL を返す。"
   },
   {
-    "path": "/api/admin/game/assets/[id]",
-    "file": "api/admin/game/assets/[id]/route.ts",
-    "methods": [
-      "DELETE"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/admin/game/assets",
-    "file": "api/admin/game/assets/route.ts",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/admin/game/characters/[id]",
-    "file": "api/admin/game/characters/[id]/route.ts",
-    "methods": [
-      "GET",
-      "PATCH",
-      "DELETE"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/admin/game/characters",
-    "file": "api/admin/game/characters/route.ts",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": "全キャラ (DRAFT 含む)"
-  },
-  {
-    "path": "/api/admin/game/items/[id]",
-    "file": "api/admin/game/items/[id]/route.ts",
-    "methods": [
-      "PATCH",
-      "DELETE"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/admin/game/items",
-    "file": "api/admin/game/items/route.ts",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/admin/game/players",
-    "file": "api/admin/game/players/route.ts",
-    "methods": [
-      "GET"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": "プレイヤー進捗一覧 (運営調査用)"
-  },
-  {
-    "path": "/api/admin/game/scenarios/[id]",
-    "file": "api/admin/game/scenarios/[id]/route.ts",
-    "methods": [
-      "GET",
-      "PATCH",
-      "DELETE"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/admin/game/scenarios",
-    "file": "api/admin/game/scenarios/route.ts",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": "章一覧"
-  },
-  {
     "path": "/api/admin/inventories/[variantId]",
     "file": "api/admin/inventories/[variantId]/route.ts",
     "methods": [
@@ -516,6 +381,36 @@
     "doc": "商品画像一覧"
   },
   {
+    "path": "/api/admin/products/[id]/options/[optionId]",
+    "file": "api/admin/products/[id]/options/[optionId]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "商品オプション更新"
+  },
+  {
+    "path": "/api/admin/products/[id]/options",
+    "file": "api/admin/products/[id]/options/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "商品オプション一覧"
+  },
+  {
     "path": "/api/admin/products/[id]",
     "file": "api/admin/products/[id]/route.ts",
     "methods": [
@@ -544,6 +439,20 @@
     "cookieOnly": false,
     "perMethod": null,
     "doc": null
+  },
+  {
+    "path": "/api/admin/products/bulk-sale-period",
+    "file": "api/admin/products/bulk-sale-period/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "これにより「10/20 21:00 に 5 商品を同時発売」が"
   },
   {
     "path": "/api/admin/products",
@@ -647,6 +556,36 @@
     "cookieOnly": false,
     "perMethod": null,
     "doc": "景品交換・発送管理 一覧"
+  },
+  {
+    "path": "/api/admin/shipping-methods/[id]",
+    "file": "api/admin/shipping-methods/[id]/route.ts",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "配送方法更新"
+  },
+  {
+    "path": "/api/admin/shipping-methods",
+    "file": "api/admin/shipping-methods/route.ts",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "配送方法一覧 (無効含む)"
   },
   {
     "path": "/api/admin/stats",
@@ -1014,7 +953,7 @@
     "bearer": true,
     "cookieOnly": false,
     "perMethod": null,
-    "doc": null
+    "doc": "入力値をスナップショットとしてカート明細に保存する"
   },
   {
     "path": "/api/cart",
@@ -1139,120 +1078,6 @@
     "cookieOnly": false,
     "perMethod": null,
     "doc": "誕生日メールの自動送信を実行する (冪等)。"
-  },
-  {
-    "path": "/api/game/characters/[slug]",
-    "file": "api/game/characters/[slug]/route.ts",
-    "methods": [
-      "GET"
-    ],
-    "auth": "optional",
-    "authLabel": "任意（未ログインでも可）",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": true,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/game/characters",
-    "file": "api/game/characters/route.ts",
-    "methods": [
-      "GET"
-    ],
-    "auth": "public",
-    "authLabel": "不要（公開）",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": false,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/game/gift",
-    "file": "api/game/gift/route.ts",
-    "methods": [
-      "POST"
-    ],
-    "auth": "member",
-    "authLabel": "会員必須",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": true,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": "PlayerProgress.affinity に affinityBoost を加算"
-  },
-  {
-    "path": "/api/game/progress",
-    "file": "api/game/progress/route.ts",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "auth": "member",
-    "authLabel": "会員必須",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": true,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": "自分の進捗"
-  },
-  {
-    "path": "/api/game/purchase",
-    "file": "api/game/purchase/route.ts",
-    "methods": [
-      "POST"
-    ],
-    "auth": "member",
-    "authLabel": "会員必須",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": true,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
-  },
-  {
-    "path": "/api/game/save-slots",
-    "file": "api/game/save-slots/route.ts",
-    "methods": [
-      "GET",
-      "POST"
-    ],
-    "auth": "member",
-    "authLabel": "会員必須",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": true,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": "セーブスロット一覧"
-  },
-  {
-    "path": "/api/game/scenarios/[id]",
-    "file": "api/game/scenarios/[id]/route.ts",
-    "methods": [
-      "GET"
-    ],
-    "auth": "optional",
-    "authLabel": "任意（未ログインでも可）",
-    "gates": [
-      "ゲーム公開トグル"
-    ],
-    "bearer": true,
-    "cookieOnly": false,
-    "perMethod": null,
-    "doc": null
   },
   {
     "path": "/api/game/webhook",
@@ -2035,6 +1860,20 @@
     "doc": null
   },
   {
+    "path": "/api/shipping-methods",
+    "file": "api/shipping-methods/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "public",
+    "authLabel": "不要（公開）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": null
+  },
+  {
     "path": "/api/subscriptions/cancel",
     "file": "api/subscriptions/cancel/route.ts",
     "methods": [
@@ -2120,7 +1959,7 @@
       "GET": "member",
       "POST": "cron"
     },
-    "doc": "月次ボーナスギフトを全アクティブ会員に付与する Cron 用エンドポイント。"
+    "doc": "月次 Pui ボーナスを全アクティブ会員 (STANDARD / PREMIUM) に付与する Cron 用エンドポイント。"
   },
   {
     "path": "/api/subscriptions/portal",
@@ -2135,6 +1974,20 @@
     "cookieOnly": false,
     "perMethod": null,
     "doc": null
+  },
+  {
+    "path": "/api/subscriptions/sync-me",
+    "file": "api/subscriptions/sync-me/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "ログイン中の本人が、自分自身の Stripe サブスクを取得して DB を Stripe に合わせる。"
   },
   {
     "path": "/api/super-admin/acchi-settings",
@@ -2163,7 +2016,7 @@
     "bearer": false,
     "cookieOnly": false,
     "perMethod": null,
-    "doc": "body: { capabilities: ('CONTENT'|'MERCH'|'GAME'|'CALL')[] }"
+    "doc": "body: { capabilities: ('CONTENT'|'MERCH'|'CALL')[] }"
   },
   {
     "path": "/api/super-admin/admins/grant",
@@ -2222,7 +2075,7 @@
     "bearer": false,
     "cookieOnly": false,
     "perMethod": null,
-    "doc": "{ title?, body?, audience?, status?, sendEmail? }"
+    "doc": "{ title?, body?, embedHtml?, audience?, status?, sendEmail? }"
   },
   {
     "path": "/api/super-admin/announcements",
@@ -2236,7 +2089,7 @@
     "bearer": false,
     "cookieOnly": false,
     "perMethod": null,
-    "doc": "body: { title, body, audience, status, sendEmail }"
+    "doc": "body: { title, body, embedHtml?, audience, status, sendEmail }"
   },
   {
     "path": "/api/super-admin/birthday/candidates",
@@ -2737,6 +2590,21 @@
     "cookieOnly": false,
     "perMethod": null,
     "doc": "スロットのプラン別「設定」(1〜6) を取得"
+  },
+  {
+    "path": "/api/super-admin/slot-theme",
+    "file": "api/super-admin/slot-theme/route.ts",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者（閲覧）",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "スロットの見た目テーマ (auto/default/halloween) を取得"
   },
   {
     "path": "/api/super-admin/stripe-mode",

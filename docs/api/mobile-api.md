@@ -7,7 +7,7 @@
 > node tools/api-docs/extract.mjs && node tools/api-docs/generate.mjs
 > ```
 
-最終生成: 2026-09-13 / アプリ向けエンドポイント **113 本**
+最終生成: 2026-11-10 / アプリ向けエンドポイント **108 本**
 
 ---
 
@@ -200,7 +200,7 @@ GET /api/call/{roomId}/events?access_token=<accessToken>
 | メソッド | パス | 認証 | ゲート | 説明 |
 |---|---|---|---|---|
 | GET | `/api/cart` | 会員 | — | — |
-| POST | `/api/cart/items` | 会員 | — | — |
+| POST | `/api/cart/items` | 会員 | — | 入力値をスナップショットとしてカート明細に保存する |
 | PATCH / DELETE | `/api/cart/items/[id]` | 会員 | — | — |
 | GET | `/api/me/orders` | 会員 | — | — |
 | GET | `/api/me/orders/[id]/invoice` | 会員 | — | 常に 404 (Not Found) を返す (ページ側 `notFound()` と同じ方針)。 |
@@ -220,8 +220,9 @@ GET /api/call/{roomId}/events?access_token=<accessToken>
 | POST | `/api/subscriptions/change-plan/cancel` | 会員 | — | — |
 | POST | `/api/subscriptions/checkout` | 会員 | — | — |
 | GET | `/api/subscriptions/me` | 会員 | — | — |
-| GET / POST | `/api/subscriptions/monthly-bonus` | GET:会員<br>POST:🔒 Cron専用 | — | 月次ボーナスギフトを全アクティブ会員に付与する Cron 用エンドポイント。 |
+| GET / POST | `/api/subscriptions/monthly-bonus` | GET:会員<br>POST:🔒 Cron専用 | — | 月次 Pui ボーナスを全アクティブ会員 (STANDARD / PREMIUM) に付与する Cron 用エンドポイント。 |
 | POST | `/api/subscriptions/portal` | 会員 | — | — |
+| POST | `/api/subscriptions/sync-me` | 会員 | — | ログイン中の本人が、自分自身の Stripe サブスクを取得して DB を Stripe に合わせる。 |
 
 ### 5-8. Pui購入・景品交換
 
@@ -260,13 +261,6 @@ GET /api/call/{roomId}/events?access_token=<accessToken>
 
 | メソッド | パス | 認証 | ゲート | 説明 |
 |---|---|---|---|---|
-| GET | `/api/game/characters` | 公開 | ゲーム公開トグル | — |
-| GET | `/api/game/characters/[slug]` | 任意 | ゲーム公開トグル | — |
-| POST | `/api/game/gift` | 会員 | ゲーム公開トグル | PlayerProgress.affinity に affinityBoost を加算 |
-| GET / POST | `/api/game/progress` | 会員 | ゲーム公開トグル | 自分の進捗 |
-| POST | `/api/game/purchase` | 会員 | ゲーム公開トグル | — |
-| GET / POST | `/api/game/save-slots` | 会員 | ゲーム公開トグル | セーブスロット一覧 |
-| GET | `/api/game/scenarios/[id]` | 任意 | ゲーム公開トグル | — |
 | POST | `/api/game/webhook` | 公開 | ゲーム公開トグル | Stripe Dashboard で `checkout.session.completed` イベントを購読する |
 
 ### 5-11. ReiRieRoom（MyRoom）
@@ -337,6 +331,7 @@ GET /api/call/{roomId}/events?access_token=<accessToken>
 | GET | `/api/maintenance-status` | 公開 | — | メンテナンスモードの ON/OFF だけを返す公開エンドポイント |
 | POST | `/api/me/birthday-mail/read` | 会員 | — | マイページで誕生日メールを開いたときに既読化する。 |
 | GET | `/api/postal-lookup` | 公開 | — | 郵便番号から住所を引く公開エンドポイント |
+| GET | `/api/shipping-methods` | 公開 | — | — |
 
 ---
 

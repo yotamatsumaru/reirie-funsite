@@ -2,7 +2,7 @@
  * PATCH /api/super-admin/admins/[id]/capabilities
  *   - SUPER_ADMIN 限定: ADMIN ユーザーの管理権限 (adminCapabilities) を更新
  *
- * body: { capabilities: ('CONTENT'|'MERCH'|'GAME'|'CALL')[] }
+ * body: { capabilities: ('CONTENT'|'MERCH'|'CALL')[] }
  *
  * 備考:
  *   - 対象が SUPER_ADMIN の場合は常に全権限を持つため、個別の権限指定は不要 (400)

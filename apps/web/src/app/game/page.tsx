@@ -1,10 +1,9 @@
 /**
- * /game — ゲーム一覧 (ミニゲーム + 恋愛 ADV ストーリー)
+ * /game — ゲーム一覧 (ミニゲーム)
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { prisma } from '@idol/db';
 import {
   ACCHI_MAX_PLAYS_PER_DAY,
   ACCHI_WIN_REWARD,
@@ -25,7 +24,7 @@ import { GamePreviewBanner } from '@/components/game/GamePreviewBanner';
 
 export const metadata: Metadata = {
   title: 'ゲーム一覧',
-  description: 'ミニゲームでポイントを貯めたり、推しキャラとの物語を楽しめるゲーム一覧。',
+  description: 'ミニゲームで遊んでポイントを貯められるゲーム一覧。',
 };
 export const dynamic = 'force-dynamic';
 
@@ -95,26 +94,12 @@ export default async function GameTopPage() {
 
   // この閲覧者に見せてよいミニゲームだけに絞り込む。
   const visibleMiniGames = MINI_GAMES.filter((g) => canViewGameMap[g.slug]);
-  // 恋愛 ADV セクションごと非公開にできる (キャラ単位の公開は各キャラの status)。
-  const showStorySection = canViewGameMap.story;
 
   const session = await auth();
   const isAuthenticated = !!session?.user?.id;
-  const isPremium = session?.user?.plan === 'PREMIUM';
 
   // ミニゲームのサムネイル画像 (管理画面でアップロード)。未設定なら絵文字表示。
   const siteImageMap = await getSiteImageUrlMap();
-
-  // ADV が非公開なら DB を引かない (不要なクエリを避ける)。
-  const characters = showStorySection
-    ? await prisma.gameCharacter.findMany({
-        where: { status: 'PUBLISHED' },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-        include: {
-          _count: { select: { scenarios: { where: { status: 'PUBLISHED' } } } },
-        },
-      })
-    : [];
 
   return (
     <main className="mx-auto max-w-6xl px-3 py-6 sm:px-4 sm:py-10">
@@ -125,7 +110,7 @@ export default async function GameTopPage() {
           ゲーム一覧
         </h1>
         <p className="mt-3 text-sm text-slate-600 sm:text-base">
-          ミニゲームでポイントを貯めたり、推しキャラとの物語を楽しめます。
+          ミニゲームで遊んでポイントを貯めよう。
         </p>
       </header>
 
@@ -193,91 +178,12 @@ export default async function GameTopPage() {
       </section>
       )}
 
-      {/* ===== 恋愛 ADV ストーリー ===== */}
-      {showStorySection && (
-      <>
-      <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-twilight-amethyst text-white shadow-[2px_2px_0_rgba(0,0,0,0.9)]">
-          <HeartIcon className="h-4 w-4" />
-        </span>
-        <h2 className="text-lg font-bold text-slate-900 sm:text-xl">恋愛 ADV ストーリー</h2>
-        {!publiclyVisible.story && <Badge tone="warning">非公開</Badge>}
-      </div>
-      <p className="mb-4 text-xs text-slate-500">
-        ※ 課金はすべて確定報酬型 DLC です。ガチャ要素はありません。
-      </p>
-
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {characters.length === 0 && (
-          <Card className="col-span-full">
-            <CardBody className="py-12 text-center text-sm text-slate-500">
-              キャラクターは準備中です。お楽しみに!
-            </CardBody>
-          </Card>
-        )}
-        {characters.map((c) => {
-          const locked = c.isPremiumOnly && !isPremium;
-          return (
-            <Link
-              key={c.id}
-              href={locked ? '/me/subscription' : `/game/${c.slug}`}
-              className="group block"
-            >
-              <Card className="h-full overflow-hidden transition-shadow hover:shadow-lg">
-                <div
-                  className="relative aspect-[3/4] overflow-hidden"
-                  style={{
-                    backgroundColor: c.themeColor ?? '#fce7f3',
-                  }}
-                >
-                  {c.portraitUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={c.portraitUrl}
-                      alt={c.name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-6xl text-white/60">
-                      ♡
-                    </div>
-                  )}
-                  {locked && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-semibold text-white">
-                      🔒 PREMIUM 会員限定
-                    </div>
-                  )}
-                </div>
-                <CardBody>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-base font-bold text-slate-900 sm:text-lg">{c.name}</p>
-                      {c.furigana && (
-                        <p className="text-xs text-slate-500">{c.furigana}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {c.isPremiumOnly && <Badge tone="brand">PREMIUM</Badge>}
-                      <Badge tone="gray">{c._count.scenarios}章</Badge>
-                    </div>
-                  </div>
-                  {c.catchcopy && (
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{c.catchcopy}</p>
-                  )}
-                </CardBody>
-              </Card>
-            </Link>
-          );
-        })}
-      </section>
-      </>
-      )}
     </main>
   );
 }
 
 /* ===== セクション見出しアイコン (ブランド SVG) =====
-   OS 依存でバラつく絵文字 (🎮 / 💗) の代わりに、サイトのネオブルータリズム
+   OS 依存でバラつく絵文字 (🎮) の代わりに、サイトのネオブルータリズム
    バッジ内で使うインライン SVG。currentColor で塗る。 */
 function GamepadIcon({ className }: { className?: string }) {
   return (
@@ -296,14 +202,6 @@ function GamepadIcon({ className }: { className?: string }) {
       <line x1="8.5" y1="11" x2="8.5" y2="13" />
       <circle cx="15" cy="11.5" r="0.6" fill="currentColor" />
       <circle cx="16.5" cy="13" r="0.6" fill="currentColor" />
-    </svg>
-  );
-}
-
-function HeartIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 20.5l-1.3-1.15C6.1 15.2 3 12.4 3 8.95 3 6.3 5.05 4.3 7.65 4.3c1.5 0 2.95.7 3.85 1.8.9-1.1 2.35-1.8 3.85-1.8C21 4.3 21 6.3 21 8.95c0 3.45-3.1 6.25-7.7 10.4L12 20.5Z" />
     </svg>
   );
 }

@@ -75,7 +75,7 @@ Unity / モバイルアプリから利用できます。クライアント側で
 > (`apps/web/src/lib/games/acchi-handlers.ts`)。どちらの URL を呼んでも挙動・レスポンスは同一です。
 > Unity 側は当面 `/api/v1/...` を使い続けてください (バージョン付き URL の後方互換を維持するため)。
 
-### 3.2 その他すべての Web API (`/api/me/*`, `/api/contents/*`, `/api/game/*`, `/api/tickets/*` など)
+### 3.2 その他すべての Web API (`/api/me/*`, `/api/contents/*`, `/api/tickets/*` など)
 
 2026年7月のアップデートで、**Web フロントエンドが使っている既存 API のほぼすべて**が
 `/api/v1/*` と同様に Bearer トークンでも呼べるようになりました。
@@ -83,7 +83,6 @@ Unity / モバイルアプリから利用できます。クライアント側で
 
 - `GET/POST /api/me/*` (プロフィール、ポイント、DM、注文履歴、リワード交換など)
 - `GET /api/contents/*`, `POST /api/contents/comments`
-- `GET/POST /api/game/*` (進行状況、セーブスロット、購入、ギフト)
 - `GET/POST /api/tickets/*`, `/api/live/*`, `/api/videos/*`, `/api/subscriptions/*`, `/api/orders/*`, `/api/cart/*`
 - `GET/POST /api/call/*` (通話イベント・シグナリング・待機列)
 

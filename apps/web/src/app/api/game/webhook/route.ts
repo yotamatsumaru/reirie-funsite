@@ -1,17 +1,22 @@
 /**
  * POST /api/game/webhook
- *   - Stripe Checkout 完了時に PlayerInventory に章/アイテムを付与 (kind=GAME_PURCHASE)
  *   - Pui パック購入確定時に Pui を付与 (kind=REWARD_POINT_PURCHASE)
- *   - PlayerPurchase / RewardPointPurchase を SUCCEEDED に更新
+ *   - RewardPointPurchase を SUCCEEDED に更新
  *
  * Stripe Dashboard で `checkout.session.completed` イベントを購読する
+ *
+ * 【URL について】
+ * パスに "game" が付いているのは、もともと恋愛 ADV の章 / アイテム課金 (kind=GAME_PURCHASE)
+ * と同居していた名残。恋愛 ADV は提供終了したが、Stripe Dashboard にこの URL で
+ * 登録済みのため、Pui パック購入の確定処理を壊さないようパスはそのまま残している。
+ * (URL を変える場合は Stripe Dashboard の Webhook エンドポイントも同時に変更すること)
+ *
+ * kind=GAME_PURCHASE (恋愛 ADV) のイベントが届いた場合は何もせず受信だけ返す。
  *
  * 【重要 / ゲーム公開設定の対象外】
  * ここには requireGameSectionVisible を入れてはならない。この webhook は
  * 「すでに決済が完了した」通知であり、公開設定を理由に 404 を返すと
- * 「課金されたのに商品が付与されない」状態になる。購入の入口 (/api/game/purchase)
- * を塞げば新規購入は止まるため、決済確定処理は常に受け付ける。
- * (公開中に購入 → 直後に非公開へ切替、という順序でも取りこぼさない)
+ * 「課金されたのに商品が付与されない」状態になる。
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
@@ -63,57 +68,9 @@ export async function POST(req: Request): Promise<Response> {
       return NextResponse.json({ received: true });
     }
 
-    if (meta.kind !== 'GAME_PURCHASE') {
-      return NextResponse.json({ received: true, ignored: true });
-    }
-    const purchaseId = meta.purchaseId;
-    const userId = meta.userId;
-    const scenarioId = meta.scenarioId || null;
-    const itemId = meta.itemId || null;
-    const quantity = Number(meta.quantity ?? '1');
-
-    if (!purchaseId || !userId) {
-      return NextResponse.json({ received: true, error: 'missing metadata' });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const purchase = await tx.playerPurchase.findUnique({ where: { id: purchaseId } });
-      if (!purchase) return;
-      if (purchase.paymentStatus === 'SUCCEEDED') return; // 二重防止
-
-      await tx.playerPurchase.update({
-        where: { id: purchase.id },
-        data: {
-          paymentStatus: 'SUCCEEDED',
-          paidAt: new Date(),
-          stripePaymentIntentId:
-            typeof session.payment_intent === 'string' ? session.payment_intent : null,
-        },
-      });
-
-      if (scenarioId) {
-        await tx.playerInventory.upsert({
-          where: { userId_scenarioId: { userId, scenarioId } },
-          create: { userId, scenarioId, quantity: 1 },
-          update: {},
-        });
-      }
-      if (itemId) {
-        const inv = await tx.playerInventory.findUnique({
-          where: { userId_itemId: { userId, itemId } },
-        });
-        if (inv) {
-          await tx.playerInventory.update({
-            where: { id: inv.id },
-            data: { quantity: inv.quantity + quantity },
-          });
-        } else {
-          await tx.playerInventory.create({
-            data: { userId, itemId, quantity },
-          });
-        }
-      }
-    });
+    // 恋愛 ADV (kind=GAME_PURCHASE) は提供終了。その他の kind も含め、
+    // ここで扱わないイベントは受信だけ返す (Stripe に再送させない)。
+    return NextResponse.json({ received: true, ignored: true });
   }
 
   return NextResponse.json({ received: true });
