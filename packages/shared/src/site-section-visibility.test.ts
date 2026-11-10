@@ -15,6 +15,8 @@ import {
   isGameSectionPreview,
   canViewMyRoomSection,
   isMyRoomSectionPreview,
+  canViewMeroSection,
+  isMeroSectionPreview,
   type SiteSectionVisibility,
 } from './site-section-visibility';
 
@@ -33,13 +35,18 @@ describe('DEFAULT_SITE_SECTION_VISIBILITY', () => {
     expect(DEFAULT_SITE_SECTION_VISIBILITY.myRoomVisible).toBe(false);
   });
 
-  it('既定値は MyRoom 以外すべて公開である', () => {
+  it('Mero の既定は「非公開」である（準備中の上位ポイントを会員に見せない）', () => {
+    expect(DEFAULT_SITE_SECTION_VISIBILITY.meroVisible).toBe(false);
+  });
+
+  it('既定値は MyRoom / Mero 以外すべて公開である', () => {
     expect(DEFAULT_SITE_SECTION_VISIBILITY).toEqual({
       contentsVisible: true,
       productsVisible: true,
       dmVisible: true,
       gamesVisible: true,
       myRoomVisible: false,
+      meroVisible: false,
     });
   });
 });
@@ -52,6 +59,7 @@ describe('SiteSectionVisibilitySchema', () => {
       dmVisible: true,
       gamesVisible: false,
       myRoomVisible: false,
+      meroVisible: false,
     });
     expect(parsed.gamesVisible).toBe(false);
   });
@@ -62,6 +70,7 @@ describe('SiteSectionVisibilitySchema', () => {
       productsVisible: true,
       dmVisible: true,
       myRoomVisible: false,
+      meroVisible: false,
     });
     expect(result.success).toBe(false);
   });
@@ -72,6 +81,18 @@ describe('SiteSectionVisibilitySchema', () => {
       productsVisible: true,
       dmVisible: true,
       gamesVisible: true,
+      meroVisible: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('meroVisible が欠けている場合も不正としてはじく', () => {
+    const result = SiteSectionVisibilitySchema.safeParse({
+      contentsVisible: true,
+      productsVisible: true,
+      dmVisible: true,
+      gamesVisible: true,
+      myRoomVisible: false,
     });
     expect(result.success).toBe(false);
   });
@@ -97,6 +118,7 @@ describe('SiteSectionVisibilitySchema', () => {
       dmVisible: false,
       gamesVisible: true,
       myRoomVisible: false,
+      meroVisible: false,
     };
     const patch = SiteSectionVisibilitySchema.partial().parse({ gamesVisible: false });
     const after = SiteSectionVisibilitySchema.parse({ ...before, ...patch });
@@ -107,6 +129,7 @@ describe('SiteSectionVisibilitySchema', () => {
       dmVisible: false,
       gamesVisible: false,
       myRoomVisible: false,
+      meroVisible: false,
     });
   });
 
@@ -279,5 +302,27 @@ describe('canViewMyRoomSection (公開後)', () => {
         }
       }
     }
+  });
+});
+
+describe('canViewMeroSection / isMeroSectionPreview (Mero は非公開でも管理者だけ見られる)', () => {
+  it('既定値のままなら一般会員・未ログインには見えず、管理者だけが見える', () => {
+    const { meroVisible } = DEFAULT_SITE_SECTION_VISIBILITY;
+    expect(canViewMeroSection(meroVisible, 'USER')).toBe(false);
+    expect(canViewMeroSection(meroVisible, undefined)).toBe(false);
+    expect(canViewMeroSection(meroVisible, null)).toBe(false);
+    expect(canViewMeroSection(meroVisible, 'STAFF')).toBe(true);
+    expect(canViewMeroSection(meroVisible, 'ADMIN')).toBe(true);
+    expect(canViewMeroSection(meroVisible, 'SUPER_ADMIN')).toBe(true);
+  });
+
+  it('公開すれば一般会員も見られ、プレビュー扱いにはならない', () => {
+    expect(canViewMeroSection(true, 'USER')).toBe(true);
+    expect(isMeroSectionPreview(true, 'ADMIN')).toBe(false);
+  });
+
+  it('非公開中の管理者にはプレビュー警告を出す / 一般会員には出さない', () => {
+    expect(isMeroSectionPreview(false, 'ADMIN')).toBe(true);
+    expect(isMeroSectionPreview(false, 'USER')).toBe(false);
   });
 });

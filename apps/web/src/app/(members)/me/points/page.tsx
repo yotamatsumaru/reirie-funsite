@@ -10,6 +10,7 @@ import {
 } from '@idol/shared';
 import { auth } from '@/auth';
 import { resolveGameVisibility } from '@/lib/game-visibility';
+import { resolveMeroVisibility } from '@/lib/mero-visibility';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -58,6 +59,8 @@ export default async function PointsHistoryPage() {
 
   // ゲームが非公開なら「ゲームで使う」リンクを出さない (リンク切れ防止)。
   const { canView: canViewGames } = await resolveGameVisibility();
+  // Mero は非公開中なら一般会員にはリンクごと出さない (管理者にはプレビュー用に出す)
+  const { canView: canViewMero } = await resolveMeroVisibility();
 
   const [user, fanTransactions, redemptions] = await Promise.all([
     prisma.user.findUnique({
@@ -85,9 +88,16 @@ export default async function PointsHistoryPage() {
           <h1 className="text-2xl font-bold text-slate-800">Pui 履歴</h1>
           <p className="mt-1 text-sm text-slate-500">Pui の残高と履歴</p>
         </div>
-        <Link href="/me/card" className="text-sm text-brand-600 hover:underline">
-          会員カードへ戻る
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link href="/me/card" className="text-sm text-brand-600 hover:underline">
+            会員カードへ戻る
+          </Link>
+          {canViewMero && (
+            <Link href="/me/mero" className="text-sm text-violet-700 hover:underline">
+              Mero を見る →
+            </Link>
+          )}
+        </div>
       </header>
 
       {/* 残高サマリー */}

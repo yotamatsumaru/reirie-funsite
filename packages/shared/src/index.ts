@@ -7,6 +7,7 @@ export * from './membership-rank';
 export * from './login-bonus-app';
 export * from './stripe-mode';
 export * from './site-section-visibility';
+export * from './mero';
 export * from './game-visibility';
 export * from './myroom-furniture';
 export * from './myroom-layout';

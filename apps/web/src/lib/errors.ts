@@ -57,6 +57,13 @@ export function errorResponse(err: unknown): NextResponse {
       { status: 422 },
     );
   }
+  // Mero (上位ポイント) の整合性エラーも同様 (lib/mero.ts の MeroIntegrityError)
+  if (err instanceof Error && err.name === 'MeroIntegrityError') {
+    return NextResponse.json(
+      { error: { code: 'MERO_INTEGRITY', message: err.message } },
+      { status: 422 },
+    );
+  }
   // eslint-disable-next-line no-console
   console.error('[api] unexpected error', err);
   return NextResponse.json(

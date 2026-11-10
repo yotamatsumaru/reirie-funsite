@@ -53,6 +53,15 @@ export const SiteSectionVisibilitySchema = z.object({
    * (canViewMyRoomSection 参照)。開発中の動作確認のため。
    */
   myRoomVisible: z.boolean(),
+  /**
+   * Mero (Pui の上位ポイント) を一般公開するか。
+   *
+   * 【既定は false = 非公開】ライブ特典・オンライン物販特典で使う上位ポイントとして
+   * 準備中のため、運営が明示的に ON にするまで一般会員からは完全に隠す。
+   * OFF の間も管理者 (ADMIN 以上) は残高画面をプレビューでき、
+   * スーパー管理者は管理画面から付与・調整できる (canViewMeroSection 参照)。
+   */
+  meroVisible: z.boolean(),
 });
 
 export type SiteSectionVisibility = z.infer<typeof SiteSectionVisibilitySchema>;
@@ -69,6 +78,8 @@ export const DEFAULT_SITE_SECTION_VISIBILITY: SiteSectionVisibility = {
   // 未完成の機能が本番デプロイと同時に会員へ露出するのを防ぐためで、
   // 公開は運営が管理画面で明示的に ON にしたときだけとする。
   myRoomVisible: false,
+  // Mero も準備中の新機能。MyRoom と同じく既定は非公開。
+  meroVisible: false,
 };
 
 /**
@@ -133,4 +144,26 @@ export function isMyRoomSectionPreview(
   role: UserRoleLiteral | undefined | null,
 ): boolean {
   return !myRoomVisible && isAdmin(role);
+}
+
+/**
+ * Mero (上位ポイント) を閲覧できるか。
+ * MyRoom と同じ「非公開でも管理者は見られる」方式。
+ *
+ * 一般会員 / 未ログイン … 非表示 (API は 404)
+ * 管理者 (ADMIN 以上)  … プレビュー表示
+ */
+export function canViewMeroSection(
+  meroVisible: boolean,
+  role: UserRoleLiteral | undefined | null,
+): boolean {
+  return meroVisible || isAdmin(role);
+}
+
+/** Mero を「管理者プレビューとして」表示しているか (非公開中バナーを出す) */
+export function isMeroSectionPreview(
+  meroVisible: boolean,
+  role: UserRoleLiteral | undefined | null,
+): boolean {
+  return !meroVisible && isAdmin(role);
 }
