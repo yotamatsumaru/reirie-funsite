@@ -19,7 +19,7 @@
 import { auth } from '@/auth';
 import { errors } from '@/lib/errors';
 import { verifyApiToken } from '@/lib/api-token';
-import { canAccess } from '@idol/shared';
+import { canAccess, hasCapability, ADMIN_CAPABILITY_LABELS } from '@idol/shared';
 import type {
   UserRoleLiteral,
   PlanTypeLiteral,
@@ -144,6 +144,28 @@ export async function requireApiAdmin(req: Request): Promise<ApiSession> {
   const session = await requireApiSession(req);
   if (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') {
     throw errors.forbidden('管理者権限が必要です');
+  }
+  return session;
+}
+
+/**
+ * 管理権限 (capability) を必須にする (API用、Bearer/Cookie両対応)。
+ *
+ * auth.ts の requireCapability() は Cookie セッション (auth()) しか見ないため、
+ * スマホアプリ (Bearer トークン) から管理APIを呼ぶと常に 401 になっていた。
+ * 判定ロジックは同じ hasCapability を使うので、Web管理画面の挙動は変わらない。
+ */
+export async function requireApiCapability(
+  req: Request,
+  required: AdminCapabilityLiteral,
+): Promise<ApiSession> {
+  const session = await requireApiSession(req);
+  const ok = hasCapability(
+    { role: session.user.role, capabilities: session.user.capabilities },
+    required,
+  );
+  if (!ok) {
+    throw errors.forbidden(`「${ADMIN_CAPABILITY_LABELS[required]}」の管理権限が必要です`);
   }
   return session;
 }

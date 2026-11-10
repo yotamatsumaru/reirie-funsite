@@ -7,26 +7,35 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireCapability } from '@/auth';
+import { requireApiCapability } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { CreateCallEventSchema } from '@idol/shared';
 
 export const runtime = 'nodejs';
 
-export const GET = handle(async () => {
-  await requireCapability('CALL');
-  const events = await prisma.callEvent.findMany({
-    orderBy: { startsAt: 'desc' },
-    include: {
-      performer: { select: { id: true, email: true, displayName: true, role: true } },
-      _count: { select: { serials: true, tickets: true } },
-    },
-  });
-  return NextResponse.json({ events });
+export const GET = handle(async (req: Request) => {
+  await requireApiCapability(req, 'CALL');
+  const [events, performers] = await Promise.all([
+    prisma.callEvent.findMany({
+      orderBy: { startsAt: 'desc' },
+      include: {
+        performer: { select: { id: true, email: true, displayName: true, role: true } },
+        _count: { select: { serials: true, tickets: true } },
+      },
+    }),
+    // 演者候補 (Web管理画面 /admin/call/events と同じ条件)。
+    // スマホアプリのイベント作成フォームで演者を選ぶために返す。
+    prisma.user.findMany({
+      where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+      select: { id: true, email: true, displayName: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ]);
+  return NextResponse.json({ events, performers });
 });
 
-export const POST = handle(async (req) => {
-  await requireCapability('CALL');
+export const POST = handle(async (req: Request) => {
+  await requireApiCapability(req, 'CALL');
   const body = await req.json();
   const input = CreateCallEventSchema.parse(body);
 
