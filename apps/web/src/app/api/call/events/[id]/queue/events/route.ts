@@ -43,7 +43,6 @@ async function buildSnapshot(eventId: string, userId: string | undefined): Promi
   const currentTicket = await prisma.callTicket.findFirst({
     where: { eventId, status: 'IN_MAIN_ROOM' },
     orderBy: { queuePos: 'asc' },
-    include: { user: { select: { displayName: true } } },
   });
 
   let me: CallQueueSnapshot['me'] = null;
@@ -77,7 +76,9 @@ async function buildSnapshot(eventId: string, userId: string | undefined): Promi
       ? {
           ticketId: currentTicket.id,
           queuePos: currentTicket.queuePos,
-          displayName: currentTicket.user.displayName,
+          // 他の会員の表示名は待機中の全員に配信されるため返さない (プライバシー保護)。
+          // 番号 (queuePos) だけで「現在 #N の方が通話中」と表示できる。
+          displayName: null,
           enteredMainAt: currentTicket.enteredMainAt
             ? currentTicket.enteredMainAt.toISOString()
             : null,

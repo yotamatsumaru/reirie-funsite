@@ -13,7 +13,8 @@
  */
 import { NextResponse } from 'next/server';
 import { resolveApiSession } from '@/lib/api-auth';
-import { relaySignal } from '@/lib/call-hub';
+import { getClientRole, relaySignal } from '@/lib/call-hub';
+import { checkCallRoomAccess } from '@/lib/call-room-access';
 import type { SignalMessage } from '@/lib/call-types';
 
 export const runtime = 'nodejs';
@@ -63,6 +64,19 @@ export async function POST(
   }
   if (!isSignalMessage(payload)) {
     return NextResponse.json({ error: 'invalid payload' }, { status: 400 });
+  }
+
+  // 送信者 (from) がこのルームに居る本人か、かつ今も入室資格があるかを確認する。
+  //  - from の clientId は SSE 接続時にサーバーが発行し、その接続のユーザーに紐づく。
+  //    他人の clientId を騙って offer/answer を差し込む «なりすまし» を防ぐ。
+  //  - 通話が終わった (DONE) ファンが古い接続から送り続けることも防ぐ。
+  const sender = getClientRole(roomId, from);
+  if (!sender || sender.userId !== session.user.id) {
+    return NextResponse.json({ error: 'sender not in room' }, { status: 403 });
+  }
+  const access = await checkCallRoomAccess(session, roomId, sender.role);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.reason }, { status: access.status });
   }
 
   const result = relaySignal(roomId, from, to, payload);
