@@ -29,6 +29,8 @@ import {
   isShippable,
   missingShippingFields,
   recipientName,
+  wasAnnualMemberOn,
+  type JstDayRange,
   type ShippingProfile,
 } from '@idol/shared';
 import { sendEmail } from '@/lib/email';
@@ -84,6 +86,70 @@ export async function fetchNewsletterTargets(): Promise<TargetUser[]> {
   for (const s of subs) {
     const u = s.user;
     if (!u || seen.has(u.id)) continue;
+    seen.add(u.id);
+    out.push(u);
+  }
+  return out;
+}
+
+const TARGET_USER_SELECT = {
+  id: true,
+  email: true,
+  memberNumber: true,
+  fullName: true,
+  displayName: true,
+  furigana: true,
+  postalCode: true,
+  prefecture: true,
+  addressLine1: true,
+  addressLine2: true,
+} as const;
+
+/**
+ * 基準日 (JST) の時点で «年間会員» (PREMIUM・年額) だった会員を取得する。
+ *
+ * 【発送連絡をこの条件で絞る理由】
+ * 会報誌は基準日 (例: 8/15) 時点の年間会員の分だけ発送している。
+ * 「現在の有効会員」で送ると、
+ *   - 基準日より後に入会した人 (= 今号は送っていない) に «発送しました» が届く
+ *   - 基準日以降に解約した人 (= 実際には送っている) に届かない
+ * というずれが起きるため、基準日時点の契約状態で判定する。
+ *
+ * 退会済み・BAN 済みの会員には送らない。
+ */
+export async function fetchAnnualMembersOn(
+  day: JstDayRange,
+  now: Date = new Date(),
+): Promise<TargetUser[]> {
+  const subs = await prisma.subscription.findMany({
+    where: {
+      planType: 'PREMIUM',
+      billingInterval: 'YEAR',
+      status: { notIn: ['INCOMPLETE', 'INCOMPLETE_EXPIRED'] },
+      // 基準日の終わりより前に始まった契約だけを候補にする (詳細判定は wasAnnualMemberOn)
+      OR: [{ createdAt: { lt: day.end } }, { currentPeriodStart: { lt: day.end } }],
+      user: { deletedAt: null, bannedAt: null },
+    },
+    select: {
+      planType: true,
+      billingInterval: true,
+      status: true,
+      createdAt: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+      canceledAt: true,
+      updatedAt: true,
+      user: { select: TARGET_USER_SELECT },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const seen = new Set<string>();
+  const out: TargetUser[] = [];
+  for (const s of subs) {
+    const u = s.user;
+    if (!u || seen.has(u.id)) continue;
+    if (!wasAnnualMemberOn(s, day, now)) continue;
     seen.add(u.id);
     out.push(u);
   }
@@ -214,19 +280,22 @@ export async function sendAddressReminders(params: {
  * 発送完了のお知らせを送る。
  *
  * 【送る相手】
- * 発送可能だった会員 (= 実際に送った相手) のみ。
+ * 基準日 (例: 8/15) 時点で年間会員だった会員のうち、発送可能だった会員
+ * (= 実際に送った相手) のみ。月額会員・基準日より後の入会者には送らない。
  * 住所未記入で発送できなかった会員に «発送しました» と送ると、
  * 届かない問い合わせを招くため除外する。
  */
 export async function sendShippingNotices(params: {
   issueKey: string;
   issueLabel: string;
+  /** 発送対象を決める基準日 (JST の 1 日) */
+  cutoffDay: JstDayRange;
   shippedOnLabel: string;
   arrivalLabel?: string;
   note?: string;
 }): Promise<SendResult> {
   const result = emptyResult();
-  const targets = await fetchNewsletterTargets();
+  const targets = await fetchAnnualMembersOn(params.cutoffDay);
 
   for (const u of targets) {
     // 発送できていない人に「発送しました」は送らない
