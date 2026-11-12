@@ -25,6 +25,8 @@ export type CallRole = 'performer' | 'fan';
 export type Client = {
   /** クライアントごとに発行するランダム ID */
   clientId: string;
+  /** 接続したユーザー (シグナル送信時の本人確認に使う) */
+  userId: string;
   /** 演者 or ファン */
   role: CallRole;
   /** SSE で push するときに使う */
@@ -132,6 +134,15 @@ export function relaySignal(
     broadcast(room, event, from);
   }
   return { ok: true };
+}
+
+/** ルーム内のクライアントの役割と所有ユーザーを返す (居なければ null) */
+export function getClientRole(
+  roomId: string,
+  clientId: string,
+): { role: CallRole; userId: string } | null {
+  const c = getHub().rooms.get(roomId)?.clients.get(clientId);
+  return c ? { role: c.role, userId: c.userId } : null;
 }
 
 export function getRoomStats(roomId: string): { exists: boolean; size: number } {

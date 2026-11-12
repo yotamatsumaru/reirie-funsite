@@ -23,6 +23,7 @@ import { Prisma, prisma } from '@idol/db';
 import { requireApiAccessLevel } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { RedeemCallSerialSchema, normalizeSerialCode } from '@idol/shared';
+import { recordRedeemFailure, redeemBlockedSeconds } from '@/lib/redeem-throttle';
 
 export const runtime = 'nodejs';
 
@@ -31,11 +32,20 @@ export const POST = handle(async (req) => {
   const session = await requireApiAccessLevel(req, 'MEMBERS');
   const userId = session!.user!.id;
 
+  // 総当たり対策: 短時間に失敗を繰り返したユーザーは一時的に受け付けない
+  const blocked = redeemBlockedSeconds(userId);
+  if (blocked !== null) {
+    throw errors.rateLimited(
+      `シリアルコードの入力ミスが続いたため、一時的に受付を停止しています。約${Math.ceil(blocked / 60)}分後に再度お試しください。`,
+    );
+  }
+
   const body = await req.json();
   const { code } = RedeemCallSerialSchema.parse(body);
 
   const canonical = normalizeSerialCode(code);
   if (!canonical) {
+    recordRedeemFailure(userId);
     throw errors.badRequest('シリアルコードの形式が正しくありません');
   }
 
@@ -47,6 +57,7 @@ export const POST = handle(async (req) => {
         include: { event: true },
       });
       if (!serial) {
+        recordRedeemFailure(userId);
         throw errors.notFound('シリアルコードが見つかりません');
       }
       if (serial.usedById) {
