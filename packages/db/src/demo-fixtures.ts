@@ -1136,6 +1136,7 @@ const fixtures: Record<string, unknown[]> = {
   rewardCatalogItem,
   rewardRedemption: empty,
   monthlyRewardPointGrant: empty,
+  meroTransaction: empty,
   announcement,
   // systemSetting はデモ専用 (Prisma schema には未登録、メモリ上のみで動作)
   systemSetting,

@@ -54,6 +54,12 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
     description:
       '会員が家具を購入して自分の部屋を飾る MyRoom 機能を一般公開するか。【現在は開発中の新機能のため、既定で非公開（管理者だけが利用できる状態）になっています】。OFF の間も管理者は動作確認でき、家具の登録・画像アップロードは管理画面「MyRoom家具」から行えます。会員に見せる準備ができてから ON にしてください',
   },
+  {
+    key: 'meroVisible',
+    label: 'Mero（Pui の上位ポイント）',
+    description:
+      'ライブ特典・オンライン物販特典で使う上位ポイント Mero を一般公開するか。【現在は準備中のため、既定で非公開（管理者だけが確認できる状態）になっています】。OFF の間も管理画面「Mero」から付与・調整でき、管理者は会員ページ (/me/mero) をプレビューできます。運用が固まってから ON にしてください',
+  },
 ];
 
 /**
@@ -61,7 +67,7 @@ const ITEMS: { key: keyof SiteSectionVisibility; label: string; description: str
  * 「非公開にしたら自分も見られなくなるのでは」という不安をなくすため、
  * UI 上でも明示する。
  */
-const ADMIN_PREVIEWABLE_KEYS: ReadonlySet<string> = new Set(['gamesVisible', 'myRoomVisible']);
+const ADMIN_PREVIEWABLE_KEYS: ReadonlySet<string> = new Set(['gamesVisible', 'myRoomVisible', 'meroVisible']);
 
 export function SiteVisibilityClient({ initialVisibility }: Props) {
   const [visibility, setVisibility] = useState<SiteSectionVisibility>(initialVisibility);
@@ -105,7 +111,7 @@ export function SiteVisibilityClient({ initialVisibility }: Props) {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">
-              コンテンツ / グッズ / DM / ゲーム / MyRoom の公開設定
+              コンテンツ / グッズ / DM / ゲーム / MyRoom / Mero の公開設定
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               OFF にすると該当セクションのページ・APIが一般ユーザーから見えなくなります

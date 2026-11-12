@@ -1386,6 +1386,20 @@
     "doc": "毎日のログインボーナスを受け取る"
   },
   {
+    "path": "/api/me/mero",
+    "file": "api/me/mero/route.ts",
+    "methods": [
+      "GET"
+    ],
+    "auth": "member",
+    "authLabel": "会員必須",
+    "gates": [],
+    "bearer": true,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "自分の Mero (Pui の上位ポイント) 残高と直近の履歴"
+  },
+  {
     "path": "/api/me/orders/[id]/invoice",
     "file": "api/me/orders/[id]/invoice/route.ts",
     "methods": [
@@ -2356,6 +2370,20 @@
     "cookieOnly": false,
     "perMethod": null,
     "doc": "会員ランクの昇格条件 (しきい値) を取得"
+  },
+  {
+    "path": "/api/super-admin/mero/adjust",
+    "file": "api/super-admin/mero/adjust/route.ts",
+    "methods": [
+      "POST"
+    ],
+    "auth": "superadmin",
+    "authLabel": "スーパー管理者",
+    "gates": [],
+    "bearer": false,
+    "cookieOnly": false,
+    "perMethod": null,
+    "doc": "管理者による Mero の付与 / 減算"
   },
   {
     "path": "/api/super-admin/newsletter/export",

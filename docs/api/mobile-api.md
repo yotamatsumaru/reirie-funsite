@@ -7,7 +7,7 @@
 > node tools/api-docs/extract.mjs && node tools/api-docs/generate.mjs
 > ```
 
-最終生成: 2026-11-10 / アプリ向けエンドポイント **108 本**
+最終生成: 2026-11-12 / アプリ向けエンドポイント **109 本**
 
 ---
 
@@ -330,6 +330,7 @@ GET /api/call/{roomId}/events?access_token=<accessToken>
 | POST | `/api/cron/birthday-mail` | 🔒 Cron専用 | — | 誕生日メールの自動送信を実行する (冪等)。 |
 | GET | `/api/maintenance-status` | 公開 | — | メンテナンスモードの ON/OFF だけを返す公開エンドポイント |
 | POST | `/api/me/birthday-mail/read` | 会員 | — | マイページで誕生日メールを開いたときに既読化する。 |
+| GET | `/api/me/mero` | 会員 | — | 自分の Mero (Pui の上位ポイント) 残高と直近の履歴 |
 | GET | `/api/postal-lookup` | 公開 | — | 郵便番号から住所を引く公開エンドポイント |
 | GET | `/api/shipping-methods` | 公開 | — | — |
 

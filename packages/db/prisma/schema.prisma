@@ -157,6 +157,18 @@ enum PuiReason {
   OTHER
 }
 
+// Mero (Pui の上位ポイント) の取引理由。
+// Mero はライブ特典・オンライン物販特典などで付与 / 交換する上位通貨。
+// 現在は非公開 (site.sectionVisibility.meroVisible) で、付与は管理者調整のみ。
+enum MeroReason {
+  ADMIN_ADJUST // 管理者による手動調整 (付与・減算)
+  LIVE_BENEFIT // ライブ特典として付与
+  MERCH_BENEFIT // オンライン物販の特典として付与
+  REDEMPTION // 特典との交換 (消費)
+  REFUND // 交換キャンセル等による返還
+  OTHER
+}
+
 // 特典ポイント購入 (Stripe) の状態
 enum RewardPointPurchaseStatus {
   PENDING
@@ -342,6 +354,8 @@ model User {
   // 【2026-07 通貨名変更】以前は「points」(Fan ポイント) という名称だったが、
   // 通貨名を「Pui」に変更したのに合わせてフィールド名も pui に変更した。
   pui                     Int       @default(0)
+  // Mero 残高 (Pui の上位ポイント)。増減は MeroTransaction と必ず同時に行う (lib/mero.ts)。
+  mero                    Int       @default(0)
   // Stripe 関連を user に持たせる(1ユーザー1顧客)
   stripeCustomerId        String?   @unique @map("stripe_customer_id")
   // メール確認用トークン (旧: リンク方式。後方互換のため残置、新規登録では使用しない)
@@ -423,6 +437,7 @@ model User {
 
   // Membership / Pui (会員カード & Pui)
   puiTransactions    PuiTransaction[]
+  meroTransactions   MeroTransaction[]
   loginBonusGrants   LoginBonusGrant[]
   loginDays          LoginDay[]
   socialShareGrants  SocialShareGrant[]
@@ -447,9 +462,9 @@ model User {
   directMessages DirectMessage[]
 
   // お問い合わせ (ログイン中に送信した場合に紐づく。ゲスト送信は null)
-  contactMessages ContactMessage[]
+  contactMessages    ContactMessage[]
   // お問い合わせへの返信のうち、この管理者が返信したもの (発行者としての履歴)
-  contactRepliesSent ContactReply[] @relation("ContactReplyRepliedBy")
+  contactRepliesSent ContactReply[]   @relation("ContactReplyRepliedBy")
 
   // 運営からの警告通知 (このユーザーが受け取った警告)
   warningsReceived UserWarning[] @relation("UserWarningTarget")
@@ -695,26 +710,26 @@ model VideoThumbnail {
 /// 240 行になり、行数 = 視聴回数という意味が壊れる。
 /// 「その視聴でどこまで見たか」は 1 行に集約する。
 model VideoViewLog {
-  id      String @id @default(uuid()) @db.Uuid
-  videoId String @map("video_id") @db.Uuid
-  userId  String @map("user_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  videoId        String    @map("video_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
   /// 実際に再生された時間の累計 (ミリ秒)。シークで見直した分も加算される。
   /// 「合計どれくらい見られたか」の集計に使う。
-  watchedMs Int @default(0) @map("watched_ms")
+  watchedMs      Int       @default(0) @map("watched_ms")
   /// 最後に見ていた再生位置 (ミリ秒)。watchedMs と分けているのは、
   /// 巻き戻して見直すと「位置は戻るが視聴時間は増える」ため。
   /// 離脱ポイントの把握と、続きから再生する導線に使う。
-  lastPositionMs Int @default(0) @map("last_position_ms")
+  lastPositionMs Int       @default(0) @map("last_position_ms")
   /// 実質的に最後まで見たか (再生位置が尺の 95% に到達)。
   /// 完視聴率の集計を毎回 durationSeconds と突き合わせて計算せずに済むよう、
   /// 判定結果を保存する (動画の尺は後から変わり得るため、判定時点の結果を残す)。
-  completed Boolean @default(false)
+  completed      Boolean   @default(false)
   /// 進捗が最後に届いた時刻。createdAt は再生開始時刻なので、
   /// この 2 つの差がその視聴セッションの実経過時間になる。
-  lastActiveAt DateTime? @map("last_active_at")
-  ipHash       String?   @map("ip_hash")
-  userAgent    String?   @map("user_agent")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  lastActiveAt   DateTime? @map("last_active_at")
+  ipHash         String?   @map("ip_hash")
+  userAgent      String?   @map("user_agent")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -775,18 +790,18 @@ model ProductCategory {
 }
 
 model Product {
-  id                 String   @id @default(uuid()) @db.Uuid
-  categoryId         String?  @map("category_id") @db.Uuid
-  slug               String   @unique
+  id                 String  @id @default(uuid()) @db.Uuid
+  categoryId         String? @map("category_id") @db.Uuid
+  slug               String  @unique
   name               String
-  description        String?  @db.Text
-  basePrice          Int      @map("base_price")
-  memberPrice        Int?     @map("member_price")
-  premiumPrice       Int?     @map("premium_price")
-  taxRate            Int      @default(10) @map("tax_rate")
-  isActive           Boolean  @default(true) @map("is_active")
-  isMembersOnly      Boolean  @default(false) @map("is_members_only")
-  isPremiumExclusive Boolean  @default(false) @map("is_premium_exclusive")
+  description        String? @db.Text
+  basePrice          Int     @map("base_price")
+  memberPrice        Int?    @map("member_price")
+  premiumPrice       Int?    @map("premium_price")
+  taxRate            Int     @default(10) @map("tax_rate")
+  isActive           Boolean @default(true) @map("is_active")
+  isMembersOnly      Boolean @default(false) @map("is_members_only")
+  isPremiumExclusive Boolean @default(false) @map("is_premium_exclusive")
 
   // ---- 販売期間 (BASE の「販売期間」相当) ----
   // 「公開/非公開」だけだと複数商品を同じ時刻に一斉発売するには
@@ -796,11 +811,11 @@ model Product {
   //   saleEndsAt を過ぎた             → ページは見えるが「販売終了」で購入不可
   // とし、時刻になれば自動で購入可能になる (手動操作不要)。
   // どちらも NULL なら従来どおり isActive だけで判定する。
-  saleStartsAt       DateTime? @map("sale_starts_at")
-  saleEndsAt         DateTime? @map("sale_ends_at")
+  saleStartsAt DateTime? @map("sale_starts_at")
+  saleEndsAt   DateTime? @map("sale_ends_at")
 
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   category        ProductCategory?        @relation(fields: [categoryId], references: [id])
   variants        ProductVariant[]
@@ -827,21 +842,21 @@ model Product {
 /// 「商品ごとに使える配送方法」を割り当て、カートでは
 /// カート内の全商品が対応している配送方法だけを購入者が選べるようにする。
 model ShippingMethod {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String
+  description   String?
   /// 全国一律送料 (円)
-  fee         Int
+  fee           Int
   /// true なら、配送方法が 1 つも設定されていない商品にも自動で適用される
   /// (BASE の「基本配送の設定」)。複数の基本配送があってもよい。
-  isDefault   Boolean  @default(false) @map("is_default")
-  isActive    Boolean  @default(true) @map("is_active")
-  sortOrder   Int      @default(0) @map("sort_order")
+  isDefault     Boolean  @default(false) @map("is_default")
+  isActive      Boolean  @default(true) @map("is_active")
+  sortOrder     Int      @default(0) @map("sort_order")
   /// ヤマト B2クラウド取込CSV の「送り状種類」コード。
   /// 0=発払い(宅急便) / 7=ネコポス / 8=宅急便コンパクト。未設定は 0。
-  b2InvoiceType String? @map("b2_invoice_type")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  b2InvoiceType String?  @map("b2_invoice_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   products ProductShippingMethod[]
   orders   Order[]
@@ -871,21 +886,21 @@ model ProductShippingMethod {
 /// 入力内容はカート明細 (CartItem.optionValues) と注文明細
 /// (OrderItem.optionValues) に «その時点の値» としてスナップショット保存する。
 model ProductOption {
-  id          String   @id @default(uuid()) @db.Uuid
-  productId   String   @map("product_id") @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
   /// 項目名 (例: 「宛名(ニックネーム)」「書いてほしい言葉」)
-  name        String
+  name       String
   /// 入力欄の下に出す案内文 (例: 「無記入を希望の方は "なし" とご入力ください」)
-  helpText    String?  @map("help_text")
+  helpText   String?  @map("help_text")
   /// 最大文字数 (全角換算ではなく文字数)
-  maxLength   Int      @default(20) @map("max_length")
+  maxLength  Int      @default(20) @map("max_length")
   /// 追加料金 (円)。入力があれば 1 個につき加算する。0 なら無料
-  price       Int      @default(0)
+  price      Int      @default(0)
   /// 必須入力か
-  isRequired  Boolean  @default(true) @map("is_required")
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  isRequired Boolean  @default(true) @map("is_required")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -966,18 +981,18 @@ model Cart {
 }
 
 model CartItem {
-  id        String   @id @default(uuid()) @db.Uuid
-  cartId    String   @map("cart_id") @db.Uuid
-  variantId String   @map("variant_id") @db.Uuid
-  quantity  Int      @default(1)
+  id           String   @id @default(uuid()) @db.Uuid
+  cartId       String   @map("cart_id") @db.Uuid
+  variantId    String   @map("variant_id") @db.Uuid
+  quantity     Int      @default(1)
   /// 商品オプションの入力値。[{ optionId, name, value, price }] の JSON。
   /// 宛名が違えば別の明細として扱いたいため optionsKey で一意性を分ける。
-  optionValues Json?   @map("option_values")
+  optionValues Json?    @map("option_values")
   /// optionValues を正規化した文字列 (同一 variant でも宛名違いを別行にするためのキー)。
   /// オプション未入力は空文字。
-  optionsKey   String  @default("") @map("options_key")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  optionsKey   String   @default("") @map("options_key")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
@@ -1026,25 +1041,25 @@ model Order {
 }
 
 model OrderItem {
-  id          String @id @default(uuid()) @db.Uuid
-  orderId     String @map("order_id") @db.Uuid
-  productId   String @map("product_id") @db.Uuid
-  variantId   String @map("variant_id") @db.Uuid
-  productName String @map("product_name")
-  variantName String @map("variant_name")
+  id           String  @id @default(uuid()) @db.Uuid
+  orderId      String  @map("order_id") @db.Uuid
+  productId    String  @map("product_id") @db.Uuid
+  variantId    String  @map("variant_id") @db.Uuid
+  productName  String  @map("product_name")
+  variantName  String  @map("variant_name")
   // 注文時点のサイズ・カラーを «そのまま» 残す。
   // variantName だけだと「ホワイト」しか残らず、
   // どのサイズが注文されたのか発送担当にも購入者にも分からなかった。
   // 後から商品マスタを変更・削除しても注文内容が変わらないよう、
   // 参照ではなくスナップショットとして保持する。
-  optionSize  String? @map("option_size")
-  optionColor String? @map("option_color")
+  optionSize   String? @map("option_size")
+  optionColor  String? @map("option_color")
   /// 商品オプション (宛名など) の入力値スナップショット。
   /// [{ optionId, name, value, price }] の JSON。発送担当がチェキに書く内容を確認するために使う。
-  optionValues Json?  @map("option_values")
-  unitPrice   Int    @map("unit_price")
-  quantity    Int
-  subtotal    Int
+  optionValues Json?   @map("option_values")
+  unitPrice    Int     @map("unit_price")
+  quantity     Int
+  subtotal     Int
 
   order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product        @relation(fields: [productId], references: [id])
@@ -1160,9 +1175,9 @@ model StripeWebhookEvent {
   //   ここに結果を残すことで、管理画面から能動的に検知できるようにする。
   //
   //   outcome: 'SUCCESS' | 'SKIPPED'  (失敗して 5xx を返す場合は行自体を作らない)
-  outcome     String?  @map("outcome")
+  outcome          String? @map("outcome")
   // SKIPPED の理由 (user_not_found / no_items / no_invoice_id など)
-  skipReason  String?  @map("skip_reason")
+  skipReason       String? @map("skip_reason")
   // 対象を特定するための Stripe ID (顧客の照合に使う)
   stripeCustomerId String? @map("stripe_customer_id")
 
@@ -1598,6 +1613,27 @@ model PuiTransaction {
   @@map("pui_transactions")
 }
 
+/// Mero 取引履歴 (増減の単一の真実)。Pui の PuiTransaction と同じ設計。
+/// User.mero は本テーブルの合計と一致するよう、付与/消費は必ず
+/// $transaction で「残高更新 + 履歴作成」を同時に行う (apps/web/src/lib/mero.ts)。
+model MeroTransaction {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  amount    Int // 正=付与, 負=消費
+  balance   Int // 取引後の残高 (監査用スナップショット)
+  reason    MeroReason
+  note      String? // 任意メモ (ライブ名・注文番号・調整理由など)
+  /// 操作した管理者 (管理者調整のとき)。自動付与なら null
+  actorId   String?    @map("actor_id") @db.Uuid
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([reason, createdAt])
+  @@map("mero_transactions")
+}
+
 // =====================================================================
 // ポイントパック購入 (Stripe) — Pui を課金で購入する
 //
@@ -1751,12 +1787,6 @@ model RewardRedemption {
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   catalogItem RewardCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
 
-  @@index([userId, createdAt])
-  @@index([status, createdAt])
-  // 重複交換の検出を高速化する (userId + catalogItemId での存在確認に使う)
-  @@index([userId, catalogItemId, status])
-  @@map("reward_redemptions")
-
   /// 【重要 / Prisma では表現できない制約がある】
   /// デジタル特典 (DIGITAL) の重複交換を防ぐため、DB 側に
   /// 部分ユニークインデックス reward_redemptions_unique_active_digital を張っている:
@@ -1770,6 +1800,12 @@ model RewardRedemption {
   /// CANCELED を除外しているのはキャンセル (Pui 返還) 後に再交換できないと
   /// 会員が詰んでしまうから。この 2 つの除外条件は @@unique では書けないため
   /// SQL で直接定義している。schema.prisma からは見えないので注意。
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  // 重複交換の検出を高速化する (userId + catalogItemId での存在確認に使う)
+  @@index([userId, catalogItemId, status])
+  @@map("reward_redemptions")
 }
 
 /// 毎日のログインボーナス受領記録。
@@ -2105,23 +2141,23 @@ model ContentBodyImage {
 ///   1. S3 アセットバケット設定済み → S3 に置き url は外部 URL / data は NULL
 ///   2. 未設定 → data にバイト列を保存し /api/media/content-body-video/{id} 経由で配信
 model ContentBodyVideo {
-  id          String   @id @default(uuid()) @db.Uuid
-  url         String
-  contentType String   @map("content_type")
+  id              String   @id @default(uuid()) @db.Uuid
+  url             String
+  contentType     String   @map("content_type")
   /// 元ファイル名 (管理画面での一覧表示・検索用)
-  fileName    String?  @map("file_name")
-  sizeBytes   Int      @map("size_bytes")
+  fileName        String?  @map("file_name")
+  sizeBytes       Int      @map("size_bytes")
   /// ポスター画像 (最初のフレーム) の URL。ブラウザ側で canvas から生成して
   /// 別途アップロードしたものを紐付ける。未生成なら NULL。
   /// これが無いと、再生前の <video> が真っ黒の矩形として記事に並んでしまう。
-  posterUrl   String?  @map("poster_url")
+  posterUrl       String?  @map("poster_url")
   /// ブラウザが測った尺 (秒)。測定できない動画もあるので NULL 可。
   /// 一覧での目安表示と、長すぎるクリップの棚卸しに使う。
-  durationSeconds Int? @map("duration_seconds")
-  data        Bytes?   @map("data")
+  durationSeconds Int?     @map("duration_seconds")
+  data            Bytes?   @map("data")
   /// アップロードした管理者。ユーザー削除時も動画自体は記事に残す必要があるため SetNull。
-  uploadedBy  String?  @map("uploaded_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
+  uploadedBy      String?  @map("uploaded_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
 
   uploader User? @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
 
@@ -2187,14 +2223,14 @@ enum AnnouncementEmailStatus {
 }
 
 model Announcement {
-  id       String               @id @default(uuid()) @db.Uuid
-  title    String
-  body     String
+  id        String               @id @default(uuid()) @db.Uuid
+  title     String
+  body      String
   /// チケットサイトの申込タグ (Ticket Dive のルート限定タグ等)。サニタイズ済み HTML。
   /// 本文 (プレーンテキスト) の下に表示する。lib/ticket-embed.ts 参照
-  embedHtml String? @map("embed_html")
-  audience AnnouncementAudience @default(ALL)
-  status   AnnouncementStatus   @default(DRAFT)
+  embedHtml String?              @map("embed_html")
+  audience  AnnouncementAudience @default(ALL)
+  status    AnnouncementStatus   @default(DRAFT)
 
   // --- メール一斉送信 ---
   /// 公開時にメールも送信するか (サイト内表示のみにしたい場合は false)
@@ -2231,48 +2267,48 @@ model Announcement {
 /// - ログイン中のユーザーは userId が紐づく。ゲスト送信は userId = null。
 /// - 管理画面 (/super-admin/contact) で一覧・対応状況の更新を行う。
 model ContactMessage {
-  id        String          @id @default(uuid()) @db.Uuid
+  id           String          @id @default(uuid()) @db.Uuid
   /// 受付番号 (例: CT-20260902-7K3QF)。控えメール・運営通知・管理画面で共通に使う
   /// 「会員と運営が同じ問い合わせを指せる」短い識別子。
   /// 【なぜ null 許容か】この機能を追加する前に届いた既存の問い合わせには
   /// 番号が存在しない。マイグレーションで機械的に埋めると「実際には控えメールを
   /// 送っていないのに番号がある」状態になり、問い合わせ照合時に混乱するため
   /// 既存行は null のまま残す (管理画面では「—」と表示する)。
-  ticketNumber String?      @unique @map("ticket_number")
+  ticketNumber String?         @unique @map("ticket_number")
   // 送信者情報 (フォーム入力値。ログイン中でもフォーム値を保存する)
-  name      String
-  email     String
-  category  ContactCategory @default(GENERAL)
-  subject   String
-  message   String          @db.Text
+  name         String
+  email        String
+  category     ContactCategory @default(GENERAL)
+  subject      String
+  message      String          @db.Text
   // 対応状況 (管理側で更新)
-  status    ContactStatus   @default(NEW)
+  status       ContactStatus   @default(NEW)
   // 管理者用メモ (対応内容の記録など。ユーザーには見えない)
-  adminNote String?         @map("admin_note") @db.Text
+  adminNote    String?         @map("admin_note") @db.Text
   // 濫用対策・調査用のメタ情報
-  ipAddress String?         @map("ip_address")
-  userAgent String?         @map("user_agent")
+  ipAddress    String?         @map("ip_address")
+  userAgent    String?         @map("user_agent")
   // ログイン中に送信した場合の紐づけ (ゲストは null)
-  userId    String?         @map("user_id") @db.Uuid
-  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId       String?         @map("user_id") @db.Uuid
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   // --- 控えメール (送信者本人宛) の送信結果 ---
   /// 送信者へ控えメールを送れたか。false のまま残っていれば
   /// 「問い合わせは受け付けたが控えが届いていない」ことが管理画面から分かる。
-  ackMailSent  Boolean   @default(false) @map("ack_mail_sent")
+  ackMailSent   Boolean   @default(false) @map("ack_mail_sent")
   /// 控えメールの送信時刻 (成功時のみ)。
   ackMailSentAt DateTime? @map("ack_mail_sent_at")
   /// 控えメールの送信失敗理由。運営が再送判断に使う。
-  ackMailError String?   @map("ack_mail_error") @db.Text
+  ackMailError  String?   @map("ack_mail_error") @db.Text
 
   // --- 運営への新規受信通知の送信結果 ---
   /// 運営通知を送れたか。宛先未設定 / 通知OFF のときは false のまま。
-  adminNotifiedAt DateTime? @map("admin_notified_at")
+  adminNotifiedAt  DateTime? @map("admin_notified_at")
   /// 運営通知の送信失敗理由。
-  adminNotifyError String?  @map("admin_notify_error") @db.Text
+  adminNotifyError String?   @map("admin_notify_error") @db.Text
 
   // 運営からの返信 (1 問い合わせに複数返信可能。履歴として保持)
-  replies   ContactReply[]
+  replies ContactReply[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -2287,20 +2323,20 @@ model ContactMessage {
 /// が非 null) の場合はマイページの「運営からのお知らせ」にも表示する。
 /// 1 つの問い合わせに複数返信でき、履歴として全件保持する。
 model ContactReply {
-  id               String   @id @default(uuid()) @db.Uuid
-  contactMessageId String   @map("contact_message_id") @db.Uuid
+  id               String         @id @default(uuid()) @db.Uuid
+  contactMessageId String         @map("contact_message_id") @db.Uuid
   contactMessage   ContactMessage @relation(fields: [contactMessageId], references: [id], onDelete: Cascade)
   /// 返信本文 (メール本文・マイページ表示に使用)。
-  body             String   @db.Text
+  body             String         @db.Text
   /// 返信した運営者。管理者ユーザーが削除された場合も記録は残す。
-  repliedById      String?  @map("replied_by_id") @db.Uuid
-  repliedBy        User?    @relation("ContactReplyRepliedBy", fields: [repliedById], references: [id], onDelete: SetNull)
+  repliedById      String?        @map("replied_by_id") @db.Uuid
+  repliedBy        User?          @relation("ContactReplyRepliedBy", fields: [repliedById], references: [id], onDelete: SetNull)
   /// メール送信できたか (SES 成功時 true)。false は記録のみ (エラー内容は emailError)。
-  emailSent        Boolean  @default(false) @map("email_sent")
-  emailError       String?  @map("email_error")
+  emailSent        Boolean        @default(false) @map("email_sent")
+  emailError       String?        @map("email_error")
   /// 会員がマイページで初めて閲覧した日時 (未読判定用。ゲスト送信では常に null)。
-  readAt           DateTime? @map("read_at")
-  createdAt        DateTime @default(now()) @map("created_at")
+  readAt           DateTime?      @map("read_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
 
   @@index([contactMessageId, createdAt])
   @@map("contact_replies")
