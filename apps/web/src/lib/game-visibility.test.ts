@@ -67,7 +67,7 @@ import {
  * 全ゲーム同一値の公開設定マップを GAME_KEYS から作る。
  *
  * 【なぜハードコードしないか】
- * 以前は { acchi: true, slot: true, story: true } と直接書いていたため、
+ * 以前は { acchi: true, slot: true, ... } と直接書いていたため、
  * ゲームを 1 本追加するだけでこのファイルの多くのテストが落ちた。
  * 「新しいゲームを足しても壊れない」ことが GAME_KEYS 導出の狙いなので、
  * テスト側もキー一覧から組み立てる。
@@ -142,7 +142,7 @@ describe('requireGameSectionVisible (API ガード / ゲーム全体)', () => {
 
   it('全ゲームを個別に非公開にすると、ゲーム全体としても 404 になる', async () => {
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: false, slot: false, story: false });
+    setStoredGameVisibility({ acchi: false, slot: false, memory: false });
     await expect(requireGameSectionVisible(req())).rejects.toMatchObject({
       status: 404,
     });
@@ -150,7 +150,7 @@ describe('requireGameSectionVisible (API ガード / ゲーム全体)', () => {
 
   it('1 本でも公開されていればゲーム全体としては通す', async () => {
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: false, slot: true, story: false });
+    setStoredGameVisibility({ acchi: false, slot: true, memory: false });
     await expect(requireGameSectionVisible(req())).resolves.toBeUndefined();
   });
 });
@@ -168,7 +168,6 @@ describe('requireGameVisible (API ガード / ゲーム個別)', () => {
     setStoredVisibility(ALL_VISIBLE);
     setStoredGameVisibility({ slot: false });
     await expect(requireGameVisible(req(), 'acchi')).resolves.toBeUndefined();
-    await expect(requireGameVisible(req(), 'story')).resolves.toBeUndefined();
   });
 
   it('個別 OFF でも一般会員 (USER) は 404 / 管理者は通る', async () => {
@@ -184,8 +183,8 @@ describe('requireGameVisible (API ガード / ゲーム個別)', () => {
 
   it('マスタースイッチが OFF なら個別 ON でも 404 (緊急停止として機能する)', async () => {
     setStoredVisibility({ ...ALL_VISIBLE, gamesVisible: false });
-    setStoredGameVisibility({ acchi: true, slot: true, story: true });
-    for (const game of ['acchi', 'slot', 'story'] as const) {
+    setStoredGameVisibility({ acchi: true, slot: true, memory: true });
+    for (const game of ['acchi', 'slot', 'memory'] as const) {
       await expect(requireGameVisible(req(), game)).rejects.toMatchObject({
         status: 404,
       });
@@ -195,16 +194,24 @@ describe('requireGameVisible (API ガード / ゲーム個別)', () => {
   it('game.visibility 未設定なら全ゲーム公開扱い (既存サイトが壊れない)', async () => {
     setStoredVisibility(ALL_VISIBLE);
     setStoredGameVisibility(null);
-    for (const game of ['acchi', 'slot', 'story'] as const) {
+    // memory (神経衰弱) は既定が非公開なので対象外 (DEFAULT_GAME_VISIBILITY 参照)
+    for (const game of ['acchi', 'slot'] as const) {
       await expect(requireGameVisible(req(), game)).resolves.toBeUndefined();
     }
   });
 
-  it('新しく追加したゲームのキーが保存されていなくても公開扱い', async () => {
-    // 既存 DB には acchi / slot しか保存されていない状態で story を追加した想定。
+  it('保存されていないキーは既定値 (DEFAULT_GAME_VISIBILITY) で判定する', async () => {
+    // 既存 DB に acchi しか保存されていない状態。slot は既定 true なので公開扱い。
     setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ acchi: true, slot: true });
-    await expect(requireGameVisible(req(), 'story')).resolves.toBeUndefined();
+    setStoredGameVisibility({ acchi: true });
+    await expect(requireGameVisible(req(), 'slot')).resolves.toBeUndefined();
+  });
+
+  it('提供終了した恋愛 ADV のキー (story) が DB に残っていても無視される', async () => {
+    setStoredVisibility(ALL_VISIBLE);
+    setStoredGameVisibility({ story: false, acchi: true, slot: true });
+    await expect(requireGameVisible(req(), 'acchi')).resolves.toBeUndefined();
+    await expect(requireGameVisible(req(), 'slot')).resolves.toBeUndefined();
   });
 
   it('game.visibility が壊れていても公開扱いにフォールバックする', async () => {
@@ -373,19 +380,6 @@ describe('resolveGameVisibility (Server Component 用 / ゲーム個別)', () =>
       canView: true,
       isPreview: true,
     });
-  });
-
-  it('【メタデータ漏洩防止】個別 OFF なら publiclyVisible が false になる', async () => {
-    // /game/[characterSlug] の generateMetadata はこの値を見て
-    // キャラ名を meta から伏せる。マスターだけ見ていると ADV 個別 OFF のときに
-    // タイトル / og:description から未公開ゲームの内容が漏れる。
-    setStoredVisibility(ALL_VISIBLE);
-    setStoredGameVisibility({ story: false });
-    cookieSession = { user: { id: 'a1', role: 'SUPER_ADMIN' } };
-    const state = await resolveGameVisibility('story');
-    expect(state.publiclyVisible).toBe(false);
-    // 管理者本人は閲覧できる (プレビュー) が、meta には出さない。
-    expect(state.canView).toBe(true);
   });
 });
 

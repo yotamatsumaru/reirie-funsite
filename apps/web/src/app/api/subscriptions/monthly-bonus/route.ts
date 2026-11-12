@@ -1,13 +1,14 @@
 /**
  * POST /api/subscriptions/monthly-bonus
  *
- * 月次ボーナスギフトを全アクティブ会員に付与する Cron 用エンドポイント。
- *
- * - STANDARD 会員: 1 個/月
- * - PREMIUM 会員 : 5 個/月
+ * 月次 Pui ボーナスを全アクティブ会員 (STANDARD / PREMIUM) に付与する Cron 用エンドポイント。
+ * 付与量はプラン別 (MONTHLY_PUI_BONUS)。
  *
  * 二重付与防止:
- *   BonusGiftGrant (userId, yearMonth) UNIQUE 制約で同月再付与を抑止。
+ *   MonthlyRewardPointGrant (userId, yearMonth) UNIQUE 制約で同月再付与を抑止 (grantMonthlyPuiBonus)。
+ *
+ * ※ 以前は恋愛 ADV 用の「ボーナスギフト (GameItem)」も同時に付与していたが、
+ *   恋愛 ADV の提供終了に伴い廃止した。過去の付与履歴 (BonusGiftGrant) は DB に残している。
  *
  * 認証:
  *   - x-cron-secret ヘッダで CRON_SECRET と一致 → 内部呼び出し許可
@@ -19,8 +20,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import {
-  MONTHLY_BONUS_GIFT_COUNT,
-  DEFAULT_BONUS_GIFT_SLUG,
   MONTHLY_PUI_BONUS,
   currentYearMonth,
   type PlanTypeLiteral,
@@ -36,11 +35,9 @@ export const runtime = 'nodejs';
 interface GrantResult {
   userId: string;
   plan: PlanTypeLiteral;
-  count: number;
   skipped: boolean;
   reason?: string;
   pui?: number;
-  puiSkipped?: boolean;
 }
 
 export const POST = handle(async (req: Request) => {
@@ -55,16 +52,6 @@ export const POST = handle(async (req: Request) => {
   }
 
   const yearMonth = currentYearMonth();
-
-  // ===== ボーナスアイテムを解決 =====
-  const bonusItem = await prisma.gameItem.findUnique({
-    where: { slug: DEFAULT_BONUS_GIFT_SLUG },
-  });
-  if (!bonusItem) {
-    throw errors.badRequest(
-      `ボーナスアイテム slug "${DEFAULT_BONUS_GIFT_SLUG}" が GameItem に見つかりません。先に管理画面で作成してください。`,
-    );
-  }
 
   // ===== アクティブ会員 (STANDARD / PREMIUM) を抽出 =====
   const activeSubs = await prisma.subscription.findMany({
@@ -83,72 +70,24 @@ export const POST = handle(async (req: Request) => {
 
   for (const sub of activeSubs) {
     const plan = sub.planType as PlanTypeLiteral;
-    const count = MONTHLY_BONUS_GIFT_COUNT[plan];
-    if (count <= 0) {
-      results.push({ userId: sub.userId, plan, count: 0, skipped: true, reason: 'no_bonus_for_plan' });
-      skipped++;
-      continue;
-    }
+    const result: GrantResult = { userId: sub.userId, plan, skipped: false };
+    results.push(result);
 
-    try {
-      await prisma.$transaction(async (tx) => {
-        // 1) 二重付与防止: 既存レコードチェック
-        const existing = await tx.bonusGiftGrant.findUnique({
-          where: { userId_yearMonth: { userId: sub.userId, yearMonth } },
-        });
-        if (existing) {
-          throw new Error('ALREADY_GRANTED');
-        }
-
-        // 2) BonusGiftGrant 作成
-        await tx.bonusGiftGrant.create({
-          data: {
-            userId: sub.userId,
-            yearMonth,
-            plan,
-            count,
-            itemId: bonusItem.id,
-          },
-        });
-
-        // 3) PlayerInventory に加算 (upsert)
-        const inv = await tx.playerInventory.findUnique({
-          where: { userId_itemId: { userId: sub.userId, itemId: bonusItem.id } },
-        });
-        if (inv) {
-          await tx.playerInventory.update({
-            where: { id: inv.id },
-            data: { quantity: inv.quantity + count },
-          });
-        } else {
-          await tx.playerInventory.create({
-            data: { userId: sub.userId, itemId: bonusItem.id, quantity: count },
-          });
-        }
-      });
-
-      results.push({ userId: sub.userId, plan, count, skipped: false });
-      granted++;
-    } catch (e) {
-      const reason = e instanceof Error && e.message === 'ALREADY_GRANTED' ? 'already_granted' : 'error';
-      results.push({ userId: sub.userId, plan, count: 0, skipped: true, reason });
-      skipped++;
-    }
-
-    // ===== Pui 月次自動付与 (景品カタログ交換に使う方) =====
-    // ギフト付与とは独立した二重付与防止 (MonthlyRewardPointGrant) を持つため、
-    // ギフト付与の成否に関わらず個別に試行する。
+    // ===== Pui 月次自動付与 (景品カタログ交換に使う) =====
     try {
       const puiResult = await grantMonthlyPuiBonus(sub.userId, plan, yearMonth);
-      const last = results[results.length - 1];
       if (puiResult.granted) {
-        last.pui = puiResult.amount;
+        result.pui = puiResult.amount;
+        granted++;
       } else {
-        last.puiSkipped = true;
+        result.skipped = true;
+        result.reason = 'already_granted_or_not_eligible';
+        skipped++;
       }
     } catch {
-      const last = results[results.length - 1];
-      last.puiSkipped = true;
+      result.skipped = true;
+      result.reason = 'error';
+      skipped++;
     }
   }
 
@@ -179,34 +118,23 @@ export const GET = handle(async (req: Request) => {
   const session = await requireApiSession(req);
   const yearMonth = currentYearMonth();
   const plan = session.user.plan;
-  const eligibleCount = MONTHLY_BONUS_GIFT_COUNT[plan];
 
-  const [grant, puiGrant] = await Promise.all([
-    prisma.bonusGiftGrant.findUnique({
-      where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
-      include: { item: { select: { name: true, iconUrl: true, slug: true } } },
-    }),
-    prisma.monthlyRewardPointGrant.findUnique({
-      where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
-    }),
-  ]);
+  const puiGrant = await prisma.monthlyRewardPointGrant.findUnique({
+    where: { userId_yearMonth: { userId: session.user.id, yearMonth } },
+  });
 
   return NextResponse.json({
     yearMonth,
     plan,
-    eligibleCount,
     eligiblePui: MONTHLY_PUI_BONUS[plan] ?? 0,
     puiGranted: !!puiGrant,
     puiGrant: puiGrant
       ? { pui: puiGrant.pui, grantedAt: puiGrant.grantedAt.toISOString() }
       : null,
-    granted: !!grant,
-    grant: grant
-      ? {
-          count: grant.count,
-          item: grant.item,
-          grantedAt: grant.grantedAt.toISOString(),
-        }
-      : null,
+    // 以下は恋愛 ADV のボーナスギフト (廃止済み) 用の項目。
+    // 既存アプリがキーの存在を前提にしていても落ちないよう、固定値で残している。
+    eligibleCount: 0,
+    granted: false,
+    grant: null,
   });
 });

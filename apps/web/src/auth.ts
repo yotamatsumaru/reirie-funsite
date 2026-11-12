@@ -118,7 +118,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               name: 'スーパー管理者',
               role: 'SUPER_ADMIN' as UserRoleLiteral,
               plan: 'PREMIUM' as PlanTypeLiteral,
-              capabilities: ['CONTENT', 'MERCH', 'GAME', 'CALL'] as AdminCapabilityLiteral[],
+              capabilities: ['CONTENT', 'MERCH', 'CALL'] as AdminCapabilityLiteral[],
             };
           }
           if (email === 'admin@example.com') {
@@ -128,7 +128,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               name: 'デモ管理者',
               role: 'ADMIN' as UserRoleLiteral,
               plan: 'PREMIUM' as PlanTypeLiteral,
-              capabilities: ['CONTENT', 'MERCH', 'GAME', 'CALL'] as AdminCapabilityLiteral[],
+              capabilities: ['CONTENT', 'MERCH', 'CALL'] as AdminCapabilityLiteral[],
             };
           }
           if (email === 'demo@example.com') {

@@ -2,7 +2,7 @@
  * 会員プラン特典の一元定義
  *
  * このファイルはフロント (プラン紹介ページ等) とバック (アクセス制御 / 送料計算 /
- * セーブスロット制限 / 月次ボーナス等) の両方から参照される single source of truth。
+ * 月次ボーナス等) の両方から参照される single source of truth。
  *
  * 仕様確定: 2026-06-26 (3 プラン体制へ刷新)
  * - FREE     : 無料 (アカウント作成のみ)
@@ -12,18 +12,8 @@
 import type { PlanTypeLiteral } from './constants';
 
 // ===================================================================
-// 数値特典 (送料 / セーブスロット / ボーナスギフト / 動画画質 等)
+// 数値特典 (送料 / 動画画質 等)
 // ===================================================================
-
-/**
- * セーブスロット数 (ゲーム)
- * FREE=1 / STANDARD=3 / PREMIUM=10
- */
-export const SAVE_SLOT_LIMIT: Record<PlanTypeLiteral, number> = {
-  FREE: 1,
-  STANDARD: 3,
-  PREMIUM: 10,
-};
 
 /**
  * 送料無料となる小計 (円)
@@ -35,18 +25,6 @@ export const FREE_SHIPPING_THRESHOLD_BY_PLAN: Record<PlanTypeLiteral, number> = 
   FREE: 8000,
   STANDARD: 8000,
   PREMIUM: 0,
-};
-
-/**
- * 月次ボーナスギフト付与数
- * - FREE     : 0
- * - STANDARD : 1 個/月
- * - PREMIUM  : 5 個/月
- */
-export const MONTHLY_BONUS_GIFT_COUNT: Record<PlanTypeLiteral, number> = {
-  FREE: 0,
-  STANDARD: 1,
-  PREMIUM: 5,
 };
 
 /**
@@ -101,12 +79,6 @@ export const NEWSLETTER_ISSUES_PER_YEAR: Record<PlanTypeLiteral, number> = {
   STANDARD: 0,
   PREMIUM: 2,
 };
-
-/**
- * 月次ボーナスとして付与するデフォルトアイテムの slug。
- * GameItem テーブルにこの slug のレコードを seed しておく必要がある。
- */
-export const DEFAULT_BONUS_GIFT_SLUG = 'monthly-bonus-bouquet';
 
 /**
  * "YYYY-MM" 形式の現在月を返す (UTC)
@@ -170,15 +142,6 @@ export const LIVE_ARCHIVE_RETENTION_DAYS: Record<PlanTypeLiteral, number> = {
 // ===================================================================
 // ブーリアン特典 (機能の解放 / 制限)
 // ===================================================================
-
-/**
- * ゲームの章購入が PREMIUM 会員は無料か (isPremiumIncluded が立っている章のみ)
- */
-export const PREMIUM_INCLUDES_SCENARIOS: Record<PlanTypeLiteral, boolean> = {
-  FREE: false,
-  STANDARD: false,
-  PREMIUM: true,
-};
 
 /**
  * コメント投稿可能か (STANDARD 以上)

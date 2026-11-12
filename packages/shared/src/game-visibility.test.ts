@@ -28,7 +28,7 @@ import {
  * 全ゲーム ON / OFF のマップ。
  *
  * 【なぜハードコードしないか】
- * 以前は { acchi: true, slot: true, story: true } と直接書いていたため、
+ * 以前は { acchi: true, slot: true, ... } と直接書いていたため、
  * ゲームを 1 本追加するだけでこのファイルの多くのテストが落ちた。
  * 「新しいゲームを足しても壊れない」ことこそ GAME_KEYS 導出の狙いなので、
  * テスト側もキー一覧から組み立てる。
@@ -56,10 +56,9 @@ describe('定義', () => {
    * 既定 true を維持しなければならない。
    * (新規追加ゲームは運営が動作確認してから公開するので既定 false でよい)
    */
-  it('既存ゲーム (acchi / slot / story) の既定は公開のまま', () => {
+  it('既存ゲーム (acchi / slot) の既定は公開のまま', () => {
     expect(DEFAULT_GAME_VISIBILITY.acchi).toBe(true);
     expect(DEFAULT_GAME_VISIBILITY.slot).toBe(true);
-    expect(DEFAULT_GAME_VISIBILITY.story).toBe(true);
   });
 
   it('GAME_VISIBILITY_ITEMS は全ゲームを過不足なく網羅する', () => {
@@ -70,7 +69,9 @@ describe('定義', () => {
   it('isGameKey は既知のキーだけ true', () => {
     expect(isGameKey('acchi')).toBe(true);
     expect(isGameKey('slot')).toBe(true);
-    expect(isGameKey('story')).toBe(true);
+    expect(isGameKey('memory')).toBe(true);
+    // 提供終了した恋愛 ADV のキーは未知扱い
+    expect(isGameKey('story')).toBe(false);
     expect(isGameKey('unknown')).toBe(false);
     expect(isGameKey(undefined)).toBe(false);
     expect(isGameKey(1)).toBe(false);
@@ -99,21 +100,26 @@ describe('GameVisibilityMapSchema', () => {
     const patch = GameVisibilityMapSchema.parse({ slot: false });
     expect(Object.keys(patch)).toEqual(['slot']);
     expect(patch).not.toHaveProperty('acchi');
-    expect(patch).not.toHaveProperty('story');
+    expect(patch).not.toHaveProperty('memory');
   });
 });
 
 describe('normalizeGameVisibility', () => {
   it('保存済みの値を反映する', () => {
-    expect(normalizeGameVisibility({ acchi: false, slot: true, story: false })).toEqual(
+    expect(normalizeGameVisibility({ acchi: false, slot: true })).toEqual(
       mapWith(DEFAULT_GAME_VISIBILITY.memory, {
         acchi: false,
         slot: true,
-        story: false,
         // 保存されていないキーは既定値のまま
         memory: DEFAULT_GAME_VISIBILITY.memory,
       }),
     );
+  });
+
+  it('提供終了した恋愛 ADV のキー (story) が DB に残っていても捨てる', () => {
+    const normalized = normalizeGameVisibility({ acchi: false, story: false });
+    expect(normalized).not.toHaveProperty('story');
+    expect(normalized.acchi).toBe(false);
   });
 
   it('保存されていないゲームは既定値のまま (設定が消えない)', () => {
@@ -164,7 +170,7 @@ describe('isGamePubliclyVisible (マスター AND 個別)', () => {
   it('マスター OFF なら個別 ON でも非公開 (緊急停止スイッチとして機能する)', () => {
     expect(isGamePubliclyVisible(false, ALL_ON, 'acchi')).toBe(false);
     expect(isGamePubliclyVisible(false, ALL_ON, 'slot')).toBe(false);
-    expect(isGamePubliclyVisible(false, ALL_ON, 'story')).toBe(false);
+    expect(isGamePubliclyVisible(false, ALL_ON, 'memory')).toBe(false);
   });
 });
 

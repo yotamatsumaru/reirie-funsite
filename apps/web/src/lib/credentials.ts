@@ -73,7 +73,7 @@ export async function authenticateCredentials(
           displayName: 'スーパー管理者',
           role: 'SUPER_ADMIN',
           plan: 'PREMIUM',
-          capabilities: ['CONTENT', 'MERCH', 'GAME', 'CALL'],
+          capabilities: ['CONTENT', 'MERCH', 'CALL'],
         },
       };
     }
@@ -86,7 +86,7 @@ export async function authenticateCredentials(
           displayName: 'デモ管理者',
           role: 'ADMIN',
           plan: 'PREMIUM',
-          capabilities: ['CONTENT', 'MERCH', 'GAME', 'CALL'],
+          capabilities: ['CONTENT', 'MERCH', 'CALL'],
         },
       };
     }

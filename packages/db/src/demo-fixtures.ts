@@ -546,7 +546,7 @@ const announcement = [
 // =====================================================================
 const systemSetting = [
   { key: 'maintenance.enabled', value: false, label: 'メンテナンスモード', description: '有効にすると全ユーザーが /maintenance にリダイレクト', category: 'system' },
-  { key: 'features.gameEnabled', value: true, label: 'ゲーム機能', description: '恋愛 ADV ゲーム全体を ON/OFF', category: 'features' },
+  { key: 'features.gameEnabled', value: true, label: 'ゲーム機能', description: 'ミニゲーム全体を ON/OFF', category: 'features' },
   { key: 'features.commentsEnabled', value: true, label: 'コメント機能', description: 'コンテンツのコメント投稿を ON/OFF', category: 'features' },
   { key: 'features.liveEnabled', value: true, label: 'ライブ配信機能', description: 'IVS ライブ機能の ON/OFF', category: 'features' },
   { key: 'features.ticketsEnabled', value: true, label: 'チケット連携', description: 'Lawson チケット連携機能の ON/OFF', category: 'features' },

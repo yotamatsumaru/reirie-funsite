@@ -9,7 +9,6 @@ import {
   Receipt,
   Video,
   Radio,
-  Gamepad2,
   PhoneCall,
   Gift,
   Truck,
@@ -69,7 +68,6 @@ const NAV: NavItem[] = [
   { href: '/admin/live', label: 'ライブ', icon: Radio, capability: 'CONTENT' },
   { href: '/admin/products', label: '商品', icon: ShoppingBag, capability: 'MERCH' },
   { href: '/admin/orders', label: '注文', icon: Receipt, capability: 'MERCH' },
-  { href: '/admin/game', label: 'ゲーム', icon: Gamepad2, capability: 'GAME' },
   // MyRoom は現在非公開 (site.sectionVisibility.myRoomVisible の既定が false) の
   // 開発中機能。家具は会員に見せるサイト素材なので CONTENT 権限で扱う。
   { href: '/admin/myroom/furnitures', label: 'MyRoom家具', icon: Sofa, capability: 'CONTENT' },

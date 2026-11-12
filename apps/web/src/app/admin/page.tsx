@@ -20,7 +20,6 @@ import {
   AlertTriangle,
   FileText,
   ShoppingBag,
-  Gamepad2,
   PhoneCall,
   type LucideIcon,
 } from 'lucide-react';
@@ -34,7 +33,6 @@ const CAPABILITY_LINKS: Record<
 > = {
   CONTENT: { href: '/admin/contents', icon: FileText },
   MERCH: { href: '/admin/products', icon: ShoppingBag },
-  GAME: { href: '/admin/game', icon: Gamepad2 },
   CALL: { href: '/admin/call', icon: PhoneCall },
 };
 

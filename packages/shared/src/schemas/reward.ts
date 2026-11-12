@@ -175,8 +175,6 @@ export type RewardPointPurchaseStatusLiteral = (typeof REWARD_POINT_PURCHASE_STA
 // ゲーム内購入の決済手段 (Pui / Stripe)
 // ---------------------------------------------------------------------
 
-export const GAME_PURCHASE_PAY_METHODS = ['STRIPE', 'PUI'] as const;
-export type GamePurchasePayMethodLiteral = (typeof GAME_PURCHASE_PAY_METHODS)[number];
 
 // ---------------------------------------------------------------------
 // サブスク月次 Pui 自動付与
@@ -266,9 +264,6 @@ export const BuyExtraPlayInputSchema = z.object({
   gameType: z.literal('ACCHI_MUITE_HOI').default('ACCHI_MUITE_HOI'),
 });
 export type BuyExtraPlayInput = z.infer<typeof BuyExtraPlayInputSchema>;
-
-/** 恋愛ADVの章/アイテム購入時の決済手段指定 (GamePurchaseInputSchema の拡張フィールド) */
-export const GamePurchasePayMethodSchema = z.enum(GAME_PURCHASE_PAY_METHODS).default('STRIPE');
 
 // 全プラン分を必須にした月次 Pui 付与のスキーマ（管理画面での設定変更に備え定義のみ用意）
 export const MonthlyPuiBonusSchema = z.object(

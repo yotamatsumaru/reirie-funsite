@@ -41,6 +41,14 @@ const nextConfig: NextConfig = {
       { pathname: '/api/media/game-audio/**' },
     ],
   },
+  async redirects() {
+    return [
+      // 恋愛 ADV (キャラ詳細 /game/<キャラ>, シナリオ再生 /game/play/<章>) は提供終了。
+      // ブックマークや SNS に残った旧 URL で 404 にならないよう、ゲーム一覧へ転送する。
+      // (現在 /game 配下のページは一覧 page.tsx のみなので、配下すべてを転送して問題ない)
+      { source: '/game/:path+', destination: '/game', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

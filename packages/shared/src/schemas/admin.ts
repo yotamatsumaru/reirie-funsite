@@ -148,7 +148,7 @@ export const ADMIN_INVITATION_STATUS_LABELS: Record<AdminInvitationStatusLiteral
 export const ADMIN_INVITATION_EXPIRY_DAYS = 7;
 
 /** 管理権限 (Admin Capability) */
-export const AdminCapabilitySchema = z.enum(['CONTENT', 'MERCH', 'GAME', 'CALL']);
+export const AdminCapabilitySchema = z.enum(['CONTENT', 'MERCH', 'CALL']);
 export type AdminCapabilityInput = z.infer<typeof AdminCapabilitySchema>;
 
 /** スーパー管理者が管理者を招待する */

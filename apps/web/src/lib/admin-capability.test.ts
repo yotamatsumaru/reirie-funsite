@@ -38,7 +38,7 @@ describe('hasCapability — ロール別の基本挙動', () => {
   it('STAFF は capabilities が空でも扱える (領域指定に依存しない)', () => {
     expect(hasCapability({ role: 'STAFF', capabilities: [] }, 'CONTENT')).toBe(true);
     expect(hasCapability({ role: 'STAFF' }, 'MERCH')).toBe(true);
-    expect(hasCapability({ role: 'STAFF', capabilities: null }, 'GAME')).toBe(true);
+    expect(hasCapability({ role: 'STAFF', capabilities: null }, 'CALL')).toBe(true);
   });
 
   it('USER はどの領域も扱えない', () => {
@@ -60,7 +60,6 @@ describe('hasCapability — ADMIN は付与された領域だけ', () => {
     const admin = p('ADMIN', ['CONTENT']);
     expect(hasCapability(admin, 'CONTENT')).toBe(true);
     expect(hasCapability(admin, 'MERCH')).toBe(false);
-    expect(hasCapability(admin, 'GAME')).toBe(false);
     expect(hasCapability(admin, 'CALL')).toBe(false);
   });
 
@@ -105,7 +104,7 @@ describe('整合性: hasAnyCapability と hasCapability', () => {
     const cases: Array<{ role: UserRoleLiteral; capabilities: string[] }> = [
       { role: 'SUPER_ADMIN', capabilities: [] },
       { role: 'STAFF', capabilities: [] },
-      { role: 'ADMIN', capabilities: ['GAME'] },
+      { role: 'ADMIN', capabilities: ['CALL'] },
       { role: 'ADMIN', capabilities: [] },
       { role: 'USER', capabilities: [] },
     ];
