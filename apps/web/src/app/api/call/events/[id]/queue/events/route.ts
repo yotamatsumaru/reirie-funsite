@@ -36,7 +36,7 @@ interface Ctx {
 async function buildSnapshot(eventId: string, userId: string | undefined): Promise<CallQueueSnapshot | null> {
   const event = await prisma.callEvent.findUnique({
     where: { id: eventId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, perFanSeconds: true },
   });
   if (!event) return null;
 
@@ -72,6 +72,7 @@ async function buildSnapshot(eventId: string, userId: string | undefined): Promi
   return {
     eventId,
     status: event.status,
+    perFanSeconds: event.perFanSeconds,
     current: currentTicket
       ? {
           ticketId: currentTicket.id,

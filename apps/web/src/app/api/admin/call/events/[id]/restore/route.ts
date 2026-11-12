@@ -18,7 +18,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireCapability } from '@/auth';
+import { requireApiCapability } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { RestoreCallTicketSchema } from '@idol/shared';
 
@@ -28,8 +28,8 @@ interface Ctx {
   params: Promise<{ id: string }>;
 }
 
-export const POST = handle(async (req, ctx: Ctx) => {
-  await requireCapability('CALL');
+export const POST = handle(async (req: Request, ctx: Ctx) => {
+  await requireApiCapability(req, 'CALL');
   const { id: eventId } = await ctx.params;
 
   const body = await req.json();

@@ -6,7 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
-import { requireCapability } from '@/auth';
+import { requireApiCapability } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { UpdateCallEventSchema } from '@idol/shared';
 
@@ -16,8 +16,8 @@ interface Ctx {
   params: Promise<{ id: string }>;
 }
 
-export const GET = handle(async (_req, ctx: Ctx) => {
-  await requireCapability('CALL');
+export const GET = handle(async (req: Request, ctx: Ctx) => {
+  await requireApiCapability(req, 'CALL');
   const { id } = await ctx.params;
   const event = await prisma.callEvent.findUnique({
     where: { id },
@@ -45,8 +45,8 @@ export const GET = handle(async (_req, ctx: Ctx) => {
   return NextResponse.json({ event, tickets, unusedSerialCount });
 });
 
-export const PATCH = handle(async (req, ctx: Ctx) => {
-  await requireCapability('CALL');
+export const PATCH = handle(async (req: Request, ctx: Ctx) => {
+  await requireApiCapability(req, 'CALL');
   const { id } = await ctx.params;
   const body = await req.json();
   const input = UpdateCallEventSchema.parse(body);
@@ -70,8 +70,8 @@ export const PATCH = handle(async (req, ctx: Ctx) => {
   return NextResponse.json({ event: updated });
 });
 
-export const DELETE = handle(async (_req, ctx: Ctx) => {
-  await requireCapability('CALL');
+export const DELETE = handle(async (req: Request, ctx: Ctx) => {
+  await requireApiCapability(req, 'CALL');
   const { id } = await ctx.params;
   const existing = await prisma.callEvent.findUnique({
     where: { id },

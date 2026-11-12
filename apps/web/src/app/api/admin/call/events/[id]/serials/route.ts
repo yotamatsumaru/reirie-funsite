@@ -9,7 +9,7 @@
  */
 import { NextResponse } from 'next/server';
 import { Prisma, prisma } from '@idol/db';
-import { requireCapability } from '@/auth';
+import { requireApiCapability } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { IssueCallSerialsSchema } from '@idol/shared';
 import { generateSerialCodeDisplay, toCanonicalSerialCode } from '@/lib/call-serial';
@@ -24,8 +24,8 @@ interface Ctx {
 // 既存シリアルとぶつかった場合のリトライ上限
 const MAX_RETRY_PER_CODE = 5;
 
-export const POST = handle(async (req, ctx: Ctx) => {
-  await requireCapability('CALL');
+export const POST = handle(async (req: Request, ctx: Ctx) => {
+  await requireApiCapability(req, 'CALL');
   const { id: eventId } = await ctx.params;
   const body = await req.json();
   const input = IssueCallSerialsSchema.parse(body);
@@ -82,8 +82,8 @@ export const POST = handle(async (req, ctx: Ctx) => {
   );
 });
 
-export const GET = handle(async (_req, ctx: Ctx) => {
-  await requireCapability('CALL');
+export const GET = handle(async (req: Request, ctx: Ctx) => {
+  await requireApiCapability(req, 'CALL');
   const { id: eventId } = await ctx.params;
 
   const event = await prisma.callEvent.findUnique({

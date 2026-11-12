@@ -98,6 +98,8 @@ export type EnterCallWaitingRoomInput = z.infer<typeof EnterCallWaitingRoomSchem
 export interface CallQueueSnapshot {
   eventId: string;
   status: 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELED';
+  // 1人あたりの持ち時間 (秒)。通話画面の残り時間表示に使う
+  perFanSeconds: number;
   // 現在本ルームにいるチケット (居れば)
   current: {
     ticketId: string;
