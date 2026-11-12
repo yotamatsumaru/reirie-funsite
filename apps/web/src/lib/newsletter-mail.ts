@@ -49,10 +49,12 @@ function sleep(ms: number): Promise<void> {
 
 export type NewsletterMailKind = 'ADDRESS_REMINDER' | 'SHIPPING_NOTICE';
 
-type TargetUser = ShippingProfile & {
+export type TargetUser = ShippingProfile & {
   id: string;
   email: string;
   memberNumber: string | null;
+  /** 電話番号 (ヤマト B2 の送り状に必須。メール送信では使わない) */
+  phone?: string | null;
 };
 
 /**
@@ -103,6 +105,7 @@ const TARGET_USER_SELECT = {
   prefecture: true,
   addressLine1: true,
   addressLine2: true,
+  phone: true,
 } as const;
 
 /**

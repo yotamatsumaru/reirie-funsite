@@ -6,6 +6,8 @@
  *  - 会員の登録住所 (User.postalCode / prefecture / addressLine1 / addressLine2) を表示
  *  - 住所や氏名が未入力の会員は「要確認」として明示し、発送前に補完できるようにする
  *  - CSV ダウンロード (/api/super-admin/newsletter/export) で宛名ラベル作成に利用可能
+ *  - ヤマト B2クラウド取込CSV (/api/super-admin/newsletter/b2-export) で送り状を一括発行できる
+ *    (対象は発送連絡と同じ «基準日時点の年間会員» )
  *
  * 個人情報 (住所) を扱う画面のため、レイアウト側で SUPER_ADMIN のみに制限している。
  */
@@ -14,6 +16,7 @@ import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { NotifyPanel } from './notify-panel';
+import { B2ExportPanel } from './b2-export-panel';
 import { jstDayRange, isShippable as isShippableProfile } from '@idol/shared';
 import { fetchAnnualMembersOn } from '@/lib/newsletter-mail';
 
@@ -88,7 +91,9 @@ export default async function NewsletterMailingListPage({
 
   // 発送連絡の対象: 基準日時点で年間会員だった会員 (うち発送可能な人にだけ送る)
   const annualMembers = await fetchAnnualMembersOn(cutoffDay);
-  const annualShippableCount = annualMembers.filter((u) => isShippableProfile(u)).length;
+  const annualShippable = annualMembers.filter((u) => isShippableProfile(u));
+  const annualShippableCount = annualShippable.length;
+  const annualMissingPhoneCount = annualShippable.filter((u) => !u.phone?.trim()).length;
 
   const subs = (await prisma.subscription.findMany({
     where: {
@@ -180,6 +185,14 @@ export default async function NewsletterMailingListPage({
           </CardBody>
         </Card>
       </div>
+
+      {/* ヤマト B2クラウド取込CSV (基準日時点の年間会員) */}
+      <B2ExportPanel
+        cutoffDate={cutoffDate}
+        annualMemberCount={annualMembers.length}
+        shippableCount={annualShippableCount}
+        missingPhoneCount={annualMissingPhoneCount}
+      />
 
       {/* 会報誌のメール連絡（住所記入のお願い / 発送連絡） */}
       <NotifyPanel
