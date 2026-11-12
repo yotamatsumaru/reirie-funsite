@@ -14,6 +14,7 @@
  */
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -30,13 +31,28 @@ type SendResult = {
   errors: { email: string; message: string }[];
 };
 
+/** "2026-08-15" → "2026年8月15日" */
+function cutoffLabel(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return `${y}年${m}月${d}日`;
+}
+
 export function NotifyPanel({
   needsInfoCount,
-  shippableCount,
+  cutoffDate,
+  annualMemberCount,
+  annualShippableCount,
 }: {
   needsInfoCount: number;
-  shippableCount: number;
+  /** 発送連絡の基準日 (YYYY-MM-DD, JST) */
+  cutoffDate: string;
+  /** 基準日時点の年間会員数 */
+  annualMemberCount: number;
+  /** そのうち住所が揃っていて発送可能な人数 (= 発送連絡を送る人数) */
+  annualShippableCount: number;
 }) {
+  const router = useRouter();
+  const shippableCount = annualShippableCount;
   const [issueKey, setIssueKey] = useState('');
   const [issueLabel, setIssueLabel] = useState('');
   const [deadlineLabel, setDeadlineLabel] = useState('');
@@ -56,7 +72,7 @@ export function NotifyPanel({
     const what =
       kind === 'ADDRESS_REMINDER'
         ? `住所が未入力の会員 ${count} 名に「ご登録のお願い」`
-        : `発送可能な会員 ${count} 名に「発送のお知らせ」`;
+        : `${cutoffLabel(cutoffDate)}時点の年間会員のうち発送可能な ${count} 名に「発送のお知らせ」`;
 
     // 取り消せない操作なので必ず確認する
     if (
@@ -81,6 +97,7 @@ export function NotifyPanel({
           ...(kind === 'ADDRESS_REMINDER'
             ? { deadlineLabel: deadlineLabel.trim() || undefined }
             : {
+                cutoffDate,
                 shippedOnLabel: shippedOnLabel.trim() || undefined,
                 arrivalLabel: arrivalLabel.trim() || undefined,
                 note: note.trim() || undefined,
@@ -168,11 +185,27 @@ export function NotifyPanel({
           <div>
             <h3 className="text-sm font-semibold text-slate-800">② 発送したことを知らせる</h3>
             <p className="mt-1 text-xs text-slate-500">
-              発送可能な会員（
+              <span className="font-semibold">{cutoffLabel(cutoffDate)}時点で年間会員</span>
+              だった方（{annualMemberCount} 名）のうち、発送可能な会員（
               <span className="font-semibold text-emerald-600">{shippableCount} 名</span>
               ）に発送完了のお知らせを送ります。
-              住所が未入力で発送できなかった会員には送りません。
+              月額会員・基準日より後に入会した方・住所が未入力で発送できなかった方には送りません。
+              基準日の後に解約した方には送ります（発送済みのため）。
             </p>
+          </div>
+          <div className="sm:max-w-xs">
+            <Input
+              type="date"
+              label="基準日（この日時点の年間会員が対象）"
+              value={cutoffDate}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                  router.replace(`?cutoff=${v}`, { scroll: false });
+                }
+              }}
+              hint="変更すると対象人数を再計算します"
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Input

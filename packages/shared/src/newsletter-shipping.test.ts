@@ -266,3 +266,113 @@ describe('summarizeRecipients', () => {
     expect(s.shippable + s.needsInfo).toBe(s.total);
   });
 });
+
+// ---------------------------------------------------------------
+// 基準日時点の年間会員判定
+// ---------------------------------------------------------------
+import { jstDayRange, wasAnnualMemberOn, type MembershipSnapshot } from './newsletter-shipping';
+
+describe('jstDayRange', () => {
+  it('JST の 1 日を UTC に変換する', () => {
+    const r = jstDayRange('2026-08-15')!;
+    expect(r.start.toISOString()).toBe('2026-08-14T15:00:00.000Z');
+    expect(r.end.toISOString()).toBe('2026-08-15T15:00:00.000Z');
+  });
+
+  it('不正な日付は null', () => {
+    expect(jstDayRange('2026-02-30')).toBeNull();
+    expect(jstDayRange('2026/08/15')).toBeNull();
+    expect(jstDayRange('')).toBeNull();
+  });
+});
+
+describe('wasAnnualMemberOn (基準日 2026-08-15)', () => {
+  const day = jstDayRange('2026-08-15')!;
+  const now = new Date('2026-11-12T00:00:00Z');
+  const base: MembershipSnapshot = {
+    planType: 'PREMIUM',
+    billingInterval: 'YEAR',
+    status: 'ACTIVE',
+    createdAt: new Date('2026-07-01T00:00:00Z'),
+    currentPeriodStart: new Date('2026-07-01T00:00:00Z'),
+    currentPeriodEnd: new Date('2027-07-01T00:00:00Z'),
+    canceledAt: null,
+    updatedAt: new Date('2026-07-01T00:00:00Z'),
+  };
+
+  it('基準日以前に加入して現在も有効 → 対象', () => {
+    expect(wasAnnualMemberOn(base, day, now)).toBe(true);
+  });
+
+  it('基準日より後に加入 → 対象外', () => {
+    const s = { ...base, createdAt: new Date('2026-09-01T00:00:00Z'), currentPeriodStart: new Date('2026-09-01T00:00:00Z') };
+    expect(wasAnnualMemberOn(s, day, now)).toBe(false);
+  });
+
+  it('基準日の JST 23:59 に加入 → 対象 / 翌日 0:00 JST → 対象外', () => {
+    const late = new Date('2026-08-15T14:59:00Z');
+    expect(wasAnnualMemberOn({ ...base, createdAt: late, currentPeriodStart: late }, day, now)).toBe(true);
+    const next = new Date('2026-08-15T15:00:00Z');
+    expect(wasAnnualMemberOn({ ...base, createdAt: next, currentPeriodStart: next }, day, now)).toBe(false);
+  });
+
+  it('月額 (STANDARD) は対象外', () => {
+    expect(wasAnnualMemberOn({ ...base, planType: 'STANDARD', billingInterval: 'MONTH' }, day, now)).toBe(false);
+  });
+
+  it('PREMIUM でも月額契約なら対象外', () => {
+    expect(wasAnnualMemberOn({ ...base, billingInterval: 'MONTH' }, day, now)).toBe(false);
+  });
+
+  it('基準日時点で会員 → その後解約済みでも対象 (発送済みのため)', () => {
+    const s = {
+      ...base,
+      status: 'CANCELED',
+      currentPeriodEnd: new Date('2026-10-01T00:00:00Z'),
+      canceledAt: new Date('2026-09-01T00:00:00Z'),
+    };
+    expect(wasAnnualMemberOn(s, day, now)).toBe(true);
+  });
+
+  it('基準日より前に期間満了で終了 → 対象外 (canceledAt が古い申込日でも)', () => {
+    const s = {
+      ...base,
+      status: 'CANCELED',
+      createdAt: new Date('2025-08-01T00:00:00Z'),
+      currentPeriodStart: new Date('2025-08-01T00:00:00Z'),
+      currentPeriodEnd: new Date('2026-08-01T00:00:00Z'),
+      canceledAt: new Date('2026-03-01T00:00:00Z'),
+    };
+    expect(wasAnnualMemberOn(s, day, now)).toBe(false);
+  });
+
+  it('期間末解約の申込が基準日より前でも、期間満了が基準日より後なら対象', () => {
+    const s = {
+      ...base,
+      status: 'CANCELED',
+      createdAt: new Date('2025-09-01T00:00:00Z'),
+      currentPeriodStart: new Date('2025-09-01T00:00:00Z'),
+      currentPeriodEnd: new Date('2026-09-01T00:00:00Z'),
+      canceledAt: new Date('2026-05-01T00:00:00Z'), // 解約を申し込んだ日
+    };
+    expect(wasAnnualMemberOn(s, day, now)).toBe(true);
+  });
+
+  it('基準日より前に即時解約 (期間が未来のまま CANCELED) → 対象外', () => {
+    const s = {
+      ...base,
+      status: 'CANCELED',
+      canceledAt: new Date('2026-08-01T00:00:00Z'),
+    };
+    expect(wasAnnualMemberOn(s, day, now)).toBe(false);
+  });
+
+  it('支払いが成立していない (INCOMPLETE) → 対象外', () => {
+    expect(wasAnnualMemberOn({ ...base, status: 'INCOMPLETE' }, day, now)).toBe(false);
+  });
+
+  it('Stripe 同期で DB 行が後から作られても、契約期間の開始が基準日以前なら対象', () => {
+    const s = { ...base, createdAt: new Date('2026-09-10T00:00:00Z'), currentPeriodStart: new Date('2026-08-01T00:00:00Z') };
+    expect(wasAnnualMemberOn(s, day, now)).toBe(true);
+  });
+});

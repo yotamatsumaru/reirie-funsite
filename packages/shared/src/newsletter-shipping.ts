@@ -240,3 +240,103 @@ export function summarizeRecipients(
     needsNameCheck,
   };
 }
+
+// ---------------------------------------------------------------
+// 基準日時点の年間会員判定 (発送連絡の対象を «発送した人» に揃える)
+// ---------------------------------------------------------------
+
+/**
+ * 基準日 (JST の 1 日) の範囲。start は 00:00:00.000 JST、end は翌日 00:00 JST (排他)。
+ */
+export type JstDayRange = { start: Date; end: Date };
+
+/**
+ * "YYYY-MM-DD" を JST の 1 日の範囲に変換する。不正な日付は null。
+ * (例: "2026-08-15" → 2026-08-14T15:00:00Z 〜 2026-08-15T15:00:00Z)
+ */
+export function jstDayRange(ymd: string): JstDayRange | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const utcMidnight = Date.UTC(y, mo - 1, d);
+  const check = new Date(utcMidnight);
+  // 2026-02-30 のような存在しない日付を弾く
+  if (check.getUTCFullYear() !== y || check.getUTCMonth() !== mo - 1 || check.getUTCDate() !== d) {
+    return null;
+  }
+  const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const start = new Date(utcMidnight - JST_OFFSET_MS);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
+/** 判定に必要なサブスクリプションの項目 */
+export type MembershipSnapshot = {
+  planType: string;
+  billingInterval: string;
+  status: string;
+  createdAt: Date;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  canceledAt: Date | null;
+  updatedAt: Date;
+};
+
+/** 現在も会員資格が続いているとみなすステータス (PAST_DUE は Stripe が再請求中) */
+const ALIVE_STATUSES = new Set(['ACTIVE', 'TRIALING', 'PAST_DUE']);
+/** 一度も支払いが成立していないステータス (会員だった期間が無い) */
+const NEVER_PAID_STATUSES = new Set(['INCOMPLETE', 'INCOMPLETE_EXPIRED']);
+
+/**
+ * 契約の «会員だった期間» を推定する。
+ *
+ * - 開始: createdAt と currentPeriodStart の早いほう。
+ *   (Stripe 同期で後から DB 行が作られた場合、createdAt は実際の加入より遅くなるため)
+ * - 終了:
+ *   - 現在も有効 (ACTIVE / TRIALING / PAST_DUE) → null (継続中)
+ *   - 終了済みで currentPeriodEnd が過去 → 期間満了で終了したとみなし currentPeriodEnd
+ *   - 終了済みで currentPeriodEnd が未来 → 途中で即時解約されたとみなし canceledAt
+ *     (canceledAt が無ければ updatedAt)
+ *
+ * ※ Stripe の canceled_at は「期間末で解約」の場合 «解約を申し込んだ日時» になり、
+ *   実際の終了日ではない。そのため canceledAt を単純に終了日として使わない。
+ */
+export function membershipPeriod(
+  sub: MembershipSnapshot,
+  now: Date,
+): { start: Date; end: Date | null } | null {
+  if (NEVER_PAID_STATUSES.has(sub.status)) return null;
+  const start =
+    sub.currentPeriodStart.getTime() < sub.createdAt.getTime()
+      ? sub.currentPeriodStart
+      : sub.createdAt;
+  if (ALIVE_STATUSES.has(sub.status)) return { start, end: null };
+  const end =
+    sub.currentPeriodEnd.getTime() <= now.getTime()
+      ? sub.currentPeriodEnd
+      : (sub.canceledAt ?? sub.updatedAt);
+  return { start, end };
+}
+
+/**
+ * 基準日に «年間会員» (PREMIUM・年額) だったか。
+ *
+ * 基準日 (JST) の 1 日のうちに会員期間が少しでも重なっていれば対象とする。
+ * (基準日に入会した人・基準日に終了した人も «その日時点で会員» として含める)
+ *
+ * 【planType を見る理由】
+ * 年額で会報誌が付くのは PREMIUM のみ。発送連絡の本文も «プレミアム会員特典» と
+ * 書いているため、念のため PREMIUM 以外の年額契約 (旧プラン等) は含めない。
+ */
+export function wasAnnualMemberOn(
+  sub: MembershipSnapshot,
+  day: JstDayRange,
+  now: Date,
+): boolean {
+  if (sub.planType !== 'PREMIUM' || sub.billingInterval !== 'YEAR') return false;
+  const period = membershipPeriod(sub, now);
+  if (!period) return false;
+  if (period.start.getTime() >= day.end.getTime()) return false; // 基準日より後に入会
+  if (period.end && period.end.getTime() <= day.start.getTime()) return false; // 基準日より前に終了
+  return true;
+}

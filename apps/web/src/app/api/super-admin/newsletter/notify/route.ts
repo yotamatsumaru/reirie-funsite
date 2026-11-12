@@ -4,6 +4,7 @@
  *
  *   kind = 'ADDRESS_REMINDER' … 住所未記入の会員へ «ご登録のお願い»
  *   kind = 'SHIPPING_NOTICE'  … 発送完了のお知らせ
+ *     → cutoffDate (例: 2026-08-15) 時点で年間会員 (PREMIUM・年額) だった会員のみが対象
  *
  * 【SUPER_ADMIN 限定にしている理由】
  * 実在の会員全員へメールを送る操作であり、取り消せない。
@@ -27,6 +28,7 @@ import {
   sendShippingNotices,
 } from '@/lib/newsletter-mail';
 import { env } from '@/lib/env';
+import { jstDayRange } from '@idol/shared';
 
 export const runtime = 'nodejs';
 
@@ -50,6 +52,16 @@ const BodySchema = z.object({
   arrivalLabel: z.string().trim().max(60).optional(),
   /** SHIPPING_NOTICE: 補足メッセージ (任意) */
   note: z.string().trim().max(500).optional(),
+  /**
+   * SHIPPING_NOTICE: 発送対象を決める基準日 (YYYY-MM-DD, JST)。
+   * この日の時点で年間会員だった人にだけ «発送しました» を送る。
+   * 誤って全会員へ送らないよう、発送連絡では必須にしている。
+   */
+  cutoffDate: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, '基準日は YYYY-MM-DD 形式で指定してください')
+    .optional(),
 });
 
 /** 今日を「2026年3月10日」形式 (JST) で表す */
@@ -77,6 +89,11 @@ export const POST = handle(async (req: Request) => {
   // メール本文に載るため、相対パスでは踏めない。
   const profileUrl = `${env.appBaseUrl.replace(/\/$/, '')}/me`;
 
+  const cutoffDay = body.cutoffDate ? jstDayRange(body.cutoffDate) : null;
+  if (body.kind === 'SHIPPING_NOTICE' && !cutoffDay) {
+    throw errors.badRequest('発送連絡には有効な基準日 (cutoffDate) が必要です');
+  }
+
   const result =
     body.kind === 'ADDRESS_REMINDER'
       ? await sendAddressReminders({
@@ -88,6 +105,7 @@ export const POST = handle(async (req: Request) => {
       : await sendShippingNotices({
           issueKey: body.issueKey,
           issueLabel: body.issueLabel,
+          cutoffDay: cutoffDay!,
           shippedOnLabel: body.shippedOnLabel || todayJstLabel(),
           arrivalLabel: body.arrivalLabel,
           note: body.note,
@@ -104,6 +122,7 @@ export const POST = handle(async (req: Request) => {
     metadata: {
       issueKey: body.issueKey,
       issueLabel: body.issueLabel,
+      ...(body.kind === 'SHIPPING_NOTICE' ? { cutoffDate: body.cutoffDate } : {}),
       ...result,
       // エラー詳細は監査ログに入れすぎない (件数だけ)
       errors: result.errors.length,

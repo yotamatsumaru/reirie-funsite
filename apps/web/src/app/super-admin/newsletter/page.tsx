@@ -14,6 +14,15 @@ import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { NotifyPanel } from './notify-panel';
+import { jstDayRange, isShippable as isShippableProfile } from '@idol/shared';
+import { fetchAnnualMembersOn } from '@/lib/newsletter-mail';
+
+/**
+ * 発送連絡の基準日の初期値 (JST)。
+ * 会報誌はこの日時点の年間会員分を発送しているため、発送連絡もこの日で絞る。
+ * 号ごとに変わる場合は画面の「基準日」で変更できる (?cutoff=YYYY-MM-DD)。
+ */
+const DEFAULT_NEWSLETTER_CUTOFF = '2026-08-15';
 
 export const metadata: Metadata = { title: '会報誌 発送リスト | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -68,7 +77,19 @@ function isShippable(u: Recipient['user']): boolean {
   );
 }
 
-export default async function NewsletterMailingListPage() {
+export default async function NewsletterMailingListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cutoff?: string }>;
+}) {
+  const { cutoff } = await searchParams;
+  const cutoffDate = cutoff && jstDayRange(cutoff) ? cutoff : DEFAULT_NEWSLETTER_CUTOFF;
+  const cutoffDay = jstDayRange(cutoffDate)!;
+
+  // 発送連絡の対象: 基準日時点で年間会員だった会員 (うち発送可能な人にだけ送る)
+  const annualMembers = await fetchAnnualMembersOn(cutoffDay);
+  const annualShippableCount = annualMembers.filter((u) => isShippableProfile(u)).length;
+
   const subs = (await prisma.subscription.findMany({
     where: {
       planType: 'PREMIUM',
@@ -161,7 +182,12 @@ export default async function NewsletterMailingListPage() {
       </div>
 
       {/* 会報誌のメール連絡（住所記入のお願い / 発送連絡） */}
-      <NotifyPanel needsInfoCount={needsInfoCount} shippableCount={shippableCount} />
+      <NotifyPanel
+        needsInfoCount={needsInfoCount}
+        cutoffDate={cutoffDate}
+        annualMemberCount={annualMembers.length}
+        annualShippableCount={annualShippableCount}
+      />
 
       <Card>
         <CardHeader>
