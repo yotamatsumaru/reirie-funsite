@@ -11,6 +11,7 @@ import { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
+import { isActiveAccount } from '@/lib/account-status';
 import {
   canAccess,
   hasCapability,
@@ -190,7 +191,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (env.demoMode) {
         return token;
       }
-      // 5分以上経過 or "update" トリガで plan を再取得
+      // 5分以上経過 or "update" トリガで plan / ロール / アカウント状態を再取得
       const stale =
         !t.planRefreshedAt || Date.now() - (t.planRefreshedAt ?? 0) > 5 * 60 * 1000;
       if (t.userId && (trigger === 'update' || stale)) {
@@ -204,6 +205,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
           },
         });
+        // BAN / 退会 (deletedAt あり) やユーザー削除済みならセッションを破棄する。
+        // null を返すと Auth.js がセッション Cookie を消し、未ログイン扱いになる。
+        if (!isActiveAccount(u)) {
+          return null;
+        }
         if (u) {
           t.role = u.role as UserRoleLiteral;
           t.plan = (u.subscriptions[0]?.planType as PlanTypeLiteral) ?? 'FREE';

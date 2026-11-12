@@ -27,6 +27,7 @@ import {
 import { requireApiSession, resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
+import { hasValidCronSecret } from '@/lib/secret-compare';
 import { logAudit } from '@/lib/audit';
 import { grantMonthlyPuiBonus } from '@/lib/points';
 
@@ -42,8 +43,7 @@ interface GrantResult {
 
 export const POST = handle(async (req: Request) => {
   // ===== 認証 =====
-  const cronSecret = req.headers.get('x-cron-secret');
-  const validCron = cronSecret && env.cron?.secret && cronSecret === env.cron.secret;
+  const validCron = hasValidCronSecret(req, env.cron?.secret);
   if (!validCron) {
     const session = await resolveApiSession(req);
     if (!session?.user?.id || session.user.role !== 'ADMIN') {

@@ -1,6 +1,7 @@
 /**
  * Next.js Proxy (旧 middleware) — Node.js runtime
  *
+ *  - /api/* への別サイトからの書き込み (CSRF) を 403 で拒否 (判定は lib/csrf.ts)
  *  - /me, /admin, /checkout 等の保護ルートで未ログイン (Auth.js cookie 無し) を /signin にリダイレクト
  *  - メンテナンスモード ON のとき、【スーパー管理者以外の】すべての訪問者を
  *    /maintenance にリダイレクト (API は 503 JSON)。スーパー管理者だけは通常どおり
@@ -15,6 +16,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { isMaintenanceModeAsync } from '@/lib/maintenance-flag';
+import { checkCrossSiteWrite } from '@/lib/csrf';
 
 const PROTECTED_PREFIXES = ['/me', '/admin', '/checkout'];
 
@@ -57,6 +59,29 @@ async function isSuperAdmin(req: NextRequest): Promise<boolean> {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // 0) 別サイトからの書き込みを拒否 (CSRF)。ログイン Cookie 付きの /api/* への
+  //    POST/PUT/PATCH/DELETE で、Origin が自サイトでなければ 403。
+  const csrf = checkCrossSiteWrite({
+    method: req.method,
+    pathname,
+    header: (name) => req.headers.get(name),
+    hasSessionCookie: SESSION_COOKIE_NAMES.some((name) => req.cookies.get(name)?.value),
+    appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:3000',
+  });
+  if (!csrf.ok) {
+    // eslint-disable-next-line no-console
+    console.warn(`[csrf] blocked ${req.method} ${pathname}: ${csrf.reason}`);
+    return NextResponse.json(
+      {
+        error: {
+          code: 'CROSS_SITE_REQUEST',
+          message: '別のサイトからの操作は受け付けられません。ページを開き直してから再度お試しください。',
+        },
+      },
+      { status: 403 },
+    );
+  }
 
   // 1) メンテナンスモードチェック (永続 AppSetting + 短時間キャッシュ)
   if (await isMaintenanceModeAsync()) {

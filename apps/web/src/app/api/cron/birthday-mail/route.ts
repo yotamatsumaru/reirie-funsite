@@ -28,6 +28,7 @@ import { NextResponse } from 'next/server';
 import { resolveApiSession } from '@/lib/api-auth';
 import { errors, handle } from '@/lib/errors';
 import { env } from '@/lib/env';
+import { hasValidCronSecret } from '@/lib/secret-compare';
 import { runBirthdayMailAutoSendAndAudit } from '@/lib/birthday-mail';
 
 export const runtime = 'nodejs';
@@ -35,8 +36,7 @@ export const dynamic = 'force-dynamic';
 
 export const POST = handle(async (req: Request) => {
   // --- 認証: cron secret もしくは管理者 -----------------------------------
-  const cronSecret = req.headers.get('x-cron-secret');
-  const validCron = Boolean(cronSecret && env.cron?.secret && cronSecret === env.cron.secret);
+  const validCron = hasValidCronSecret(req, env.cron?.secret);
 
   let adminUserId: string | null = null;
   if (!validCron) {

@@ -20,6 +20,7 @@ import { prisma, Prisma } from '@idol/db';
 import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { forgetAccountStatus } from '@/lib/account-status';
 import { USER_ROLES } from '@idol/shared';
 import { safeGetPromoUntil, safeSetPromoUntil } from '@/lib/points';
 
@@ -129,6 +130,8 @@ export const PATCH = handle(
         select: { id: true, role: true },
       });
       updatedRole = updated.role;
+      // BAN / 復帰をアプリ (Bearer) 側のキャッシュにもすぐ反映する
+      forgetAccountStatus(id);
     }
 
     // プロモ/デモの書き込み (生 SQL)。カラム未適用なら false。

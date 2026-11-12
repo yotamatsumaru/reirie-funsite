@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
+import { buildEnforcedCsp, buildReportOnlyCsp, CSP_REPORT_PATH } from './src/lib/csp';
 
 const cdnAssetDomain = process.env.NEXT_PUBLIC_CLOUDFRONT_ASSET_DOMAIN ?? '';
+const isProduction = process.env.NODE_ENV === 'production';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -60,28 +62,22 @@ const nextConfig: NextConfig = {
           // 1on1 通話機能用にカメラ・マイクを同一オリジンで許可する
           // self = このサイト自身。クロスオリジン埋め込みは引き続き不可。
           { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=()' },
-          // Content-Security-Policy: XSS の実害範囲を限定する多層防御。
-          // - Stripe.js / IVS プレイヤー等が要求する接続先のみ許可
-          // - unsafe-inline は Next.js のインラインスタイル/一部スクリプトのために必要最小限で許可
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://api.stripe.com https://*.amazonaws.com wss: https:",
-              // Ticket Dive: お知らせに埋め込む申込タグ (iframe 型) 用。lib/ticket-embed.ts と同じドメイン
-              "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://ticketdive.com https://*.ticketdive.com",
-              "media-src 'self' blob: https:",
-              "object-src 'none'",
-              "base-uri 'self'",
-              // Ticket Dive: お知らせに埋め込む申込タグ (フォーム型) の送信先
-              "form-action 'self' https://ticketdive.com https://*.ticketdive.com",
-              "frame-ancestors 'self'",
-            ].join('; '),
-          },
+          // Content-Security-Policy: XSS の実害範囲を限定する多層防御 (lib/csp.ts)。
+          { key: 'Content-Security-Policy', value: buildEnforcedCsp() },
+          // より厳しい方針を「違反を報告するだけ」で試す (本番のみ)。
+          // 開発サーバーは eval を使うため、ここで出すと報告がノイズだらけになる。
+          ...(isProduction
+            ? [
+                {
+                  key: 'Content-Security-Policy-Report-Only',
+                  value: buildReportOnlyCsp({
+                    videoDomain: process.env.CLOUDFRONT_VIDEO_DOMAIN,
+                    assetDomain: process.env.CLOUDFRONT_ASSET_DOMAIN ?? cdnAssetDomain,
+                  }),
+                },
+                { key: 'Reporting-Endpoints', value: `csp="${CSP_REPORT_PATH}"` },
+              ]
+            : []),
         ],
       },
     ];

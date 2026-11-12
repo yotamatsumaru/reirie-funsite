@@ -14,15 +14,16 @@
  *
  * クエリ:
  *   ?role=performer  (演者側) or ?role=fan (ファン側)
+ *   ?check=1         入室条件だけ確認して 204 / 403 等を返す (ルームには入らない)
  *
- * 認可 (lib/call-room-access.ts):
- *   - roomId は `event:{eventId}` のみ
- *   - performer: 通話管理権限 (CALL)
- *   - fan: 自分のチケットが IN_MAIN_ROOM (呼ばれた本人のみ)。DONE/NO_SHOW になると切断
+ * 入室条件 (lib/call-access.ts):
+ *   - 特典会ルーム `event:<id>`: 演者は CALL 権限、ファンは本ルームに呼ばれているチケット本人
+ *     (終了・中止イベントは誰も入れない / ファンは DONE・NO_SHOW になった時点で切断)
+ *   - 1on1 ルーム `<演者 userId>`: 演者はルームの持ち主本人、ファンは会員 (スタンダード以上) か運営
  */
 import { resolveApiSession } from '@/lib/api-auth';
-import { joinRoom, type CallRole, type SignalEvent } from '@/lib/call-hub';
-import { checkCallRoomAccess, isFanStillInMainRoom } from '@/lib/call-room-access';
+import { tryJoinRoom, type CallRole, type SignalEvent } from '@/lib/call-hub';
+import { checkCallRoomAccess, isFanStillInMainRoom } from '@/lib/call-access';
 import { randomUUID } from 'crypto';
 
 /** ファンの «まだ自分の番か» を確認する間隔。DONE/NO_SHOW になったら切断する */
@@ -44,13 +45,30 @@ export async function GET(
   const url = new URL(req.url);
   const role: CallRole = url.searchParams.get('role') === 'performer' ? 'performer' : 'fan';
 
-  // 入室可否: 演者=通話管理権限 / ファン=自分のチケットが IN_MAIN_ROOM
-  // (従来はログインさえしていれば誰でも任意のルームに入れた)
-  const access = await checkCallRoomAccess(session, roomId, role);
-  if (!access.ok) {
-    return new Response(`Forbidden: ${access.reason}`, { status: access.status });
+  // 入室可否 (lib/call-access.ts)。従来はログインさえしていれば誰でも任意のルームに入れた
+  const decision = await checkCallRoomAccess(
+    roomId,
+    {
+      userId: session.user.id,
+      role: session.user.role,
+      plan: session.user.plan,
+      capabilities: session.user.capabilities ?? [],
+    },
+    role,
+  );
+  if (!decision.ok) {
+    return new Response(decision.message, {
+      status: decision.status,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
 
+  // 入室前の確認だけ (CallRoom が EventSource を開く前に呼ぶ)。ルームには入らない
+  if (url.searchParams.get('check') === '1') {
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  const userId = session.user.id;
   const clientId = randomUUID();
   const encoder = new TextEncoder();
 
@@ -74,7 +92,19 @@ export async function GET(
       // 先頭にコメント行を入れて Nginx 等のバッファをフラッシュ
       safeEnqueue(encoder.encode(`: connected ${clientId}\n\n`));
 
-      const leave = joinRoom(roomId, { clientId, userId: session.user.id, role, send });
+      const joined = tryJoinRoom(roomId, { clientId, userId, role, send });
+      if (!joined.ok) {
+        // 上限超過: 理由を 1 回だけ送って切断する
+        safeEnqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ reason: joined.reason })}\n\n`));
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
+        return;
+      }
+      const leave = joined.leave;
 
       // keep-alive
       const keepAlive = setInterval(() => {
@@ -83,7 +113,7 @@ export async function GET(
 
       // ファンは通話が終わった (スタッフが「次へ」を押した) 時点でルームから追い出す。
       // これをしないと、DONE になった人が接続を張ったまま次の人の通話に居座れる。
-      const ticketId = access.ticketId;
+      const ticketId = decision.ticketId;
       const recheck =
         role === 'fan' && ticketId
           ? setInterval(async () => {

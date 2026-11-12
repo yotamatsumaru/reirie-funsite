@@ -3,6 +3,8 @@
  *
  * - ログイン必須 (未ログインなら /signin に飛ばす)
  * - roomId は演者の userId
+ * - 会員限定 (スタンダード以上の有料プラン、または運営)。
+ *   同じ条件を API (/api/call/[roomId]/events) 側でも lib/call-access.ts で確認している。
  */
 import type { Metadata } from 'next';
 import { auth } from '@/auth';
@@ -10,6 +12,9 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@idol/db';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { CallRoom } from '@/components/call/CallRoom';
+import Link from 'next/link';
+import { canAccess, isAdmin } from '@idol/shared';
+import { LEGACY_CALL_FAN_ACCESS_LEVEL } from '@/lib/call-access';
 
 export const metadata: Metadata = { title: '1on1 コール' };
 export const dynamic = 'force-dynamic';
@@ -37,6 +42,10 @@ export default async function FanCallPage({
     performer.deletedAt === null &&
     (performer.role === 'ADMIN' || performer.role === 'SUPER_ADMIN');
 
+  const isMember =
+    canAccess(session.user.plan, LEGACY_CALL_FAN_ACCESS_LEVEL) || isAdmin(session.user.role);
+  const isOwnRoom = session.user.id === roomId;
+
   return (
     <main className="mx-auto max-w-5xl px-3 py-6 sm:px-4 sm:py-10">
       <header className="mb-6">
@@ -52,6 +61,33 @@ export default async function FanCallPage({
             <p className="text-sm text-rose-700">
               このコールルームは存在しないか、無効になっています。URL をご確認ください。
             </p>
+          </CardBody>
+        </Card>
+      ) : isOwnRoom ? (
+        <Card>
+          <CardBody>
+            <p className="text-sm text-slate-700">
+              これはあなた自身のコールルームです。演者として入室するには{' '}
+              <Link href="/admin/call" className="font-semibold text-brand-600 underline">
+                管理画面のコール
+              </Link>
+              から開いてください。
+            </p>
+          </CardBody>
+        </Card>
+      ) : !isMember ? (
+        <Card>
+          <CardBody>
+            <p className="text-sm font-semibold text-slate-900">1on1 コールは会員限定です</p>
+            <p className="mt-1.5 text-sm text-slate-600">
+              スタンダード以上のプランにご加入いただくと、演者と 1on1 コールができます。
+            </p>
+            <Link
+              href="/plans"
+              className="mt-4 inline-flex rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              プランを見る
+            </Link>
           </CardBody>
         </Card>
       ) : (

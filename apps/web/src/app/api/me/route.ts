@@ -3,6 +3,7 @@ import { prisma } from '@idol/db';
 import { UpdateProfileSchema, WithdrawAccountSchema } from '@idol/shared';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { forgetAccountStatus } from '@/lib/account-status';
 import { requireApiSession } from '@/lib/api-auth';
 import { verifyPassword } from '@/lib/password';
 import { env } from '@/lib/env';
@@ -113,6 +114,7 @@ export const DELETE = handle(async (req: Request) => {
     where: { id: session.user.id },
     data: { deletedAt: new Date() },
   });
+  forgetAccountStatus(session.user.id);
   await logAudit({ userId: session.user.id, action: 'user.delete' });
   return NextResponse.json({ message: '退会処理を受け付けました' });
 });

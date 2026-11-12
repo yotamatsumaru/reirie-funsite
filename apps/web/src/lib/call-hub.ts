@@ -25,7 +25,11 @@ export type CallRole = 'performer' | 'fan';
 export type Client = {
   /** クライアントごとに発行するランダム ID */
   clientId: string;
-  /** 接続したユーザー (シグナル送信時の本人確認に使う) */
+  /**
+   * 接続しているログインユーザーの ID。
+   * signal 送信時に「from の clientId が本当にこのユーザーのものか」を確かめるのに使う
+   * (他人の clientId を名乗って offer/answer を差し込むのを防ぐ)。
+   */
   userId: string;
   /** 演者 or ファン */
   role: CallRole;
@@ -51,6 +55,15 @@ type Hub = {
 };
 
 const GLOBAL_KEY = '__idol_call_hub__';
+
+/**
+ * 1 ルームに同時に入れる接続数の上限。
+ * 通常は演者 1 + ファン 1 (タブの開き直しや再接続で一時的に増える) なので十分な余裕を持たせつつ、
+ * 1 つのルームに大量接続してメモリを食い潰すのを防ぐ。
+ */
+export const MAX_CLIENTS_PER_ROOM = 16;
+/** 同じユーザーが 1 ルームに同時に張れる接続数の上限 */
+export const MAX_CLIENTS_PER_USER_IN_ROOM = 4;
 
 function getHub(): Hub {
   const g = globalThis as unknown as Record<string, Hub | undefined>;
@@ -79,6 +92,28 @@ function broadcast(room: Room, event: SignalEvent, exceptClientId?: string) {
       // 個別の失敗は無視（次の cleanup で除去される）
     }
   }
+}
+
+export type JoinResult =
+  | { ok: true; leave: () => void }
+  | { ok: false; reason: 'room full' | 'too many connections' };
+
+/**
+ * ルームに入る。上限を超える場合は入室させずに理由を返す。
+ */
+export function tryJoinRoom(roomId: string, client: Client): JoinResult {
+  const existing = getHub().rooms.get(roomId);
+  if (existing) {
+    if (existing.clients.size >= MAX_CLIENTS_PER_ROOM) {
+      return { ok: false, reason: 'room full' };
+    }
+    let mine = 0;
+    for (const c of existing.clients.values()) if (c.userId === client.userId) mine++;
+    if (mine >= MAX_CLIENTS_PER_USER_IN_ROOM) {
+      return { ok: false, reason: 'too many connections' };
+    }
+  }
+  return { ok: true, leave: joinRoom(roomId, client) };
 }
 
 export function joinRoom(roomId: string, client: Client): () => void {
@@ -112,17 +147,24 @@ export function joinRoom(roomId: string, client: Client): () => void {
 
 /**
  * クライアントからの signal (offer/answer/ice) を to が指定されていれば直接、
- * 居なければ部屋全体にブロードキャストする
+ * 居なければ部屋全体にブロードキャストする。
+ *
+ * senderUserId: 送信リクエストのログインユーザー。from の clientId がこのユーザーの
+ * 接続でなければ拒否する (なりすまし防止)。
  */
 export function relaySignal(
   roomId: string,
   from: string,
   to: string | undefined,
   payload: SignalMessage,
+  senderUserId: string,
 ): { ok: boolean; reason?: string } {
   const room = getHub().rooms.get(roomId);
   if (!room) return { ok: false, reason: 'room not found' };
-  if (!room.clients.has(from)) return { ok: false, reason: 'sender not in room' };
+  const sender = room.clients.get(from);
+  if (!sender || sender.userId !== senderUserId) {
+    return { ok: false, reason: 'sender not in room' };
+  }
 
   const event: SignalEvent = { type: 'signal', from, payload };
 

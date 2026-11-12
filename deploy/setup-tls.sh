@@ -76,6 +76,21 @@ map $http_x_forwarded_host $proxied_host {
   ''      $host;
 }
 
+# アクセスログからトークンを除く。
+# SSE (EventSource) はヘッダーを付けられないため、アプリは ?access_token=... で
+# 認証トークンを受け取る (待機列・通話・ライブ配信)。nginx 既定のログ形式は
+# $request (クエリ込みの URL) を書くので、そのままだとトークンがログに残り、
+# ログを読める人がなりすませてしまう。access_token / token を含む URL は
+# パスだけを記録し、クエリは [redacted] に置き換える。
+map $request_uri $log_request_uri {
+  "~^(?<log_path>[^?]*)\?(?:.*&)?(?:access_token|token)=" "$log_path?[redacted]";
+  default $request_uri;
+}
+log_format app_redacted '$remote_addr - $remote_user [$time_local] '
+                        '"$request_method $log_request_uri $server_protocol" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+
 server {
   listen 80 default_server;
   server_name _;
@@ -90,6 +105,8 @@ server {
   ssl_certificate     /etc/nginx/ssl/cloudflare-origin.pem;
   ssl_certificate_key /etc/nginx/ssl/cloudflare-origin.key;
   ssl_protocols TLSv1.2 TLSv1.3;
+
+  access_log /var/log/nginx/access.log app_redacted;
 
   client_max_body_size 50M;
   proxy_read_timeout 300s;
