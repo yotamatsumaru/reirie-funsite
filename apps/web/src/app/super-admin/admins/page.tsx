@@ -84,7 +84,7 @@ export default async function SuperAdminAdminsPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">管理者管理</h1>
           <p className="mt-1 text-sm text-slate-500">
-            ADMIN / SUPER_ADMIN ロールの付与・剥奪を行います。ファン会員はこの画面には表示されません。
+            スーパー管理者 / スタッフ管理者 / 管理者の付与・変更・剥奪を行います。ロールは各行の「操作」から切り替えられます。ファン会員はこの画面には表示されません。
           </p>
         </div>
         <Link
@@ -287,7 +287,11 @@ function AdminTable({ users, readOnly = false }: { users: UserRow[]; readOnly?: 
                 {!readOnly && (
                   <td className="px-4 py-3 text-right align-top">
                     <SuperAdminWriteGate silent>
-                      <AdminRowActions userId={u.id} currentRole={u.role} />
+                      <AdminRowActions
+                        userId={u.id}
+                        currentRole={u.role}
+                        label={u.displayName ?? u.email}
+                      />
                     </SuperAdminWriteGate>
                   </td>
                 )}
