@@ -3,11 +3,14 @@
  *
  * 要件:
  *   - STAFF は SUPER_ADMIN と同じ画面を「閲覧」できる
- *   - ただし「返金」「サブスクの変更」をはじめ、書き込み操作は一切できない
+ *   - ただし「返金」「サブスクの変更」をはじめ、書き込み操作は原則できない
+ *   - 例外として、サイト運営に必要な操作だけ STAFF にも書き込みを許可する
+ *     (STAFF_WRITABLE_ROUTES に列挙したもの。現在はお知らせのみ)
  *
  * 権限の実体は各 API ルートのガード関数で担保している:
- *   requireSuperAdmin()     … SUPER_ADMIN のみ (STAFF は 403)  → 書き込みに使う
- *   requireSuperAdminView() … SUPER_ADMIN と STAFF (閲覧)      → 読み取りに使う
+ *   requireSuperAdmin()        … SUPER_ADMIN のみ (STAFF は 403)  → 書き込みに使う
+ *   requireSuperAdminView()    … SUPER_ADMIN と STAFF (閲覧)      → 読み取りに使う
+ *   requireSuperAdminOrStaff() … SUPER_ADMIN と STAFF (書き込み)  → 許可リストの API だけ
  *
  * 新しい書き込み API を追加したときに、うっかり requireSuperAdminView() を
  * 使ってしまうと STAFF が返金できてしまう。それをこのテストで機械的に防ぐ。
@@ -31,6 +34,23 @@ function collectRouteFiles(dir: string, acc: string[] = []): string[] {
 }
 
 const WRITE_METHODS = ['POST', 'PATCH', 'PUT', 'DELETE'] as const;
+
+/**
+ * STAFF にも書き込みを許可する API (api/super-admin からの相対パス → メソッド)。
+ *
+ * ここに無い API で requireSuperAdminOrStaff() を使うとテストが落ちる。
+ * 追加するときは «なぜ STAFF に任せてよいか» をコメントに残すこと。
+ */
+const STAFF_WRITABLE_ROUTES: Record<string, readonly string[]> = {
+  // お知らせ: サイト運営に日常的に必要 (ライブ告知・メンテ告知など)。
+  // 操作者は監査ログ (announcement.create / update / delete) に残る。
+  'announcements/route.ts': ['POST'],
+  'announcements/[id]/route.ts': ['PATCH', 'DELETE'],
+};
+
+function routeKey(file: string): string {
+  return relative(API_ROOT, file).split(/[\\/]/).join('/');
+}
 
 /**
  * ソースを関数単位に大まかに分割し、HTTP メソッドごとの本文を取り出す。
@@ -59,31 +79,60 @@ describe('STAFF 権限モデル: /api/super-admin の書き込みガード', () 
     expect(routeFiles.length).toBeGreaterThan(20);
   });
 
-  it('すべての書き込みハンドラが requireSuperAdmin() で保護されている', () => {
+  it('すべての書き込みハンドラが requireSuperAdmin() で保護されている (許可リストを除く)', () => {
     const violations: string[] = [];
 
     for (const file of routeFiles) {
+      const key = routeKey(file);
       const src = readFileSync(file, 'utf8');
       const handlers = extractHandlers(src);
+      const staffWritable = STAFF_WRITABLE_ROUTES[key] ?? [];
 
       for (const method of WRITE_METHODS) {
         const body = handlers.get(method);
         if (!body) continue;
 
         const hasStrictGuard = /requireSuperAdmin\s*\(/.test(body);
+        const hasStaffWriteGuard = /requireSuperAdminOrStaff\s*\(/.test(body);
         // requireSuperAdminView() は「閲覧」用。書き込みで使ってはいけない。
         const usesViewGuard = /requireSuperAdminView\s*\(/.test(body);
 
-        if (!hasStrictGuard || usesViewGuard) {
+        if (usesViewGuard) {
+          violations.push(`${key} の ${method}: requireSuperAdminView() を使用 (閲覧用ガード)`);
+          continue;
+        }
+        if (staffWritable.includes(method)) {
+          if (!hasStaffWriteGuard && !hasStrictGuard) {
+            violations.push(`${key} の ${method}: ガードがない`);
+          }
+          continue;
+        }
+        if (hasStaffWriteGuard) {
           violations.push(
-            `${relative(API_ROOT, file)} の ${method}: ` +
-              `${usesViewGuard ? 'requireSuperAdminView() を使用 (STAFF が書き込めてしまう)' : 'requireSuperAdmin() がない'}`,
+            `${key} の ${method}: requireSuperAdminOrStaff() を使用 ` +
+              '(STAFF が書き込めてしまう。必要なら STAFF_WRITABLE_ROUTES に理由付きで追加)',
           );
+          continue;
+        }
+        if (!hasStrictGuard) {
+          violations.push(`${key} の ${method}: requireSuperAdmin() がない`);
         }
       }
     }
 
     expect(violations).toEqual([]);
+  });
+
+  it('許可リストの API は実在し、STAFF 用の書き込みガードを使っている', () => {
+    for (const [key, methods] of Object.entries(STAFF_WRITABLE_ROUTES)) {
+      const src = readFileSync(join(API_ROOT, ...key.split('/')), 'utf8');
+      const handlers = extractHandlers(src);
+      for (const method of methods) {
+        const body = handlers.get(method);
+        expect(body).toBeDefined();
+        expect(body).toMatch(/requireSuperAdminOrStaff\s*\(/);
+      }
+    }
   });
 });
 
@@ -129,5 +178,22 @@ describe('STAFF 権限モデル: 返金 / サブスク変更 (ユーザーが明
     expect(patch).toBeDefined();
     expect(patch).toMatch(/requireSuperAdmin\s*\(/);
     expect(patch).not.toMatch(/requireSuperAdminView\s*\(/);
+  });
+});
+
+describe('STAFF 権限モデル: お知らせ (サイト運営に必要なため STAFF も変更可)', () => {
+  function readRoute(...segments: string[]): string {
+    return readFileSync(join(API_ROOT, ...segments), 'utf8');
+  }
+
+  it('お知らせの作成 (POST) は STAFF も可', () => {
+    const post = extractHandlers(readRoute('announcements', 'route.ts')).get('POST');
+    expect(post).toMatch(/requireSuperAdminOrStaff\s*\(/);
+  });
+
+  it('お知らせの編集・公開切替 (PATCH) と削除 (DELETE) は STAFF も可', () => {
+    const h = extractHandlers(readRoute('announcements', '[id]', 'route.ts'));
+    expect(h.get('PATCH')).toMatch(/requireSuperAdminOrStaff\s*\(/);
+    expect(h.get('DELETE')).toMatch(/requireSuperAdminOrStaff\s*\(/);
   });
 });

@@ -1,6 +1,7 @@
 /**
  * PATCH/DELETE /api/super-admin/announcements/[id]
- *   - SUPER_ADMIN 限定: お知らせの更新 / 削除
+ *   - SUPER_ADMIN / STAFF: お知らせの更新 / 削除
+ *     (サイト運営に必要なため STAFF にも許可。監査ログに操作者が残る)
  *
  * PATCH body: { title?, body?, embedHtml?, audience?, status?, sendEmail? }
  *   embedHtml: 文字列 = 置き換え (サニタイズして保存) / null・空文字 = 削除
@@ -12,7 +13,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminOrStaff } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendAnnouncementEmails, shouldTriggerEmail } from '@/lib/bulk-email';
@@ -37,7 +38,7 @@ const PatchSchema = z
 
 export const PATCH = handle(
   async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireSuperAdmin();
+    const session = await requireSuperAdminOrStaff();
     const { id } = await ctx.params;
 
     const json = (await req.json().catch(() => ({}))) as unknown;
@@ -106,7 +107,7 @@ export const PATCH = handle(
 
 export const DELETE = handle(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requireSuperAdmin();
+    const session = await requireSuperAdminOrStaff();
     const { id } = await ctx.params;
 
     const prev = await prisma.announcement.findUnique({ where: { id } });

@@ -2084,7 +2084,7 @@
       "DELETE"
     ],
     "auth": "superadmin",
-    "authLabel": "スーパー管理者",
+    "authLabel": "スーパー管理者 / スタッフ管理者",
     "gates": [],
     "bearer": false,
     "cookieOnly": false,
@@ -2098,7 +2098,7 @@
       "POST"
     ],
     "auth": "superadmin",
-    "authLabel": "スーパー管理者",
+    "authLabel": "スーパー管理者 / スタッフ管理者",
     "gates": [],
     "bearer": false,
     "cookieOnly": false,

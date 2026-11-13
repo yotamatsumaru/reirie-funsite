@@ -21,7 +21,6 @@ import { useRouter } from 'next/navigation';
 import { Pencil, SquareArrowOutUpRight } from 'lucide-react';
 import { AnnouncementEditForm } from './announcement-edit-form';
 import type { AnnouncementEditableFields } from '@/lib/announcement-edit';
-import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 type Status = 'DRAFT' | 'PUBLISHED';
 type EmailStatus =
@@ -178,17 +177,16 @@ export function AnnouncementListItem({
         key に現在値を含めることで、保存後に再取得された値が
         初期値として反映される (古い入力が残らない)。
       */}
+      {/* STAFF も編集できるため、閲覧のみゲート (SuperAdminWriteGate) は使わない */}
       {canEdit && editing && (
-        <SuperAdminWriteGate silent>
-          <AnnouncementEditForm
-            key={`${id}-${initial.title}-${initial.body}-${initial.embedHtml ?? ''}-${initial.audience}-${initial.sendEmail}`}
-            id={id}
-            status={status}
-            emailStatus={emailStatus}
-            initial={initial}
-            onClose={() => setEditing(false)}
-          />
-        </SuperAdminWriteGate>
+        <AnnouncementEditForm
+          key={`${id}-${initial.title}-${initial.body}-${initial.embedHtml ?? ''}-${initial.audience}-${initial.sendEmail}`}
+          id={id}
+          status={status}
+          emailStatus={emailStatus}
+          initial={initial}
+          onClose={() => setEditing(false)}
+        />
       )}
     </>
   );

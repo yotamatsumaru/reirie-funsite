@@ -28,6 +28,7 @@ const GUARDS = [
   // 管理者
   { re: /requireApiAdmin\s*\(/, key: 'admin', label: '管理者' },
   { re: /requireSuperAdminView\s*\(/, key: 'superadmin', label: 'スーパー管理者（閲覧）' },
+  { re: /requireSuperAdminOrStaff\s*\(/, key: 'superadmin', label: 'スーパー管理者 / スタッフ管理者' },
   { re: /requireSuperAdmin\s*\(/, key: 'superadmin', label: 'スーパー管理者' },
   { re: /requireAdmin\s*\(/, key: 'admin', label: '管理者' },
   { re: /hasCapability|hasAnyCapability/, key: 'admin', label: '管理者（権限別）' },

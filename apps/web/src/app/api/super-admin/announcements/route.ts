@@ -1,6 +1,7 @@
 /**
  * POST /api/super-admin/announcements
- *   - SUPER_ADMIN 限定: お知らせを新規作成
+ *   - SUPER_ADMIN / STAFF: お知らせを新規作成
+ *     (サイト運営に必要なため STAFF にも許可。監査ログに操作者が残る)
  *
  * body: { title, body, embedHtml?, audience, status, sendEmail }
  *
@@ -13,7 +14,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@idol/db';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminOrStaff } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 import { sendAnnouncementEmails, shouldTriggerEmail } from '@/lib/bulk-email';
@@ -35,7 +36,7 @@ const Schema = z.object({
 });
 
 export const POST = handle(async (req: Request) => {
-  const session = await requireSuperAdmin();
+  const session = await requireSuperAdminOrStaff();
 
   const json = (await req.json().catch(() => ({}))) as unknown;
   const parsed = Schema.safeParse(json);

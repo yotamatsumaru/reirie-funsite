@@ -48,6 +48,7 @@ export function accessLevelLabel(level: AccessLevelLiteral | string): string {
  *  - ADMIN:       運営編集者 (コンテンツ・商品・ゲーム編集権限)
  *  - STAFF:       スタッフ管理者。SUPER_ADMIN と同じ管理画面を「閲覧」できるが、
  *                 返金 / BAN / ロール変更などの書き込み操作はできない (read-only 運営)。
+ *                 例外としてお知らせの作成・編集・削除はできる (サイト運営に必要なため)。
  *  - SUPER_ADMIN: システム最高権限 (KPI / 課金 / ユーザー BAN / 管理者管理 / 監査)
  */
 export const USER_ROLES = ['USER', 'ADMIN', 'STAFF', 'SUPER_ADMIN'] as const;
