@@ -338,6 +338,25 @@ export async function requireSuperAdminView() {
   return session;
 }
 
+/**
+ * SUPER_ADMIN と STAFF の «書き込み» を許可するガード。
+ *
+ * /super-admin の書き込みは原則 requireSuperAdmin() (STAFF 不可) だが、
+ * サイト運営に日常的に必要な一部の操作だけは STAFF にも任せる。
+ *
+ * ⚠️ 使ってよい API は staff-permissions.test.ts の STAFF_WRITABLE_ROUTES に
+ *    列挙したものだけ。それ以外で使うとテストが落ちる (うっかり権限を広げないため)。
+ *    現在の対象: お知らせの作成・編集・公開切替・削除 (/api/super-admin/announcements)
+ */
+export async function requireSuperAdminOrStaff() {
+  const session = await requireSession();
+  if (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'STAFF') {
+    const { errors } = await import('./lib/errors');
+    throw errors.forbidden('スーパー管理者またはスタッフ管理者の権限が必要です');
+  }
+  return session;
+}
+
 export async function requireAccessLevel(level: AccessLevelLiteral) {
   const session = await auth();
   if (level !== 'PUBLIC' && !session?.user?.id) {

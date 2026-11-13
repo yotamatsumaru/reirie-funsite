@@ -6,9 +6,8 @@
  * - 行内アクション: プレビュー / 編集 (インライン展開) / 公開切替 / 削除
  * - 各お知らせの公開 URL コピー (外部サイトへの掲載・アクセス元制限の登録用)
  *
- * STAFF は閲覧のみなので、書き込み系のボタンは canEdit で出し分ける
- * (API 側も requireSuperAdmin で二重に防いでいる)。
- * URL のコピーは閲覧操作なので STAFF にも出す。
+ * お知らせはサイト運営に必要なため、STAFF (スタッフ管理者) も作成・編集・公開切替・削除できる。
+ * (/super-admin の他の画面は STAFF は閲覧のみ。API 側は requireSuperAdminOrStaff で許可している)
  */
 import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
@@ -24,7 +23,6 @@ import {
 } from '@/lib/announcement-audience';
 import { AnnouncementLinkCopy } from './announcement-link-copy';
 import { ExternalLinkGuide } from './external-link-guide';
-import { SuperAdminWriteGate } from '@/components/admin/SuperAdminReadOnly';
 
 export const metadata: Metadata = { title: 'お知らせ配信 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -67,9 +65,10 @@ function formatDateTime(d: Date | null): string {
 export default async function SuperAdminAnnouncementsPage() {
   const session = await requireSuperAdminView();
 
-  // STAFF は閲覧のみ (書き込み API は requireSuperAdmin で弾かれる)。
-  // 押しても 403 になるボタンを出さないよう、ここで出し分ける。
-  const canEdit = session.user.role === 'SUPER_ADMIN';
+  // お知らせは SUPER_ADMIN と STAFF が編集できる (API: requireSuperAdminOrStaff)。
+  // requireSuperAdminView を通過した時点でどちらかなので常に true だが、
+  // 将来ガードを変えたときに気づけるよう明示的に判定しておく。
+  const canEdit = session.user.role === 'SUPER_ADMIN' || session.user.role === 'STAFF';
 
   const all = await listAnnouncements();
   // お知らせの公開 URL を組み立てるためのベース (末尾スラッシュは落とす)
@@ -131,9 +130,8 @@ export default async function SuperAdminAnnouncementsPage() {
           </h2>
         </CardHeader>
         <CardBody>
-          <SuperAdminWriteGate label="お知らせの作成はスーパー管理者のみ実行できます">
-            <AnnouncementForm origin={baseUrl} />
-          </SuperAdminWriteGate>
+          {/* STAFF も作成できるため、閲覧のみゲート (SuperAdminWriteGate) は使わない */}
+          {canEdit && <AnnouncementForm origin={baseUrl} />}
         </CardBody>
       </Card>
 
