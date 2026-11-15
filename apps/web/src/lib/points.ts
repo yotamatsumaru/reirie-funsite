@@ -44,6 +44,7 @@ import {
   type RewardCatalogItemKindLiteral,
   type RewardRedemptionStatusLiteral,
 } from '@idol/shared';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 /**
  * Pui 取引の理由。
@@ -100,7 +101,7 @@ async function getUserPlanTx(
   const sub = await tx.subscription.findFirst({
     where: {
       userId,
-      status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+      ...liveSubscriptionWhere(),
     },
     orderBy: { createdAt: 'desc' },
     select: { planType: true },

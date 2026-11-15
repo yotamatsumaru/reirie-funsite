@@ -23,6 +23,7 @@ import {
 } from '@idol/shared';
 import { env } from './lib/env';
 import { authenticateCredentials } from './lib/credentials';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 declare module 'next-auth' {
   interface Session {
@@ -199,7 +200,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { id: t.userId },
           include: {
             subscriptions: {
-              where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+              where: liveSubscriptionWhere(),
               orderBy: { createdAt: 'desc' },
               take: 1,
             },

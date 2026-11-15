@@ -96,7 +96,14 @@ export function SubRowActions({
   }
 
   function handleCancelImmediate() {
-    if (!confirm('この契約を即時解約しますか？(返金は別途「返金」から処理してください)')) return;
+    if (
+      !confirm(
+        'この契約を即時解約しますか？\n\n' +
+          'Stripe 側も解約され、以後の請求は止まります。会員はすぐ無料プランになります。\n' +
+          '（返金は別途「返金」から処理してください）',
+      )
+    )
+      return;
     startTransition(async () => {
       const ok = await callApi({ action: 'cancel_immediate' });
       if (ok) router.refresh();
@@ -105,7 +112,9 @@ export function SubRowActions({
 
   function handleCancelAtPeriodEnd() {
     const next = !cancelAtPeriodEnd;
-    const msg = next ? '期末で解約を予約しますか？' : '期末解約の予約を取り消しますか？';
+    const msg = next
+      ? '期末で解約を予約しますか？\n\nStripe 側も期末解約になり、次回以降の請求は発生しません。\nプラン変更の予約がある場合は取り消されます。'
+      : '期末解約の予約を取り消しますか？\n\nStripe 側も継続に戻り、次回から請求が再開されます。';
     if (!confirm(msg)) return;
     startTransition(async () => {
       const ok = await callApi({ action: 'cancel_at_period_end', value: next });

@@ -67,6 +67,7 @@ import {
   updateMemorySession,
   type MemorySessionRecord,
 } from '@/lib/games/memory-store';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 /**
  * ユーザーの現在プランを DB の有効サブスクリプションから解決する。
@@ -76,7 +77,7 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
   const [promoUntil, sub] = await Promise.all([
     safeGetPromoUntil(prisma, userId),
     prisma.subscription.findFirst({
-      where: { userId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+      where: { userId, ...liveSubscriptionWhere() },
       orderBy: { createdAt: 'desc' },
       select: { planType: true },
     }),

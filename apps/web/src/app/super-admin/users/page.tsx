@@ -23,6 +23,7 @@ import { RankTiersClient } from './rank-tiers-client';
 import { CreateFanUserForm } from './create-fan-user-form';
 import { getMemberRankTiers } from '@/lib/app-setting';
 import { getMemberRanksForUsers } from '@/lib/membership-rank';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const metadata: Metadata = { title: 'ファンユーザー管理 | Super Admin' };
 export const dynamic = 'force-dynamic';
@@ -122,7 +123,7 @@ export default async function SuperAdminUsersPage({
     ? ((await prisma.subscription.findMany({
         where: {
           userId: { in: filteredIds },
-          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+          ...liveSubscriptionWhere(),
         },
         select: {
           userId: true,

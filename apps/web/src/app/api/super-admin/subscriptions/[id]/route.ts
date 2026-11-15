@@ -6,8 +6,9 @@
  *   { action: 'cancel_immediate' }
  *   { action: 'cancel_at_period_end', value: true | false }
  *
- * Note: 実本番では Stripe API を呼んで cancel する必要がある。
- *       ここでは DB だけ更新 (デモ用) + 監査ログ。
+ * Stripe 経由の契約は Stripe 側も解約する (lib/admin-subscription-cancel.ts)。
+ * 以前は DB だけ書き換えていたため、請求が続き、次の更新で有料プランが復活していた。
+ * 返金は別 API (/refund) で行う。
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -15,6 +16,8 @@ import { prisma } from '@idol/db';
 import { requireSuperAdmin } from '@/auth';
 import { errors, handle } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
+import { getStripe } from '@/lib/stripe';
+import { applyAdminCancel } from '@/lib/admin-subscription-cancel';
 
 export const runtime = 'nodejs';
 
@@ -37,33 +40,37 @@ export const PATCH = handle(
     const sub = await prisma.subscription.findUnique({ where: { id } });
     if (!sub) throw errors.notFound('サブスクが見つかりません');
 
-    if (parsed.data.action === 'cancel_immediate') {
-      await prisma.subscription.update({
-        where: { id },
-        data: { status: 'CANCELED', cancelAtPeriodEnd: false },
-      });
-      await logAudit({
-        userId: session.user.id,
-        action: 'subscription.cancel.immediate',
-        resource: `subscription:${id}`,
-        metadata: { subUserId: sub.userId },
-      });
-      return NextResponse.json({ ok: true });
+    let outcome;
+    try {
+      outcome = await applyAdminCancel(sub, parsed.data, getStripe);
+    } catch (err) {
+      // Stripe が失敗した場合は DB を変更していない。理由を管理者に返す
+      // eslint-disable-next-line no-console
+      console.error('[super-admin/subscriptions] stripe cancel failed', sub.id, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      throw errors.internal(`Stripe での解約に失敗しました (DB は変更していません): ${msg}`);
     }
 
-    // cancel_at_period_end
-    await prisma.subscription.update({
-      where: { id },
-      data: { cancelAtPeriodEnd: parsed.data.value },
-    });
+    const action =
+      parsed.data.action === 'cancel_immediate'
+        ? 'subscription.cancel.immediate'
+        : parsed.data.value
+          ? 'subscription.cancel.schedule'
+          : 'subscription.cancel.unschedule';
+
     await logAudit({
       userId: session.user.id,
-      action: parsed.data.value
-        ? 'subscription.cancel.schedule'
-        : 'subscription.cancel.unschedule',
+      action,
       resource: `subscription:${id}`,
-      metadata: { value: parsed.data.value },
+      metadata: {
+        subUserId: sub.userId,
+        stripeSubscriptionId: sub.stripeSubscriptionId,
+        stripe: outcome.stripe,
+        releasedSchedule: outcome.releasedSchedule,
+        ...(parsed.data.action === 'cancel_at_period_end' ? { value: parsed.data.value } : {}),
+      },
     });
-    return NextResponse.json({ ok: true });
+
+    return NextResponse.json({ ok: true, ...outcome });
   },
 );

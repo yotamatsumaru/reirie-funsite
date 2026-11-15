@@ -11,6 +11,7 @@ import {
   videoLockReason,
 } from '@/lib/video-visibility';
 import { VideoWatch } from './watch';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const metadata: Metadata = { title: '動画を見る' };
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,7 @@ export default async function MemberVideoWatchPage({
       where: { id: session.user.id },
       include: {
         subscriptions: {
-          where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+          where: liveSubscriptionWhere(),
           orderBy: { createdAt: 'desc' },
           take: 1,
         },

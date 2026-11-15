@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import Link from 'next/link';
 import { PLAN_PRICES, type PlanTypeLiteral } from '@idol/shared';
+import { isLiveSubscription } from '@/lib/subscription-status';
 import {
   Users,
   CreditCard,
@@ -35,6 +36,8 @@ type Sub = {
   planType: PlanTypeLiteral;
   interval: 'MONTH' | 'YEAR';
   status: string;
+  stripeSubscriptionId: string;
+  currentPeriodEnd: Date;
   createdAt: Date;
 };
 
@@ -69,9 +72,8 @@ export default async function SuperAdminDashboardPage() {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const newUsers7d = usersTyped.filter((u) => new Date(u.createdAt) >= sevenDaysAgo).length;
 
-  const activeSubs = subsTyped.filter((s) =>
-    ['ACTIVE', 'TRIALING', 'PAST_DUE'].includes(s.status),
-  );
+  // 有効ステータス + 手動付与の期限切れを除く (lib/subscription-status.ts と同じルール)
+  const activeSubs = subsTyped.filter((s) => isLiveSubscription(s));
   // MRR (月次経常収益): 月額換算
   const mrr = activeSubs.reduce((acc, s) => {
     const price = PLAN_PRICES[s.planType] ?? { monthly: 0, yearly: 0 };

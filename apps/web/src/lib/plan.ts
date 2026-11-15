@@ -12,9 +12,7 @@
  */
 import { prisma } from '@idol/db';
 import type { PlanTypeLiteral } from '@idol/shared';
-
-/** プランとして「有効」とみなすサブスクリプションステータス */
-const ACTIVE_SUBSCRIPTION_STATUSES = ['ACTIVE', 'TRIALING', 'PAST_DUE'] as const;
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 /**
  * userId のアクティブなサブスクから有効プランを解決する（DB を正とする）。
@@ -25,10 +23,8 @@ const ACTIVE_SUBSCRIPTION_STATUSES = ['ACTIVE', 'TRIALING', 'PAST_DUE'] as const
  */
 export async function getLivePlan(userId: string): Promise<PlanTypeLiteral> {
   const sub = await prisma.subscription.findFirst({
-    where: {
-      userId,
-      status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
-    },
+    // 有効ステータス + 手動付与の期限切れを除く (lib/subscription-status.ts)
+    where: { userId, ...liveSubscriptionWhere() },
     orderBy: { createdAt: 'desc' },
     select: { planType: true },
   });

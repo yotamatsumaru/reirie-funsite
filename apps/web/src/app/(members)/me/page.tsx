@@ -29,6 +29,7 @@ import { listUserBirthdayMails } from '@/lib/birthday-mail';
 import { ContactReplySection } from './contact-reply-section';
 import { listMyContactReplies } from '@/lib/contact-reply';
 import { resolveMyRoomVisibility } from '@/lib/myroom-visibility';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const metadata: Metadata = { title: 'マイページ' };
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,7 @@ export default async function MePage() {
       where: { id: session.user.id },
       include: {
         subscriptions: {
-          where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+          where: liveSubscriptionWhere(),
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
