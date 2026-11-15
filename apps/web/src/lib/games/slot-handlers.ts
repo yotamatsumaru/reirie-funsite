@@ -45,6 +45,7 @@ import {
 import { resolveSlotPlay } from '@/lib/games/slot';
 import { getSlotSettings, getSlotThemeMode } from '@/lib/app-setting';
 import { requireGameVisible } from '@/lib/game-visibility';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 /**
  * ユーザーの現在プランを DB の有効サブスクリプションから解決する。
@@ -58,7 +59,7 @@ async function resolveUserPlan(userId: string): Promise<PlanTypeLiteral> {
     // promo_until はカラム未追加でも 500 にしないよう安全に読む (未追加なら null)。
     safeGetPromoUntil(prisma, userId),
     prisma.subscription.findFirst({
-      where: { userId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+      where: { userId, ...liveSubscriptionWhere() },
       orderBy: { createdAt: 'desc' },
       select: { planType: true },
     }),

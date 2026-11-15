@@ -15,6 +15,7 @@ import type { PlanTypeLiteral, UserRoleLiteral } from '@idol/shared';
 import { handle, errors } from '@/lib/errors';
 import { verifyApiToken, issueTokenPair } from '@/lib/api-token';
 import { env } from '@/lib/env';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const runtime = 'nodejs';
 
@@ -48,7 +49,7 @@ export const POST = handle(async (req: Request) => {
     where: { id: userId, deletedAt: null },
     include: {
       subscriptions: {
-        where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+        where: liveSubscriptionWhere(),
         orderBy: { createdAt: 'desc' },
         take: 1,
       },

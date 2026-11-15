@@ -23,6 +23,7 @@ import {
   PhoneCall,
   type LucideIcon,
 } from 'lucide-react';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const metadata: Metadata = { title: '管理ダッシュボード' };
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ export default async function AdminDashboardPage() {
     prisma.user.count({ where: { deletedAt: null } }),
     prisma.subscription.groupBy({
       by: ['planType'],
-      where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+      where: liveSubscriptionWhere(),
       _count: { _all: true },
     }),
     prisma.order.aggregate({

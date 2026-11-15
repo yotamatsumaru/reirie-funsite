@@ -33,6 +33,7 @@ import {
   recordBirthdayMailCheck,
   releaseBirthdayMailRun,
 } from './app-setting';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 // ---------------------------------------------------------------------------
 // JST 日付ユーティリティ
@@ -226,7 +227,7 @@ export async function listBirthdayRecipients(params: {
       subscriptions: {
         some: {
           planType: { in: ['STANDARD', 'PREMIUM'] },
-          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+          ...liveSubscriptionWhere(),
         },
       },
     },
@@ -389,7 +390,7 @@ export async function searchBirthdayMailCandidates(params: {
       subscriptions: {
         where: {
           planType: { in: ['STANDARD', 'PREMIUM'] },
-          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+          ...liveSubscriptionWhere(),
         },
         select: { id: true },
         take: 1,

@@ -25,6 +25,7 @@ import { env } from './env';
 import { logAudit } from './audit';
 import { MAX_FAILED_LOGIN_ATTEMPTS, isLockedOut, lockoutExpiryDate } from './login-lockout';
 import { decryptTotpSecret, verifyTotpToken, consumeBackupCode } from './totp';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export interface AuthenticatedUser {
   id: string;
@@ -121,7 +122,7 @@ export async function authenticateCredentials(
     where: { email: normalizedEmail, deletedAt: null },
     include: {
       subscriptions: {
-        where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+        where: liveSubscriptionWhere(),
         orderBy: { createdAt: 'desc' },
         take: 1,
       },

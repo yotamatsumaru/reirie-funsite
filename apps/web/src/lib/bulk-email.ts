@@ -32,6 +32,7 @@ import {
   planTypesForAudience,
   type AnnouncementAudienceLiteral,
 } from './announcement-audience';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 /** 1件送信ごとに空ける間隔 (ms)。SES 既定レート (最低 1件/秒) を安全に下回る値。 */
 const SEND_INTERVAL_MS = 150;
@@ -80,7 +81,7 @@ async function resolveRecipients(
       subscriptions: {
         some: {
           planType: { in: planTypes },
-          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+          ...liveSubscriptionWhere(),
         },
       },
     },
