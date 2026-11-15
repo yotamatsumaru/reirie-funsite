@@ -6,7 +6,7 @@
 
 | # | スタック | 主なリソース | 依存 |
 |---|---|---|---|
-| 1 | `*-network` | VPC, Subnets (public/private/isolated), NAT, SG (EC2/RDS/Lambda), S3 GW Endpoint | - |
+| 1 | `*-network` | VPC, Subnets (public/private/isolated), NAT (instance / gateway), SG (EC2/RDS/Lambda), S3 GW Endpoint | - |
 | 2 | `*-database` | RDS PostgreSQL 15, パラメータグループ, Secrets Manager (admin) | network |
 | 3 | `*-storage` | S3 (videos/assets/media-output), CloudFront × 2, OAC, signed URL Key Group | - |
 | 3.5 | `*-dns` | Route 53 Public Hosted Zone + ACM 証明書 (us-east-1固定, DNS検証) | - (`domainName` context 指定時のみ作成。email より先に作成) |
@@ -157,7 +157,14 @@ RDS は `RemovalPolicy.SNAPSHOT` でスナップショット保管。
 
 ## 設計上の留意点
 
-- **VPC 構成**: NAT × 2 (prod) で AZ 障害耐性。dev は NAT × 1 でコスト最小化。
+- **VPC 構成**: NAT を使うのは private サブネットの Stripe Webhook Lambda だけ (Stripe API / SSM への外向き通信)。
+  EC2 は public サブネット + EIP、RDS は isolated なので NAT を通らない。
+  - `natMode=instance` (dev/stg の既定): t4g.nano の NAT インスタンス 1 台 (月 約 $5)。
+    ステータスチェック失敗時は CloudWatch アラームで自動復旧 / 自動再起動。
+    停止中は Webhook 処理が失敗するが、Stripe が最大 3 日間自動リトライする。
+  - `natMode=gateway` (prod の既定): マネージド NAT ゲートウェイ (prod は × 2 で AZ 障害耐性。月 $46〜/台)。
+  - 切り替え: `cdk deploy '*-network' -c natMode=gateway` (または cdk.json の context に `natMode` を書く)。
+  - インスタンスタイプは `-c natInstanceType=t4g.micro` などで変更可。
 - **Stripe Webhook 分離**: EC2 障害時も Webhook を取りこぼさないよう Lambda 化 (Q3.B 採用)。
 - **Cloudflare 連携**: ドメイン/SSL は Cloudflare で完結 (Step 6.5)。CDK は IP/ドメインを Output に出すのみ。
 - **Route 53 + CloudFront 連携 (代替構成)**: `domainName` context 指定時のみ `*-dns` (us-east-1, ACM証明書)
