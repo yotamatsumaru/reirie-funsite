@@ -889,16 +889,18 @@ pnpm cdk destroy idol-fansite-dev-network     --force
 |---|---|
 | EC2 t3.small × 1 (24h) | ¥3,500 |
 | RDS t3.micro Single-AZ + 20GB | ¥3,000 |
-| NAT Gateway × 1 | ¥6,000 |
+| NAT インスタンス t4g.nano × 1 (natMode=instance, 既定) | ¥700 |
 | EIP (使用中は無料) | ¥0 |
 | EBS gp3 30GB | ¥600 |
 | S3 (低トラフィック) | ¥100 |
 | CloudFront × 2 (PRICE_CLASS_100) | ¥500 |
 | Lambda (Stripe webhook) | ¥0 (無料枠内) |
 | CloudWatch Logs / Metrics | ¥500 |
-| **合計** | **約 ¥14,000 ~ 18,000 / 月** |
+| **合計** | **約 ¥9,000 ~ 12,000 / 月** |
 
-> NAT Gateway がコストの主要因。費用を抑えたいなら、EC2 を public subnet に置く現構成 + NAT を 0 にする調整も可能。
+> NAT は private サブネットの Stripe Webhook Lambda が Stripe API / SSM へ出るためだけに使う。
+> 以前は NAT Gateway (月 約 ¥7,000 = 時間課金 $46) がコストの約 4 割を占めていたため、
+> dev/stg は既定で t4g.nano の NAT インスタンスにしている (`natMode` context で `gateway` に戻せる)。
 
 ---
 
