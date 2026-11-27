@@ -46,6 +46,11 @@ const STAFF_WRITABLE_ROUTES: Record<string, readonly string[]> = {
   // 操作者は監査ログ (announcement.create / update / delete) に残る。
   'announcements/route.ts': ['POST'],
   'announcements/[id]/route.ts': ['PATCH', 'DELETE'],
+  // お問い合わせ: 会員への返信・対応状況・管理メモ。日常のサポート業務として STAFF に任せる。
+  // 返信者は ContactReply.repliedById と監査ログ (contact.reply / contact.update) に残る。
+  // 通知先の設定 (contact-notification) は引き続き SUPER_ADMIN 限定。
+  'contact/[id]/reply/route.ts': ['POST'],
+  'contact/[id]/route.ts': ['PATCH'],
 };
 
 function routeKey(file: string): string {
@@ -195,5 +200,29 @@ describe('STAFF 権限モデル: お知らせ (サイト運営に必要なため
     const h = extractHandlers(readRoute('announcements', '[id]', 'route.ts'));
     expect(h.get('PATCH')).toMatch(/requireSuperAdminOrStaff\s*\(/);
     expect(h.get('DELETE')).toMatch(/requireSuperAdminOrStaff\s*\(/);
+  });
+});
+
+describe('STAFF 権限モデル: お問い合わせ (返信・対応状況は STAFF も可)', () => {
+  function readRoute(...segments: string[]): string {
+    return readFileSync(join(API_ROOT, ...segments), 'utf8');
+  }
+
+  it('お問い合わせへの返信 (POST) は STAFF も可', () => {
+    const post = extractHandlers(readRoute('contact', '[id]', 'reply', 'route.ts')).get('POST');
+    expect(post).toMatch(/requireSuperAdminOrStaff\s*\(/);
+  });
+
+  it('対応状況・管理メモの更新 (PATCH) は STAFF も可', () => {
+    const patch = extractHandlers(readRoute('contact', '[id]', 'route.ts')).get('PATCH');
+    expect(patch).toMatch(/requireSuperAdminOrStaff\s*\(/);
+  });
+
+  it('お問い合わせ通知の設定は SUPER_ADMIN 限定のまま', () => {
+    const h = extractHandlers(readRoute('contact-notification', 'route.ts'));
+    for (const m of ['POST', 'PATCH', 'PUT']) {
+      const body = h.get(m);
+      if (body) expect(body).toMatch(/requireSuperAdmin\s*\(/);
+    }
   });
 });

@@ -93,9 +93,9 @@ export function buildContactAckText(t: ContactNotifyTarget): string {
   });
 
   const mypageNotice = t.isMember
-    ? `運営からの回答は、このメールアドレス宛および\n` +
-      `マイページの「運営からのお知らせ」でご確認いただけます。\n` +
-      `${siteUrl()}/me\n\n`
+    ? `運営からの回答は、このメールアドレス宛にお送りするほか、\n` +
+      `マイページの「お問い合わせ」でチャット形式でご確認・追加のご質問ができます。\n` +
+      `${siteUrl()}/me/contact/${t.id}\n\n`
     : `運営からの回答は、このメールアドレス宛にお送りします。\n\n`;
 
   return (
@@ -130,9 +130,9 @@ export function buildContactAckHtml(t: ContactNotifyTarget): string {
 
   const mypageBlock = t.isMember
     ? `<p style="margin:0 0 18px;font-size:13px;line-height:1.7;color:#6b7280;">
-         運営からの回答は、このメールアドレス宛および
-         マイページの「運営からのお知らせ」でご確認いただけます。<br>
-         <a href="${escapeHtml(`${url}/me`)}" style="color:#a84f89;text-decoration:underline;">マイページを開く →</a>
+         運営からの回答は、このメールアドレス宛にお送りするほか、
+         マイページの「お問い合わせ」でチャット形式でご確認・追加のご質問ができます。<br>
+         <a href="${escapeHtml(`${url}/me/contact/${t.id}`)}" style="color:#a84f89;text-decoration:underline;">お問い合わせのやり取りを開く →</a>
        </p>`
     : `<p style="margin:0 0 18px;font-size:13px;line-height:1.7;color:#6b7280;">
          運営からの回答は、このメールアドレス宛にお送りします。
@@ -401,5 +401,65 @@ async function recordResult(contactId: string, r: ContactNotifyResult): Promise<
     });
   } catch {
     // 記録できなくても問い合わせは成立している (最悪、管理画面の表示が欠けるだけ)。
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 会員からの追加メッセージ (チャット) の運営通知
+// ---------------------------------------------------------------------------
+
+export type MemberMessageNotifyTarget = {
+  contactId: string;
+  ticketNumber: string | null;
+  subject: string;
+  name: string;
+  email: string;
+  memberNumber: string | null;
+  body: string;
+};
+
+/** 運営通知メールの本文 (プレーンテキスト)。返信は管理画面で行う */
+export function buildMemberMessageAdminText(t: MemberMessageNotifyTarget): string {
+  return (
+    `お問い合わせに会員から追加のメッセージが届きました。\n\n` +
+    (t.ticketNumber ? `受付番号: ${t.ticketNumber}\n` : '') +
+    `件名: ${t.subject}\n` +
+    `送信者: ${t.name}${t.memberNumber ? `（会員番号 ${t.memberNumber}）` : ''}\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `${t.body}\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `返信は管理画面から行ってください:\n` +
+    `${siteUrl()}/super-admin/contact/${t.contactId}\n\n` +
+    `※ 運営が画面を開くまでの間に届いた続きのメッセージでは、通知を重ねて送りません。`
+  );
+}
+
+/**
+ * 会員の追加メッセージを運営に知らせる。例外は投げない (メッセージ自体は保存済みのため)。
+ * 宛先・ON/OFF は新規問い合わせの受信通知と同じ設定 (システム設定 → お問い合わせ通知) を使う。
+ */
+export async function notifyAdminsOfMemberMessage(
+  t: MemberMessageNotifyTarget,
+  settings?: ContactNotificationSettings,
+): Promise<{ sent: number; error: string | null }> {
+  try {
+    const effective = settings ?? (await getContactNotificationSettings());
+    if (!shouldNotifyAdmins(effective)) return { sent: 0, error: null };
+    const recipients = adminRecipientsExcludingSender(effective, t.email);
+    const subject = `[追加メッセージ] ${t.subject}${t.ticketNumber ? `（${t.ticketNumber}）` : ''}`;
+    const text = buildMemberMessageAdminText(t);
+    let sent = 0;
+    const failures: string[] = [];
+    for (const to of recipients) {
+      try {
+        await sendEmail({ to, subject, text });
+        sent += 1;
+      } catch (e) {
+        failures.push(`${to}: ${errMessage(e)}`);
+      }
+    }
+    return { sent, error: failures.length ? failures.join(' / ') : null };
+  } catch (e) {
+    return { sent: 0, error: errMessage(e) };
   }
 }
