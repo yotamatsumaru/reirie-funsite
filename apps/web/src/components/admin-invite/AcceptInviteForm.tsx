@@ -8,7 +8,6 @@
  */
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/stores/ui-store';
@@ -24,7 +23,6 @@ export function AcceptInviteForm({
   isExistingUser: boolean;
   loggedInAsInvitee: boolean;
 }) {
-  const router = useRouter();
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -91,8 +89,9 @@ export function AcceptInviteForm({
       }
 
       toast.success('管理者権限を承認しました');
-      router.push('/super-admin');
-      router.refresh();
+      // ログイン直後なので、ページ全体を読み込み直して新しいログイン状態で開く
+      // (router.push だとログイン前の «転送» の記憶が使われることがある)
+      window.location.assign('/super-admin');
     } catch {
       setError('予期しないエラーが発生しました');
       setLoading(false);
