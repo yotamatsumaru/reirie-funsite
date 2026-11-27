@@ -3,39 +3,13 @@
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { resolveCallbackPath } from '@/lib/callback-path';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { toast } from '@/stores/ui-store';
 
-/**
- * ログイン後の遷移先を安全なローカルパスに正規化する。
- * - callbackUrl が未指定 / 空 / トップ("/") の場合はマイページ("/me")へ。
- * - "//" や "http(s)://" で始まるオープンリダイレクトは弾いて "/me" にフォールバック。
- * - 絶対URL(res.url など)が渡された場合は pathname + search のみを取り出す。
- */
-function resolveCallbackPath(raw: string | null | undefined): string {
-  const fallback = '/me';
-  if (!raw) return fallback;
-  let value = raw;
-  // 絶対URLならパス部分だけを取り出す
-  if (/^https?:\/\//i.test(value)) {
-    try {
-      const u = new URL(value);
-      value = `${u.pathname}${u.search}`;
-    } catch {
-      return fallback;
-    }
-  }
-  // オープンリダイレクト対策: 単一スラッシュ始まりのローカルパスのみ許可
-  if (!value.startsWith('/') || value.startsWith('//')) return fallback;
-  // トップページ指定はマイページへ寄せる
-  if (value === '/') return fallback;
-  return value;
-}
-
 export function SignInForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const callbackUrl = resolveCallbackPath(params.get('callbackUrl'));
   const [email, setEmail] = useState('');
@@ -84,11 +58,17 @@ export function SignInForm() {
       return;
     }
     toast.success('ログインしました');
-    // next-auth の res.url は絶対URLで返ることがあるためローカルパスへ正規化する。
-    // 解決できない場合は callbackUrl (既定は /me = マイページ) へ遷移する。
-    const destination = resolveCallbackPath(res.url) || callbackUrl;
-    router.push(destination);
-    router.refresh();
+    // ログイン前に開こうとしたページ (callbackUrl。既定は /me = マイページ) へ移動する。
+    //
+    // 【router.push ではなくページ全体を読み込み直す理由】
+    // ログイン前に /me/videos などを開くと、ブラウザ内のルーターが
+    // 「/me/videos → /signin へ転送」という結果を覚えている。router.push だとその記憶が使われ、
+    // ログインに成功してもログイン画面に戻ってしまう (サイドバーだけログイン状態になる) ことがあった。
+    // ページ全体を読み込み直せば、新しいログイン Cookie で必ず目的のページが表示される。
+    // (res.url は next-auth が返す絶対 URL。自サイトのものだけ受け付ける)
+    const fromServer = res.url ? resolveCallbackPath(res.url, window.location.origin) : null;
+    const destination = fromServer && fromServer !== '/me' ? fromServer : callbackUrl;
+    window.location.assign(destination);
   };
 
   return (
