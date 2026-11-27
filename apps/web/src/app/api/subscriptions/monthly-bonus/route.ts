@@ -30,6 +30,7 @@ import { env } from '@/lib/env';
 import { hasValidCronSecret } from '@/lib/secret-compare';
 import { logAudit } from '@/lib/audit';
 import { grantMonthlyPuiBonus } from '@/lib/points';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const runtime = 'nodejs';
 
@@ -56,7 +57,8 @@ export const POST = handle(async (req: Request) => {
   // ===== アクティブ会員 (STANDARD / PREMIUM) を抽出 =====
   const activeSubs = await prisma.subscription.findMany({
     where: {
-      status: { in: ['ACTIVE', 'TRIALING'] },
+      // 有効 (猶予中の PAST_DUE は除く) + 手動付与の期限切れを除く
+      ...liveSubscriptionWhere(new Date(), ['ACTIVE', 'TRIALING']),
       planType: { in: ['STANDARD', 'PREMIUM'] },
     },
     distinct: ['userId'],

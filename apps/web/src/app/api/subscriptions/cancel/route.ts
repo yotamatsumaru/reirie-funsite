@@ -5,6 +5,7 @@ import { requireApiSession } from '@/lib/api-auth';
 import { handle, errors } from '@/lib/errors';
 import { getStripe } from '@/lib/stripe';
 import { logAudit } from '@/lib/audit';
+import { isManualSubscription, liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const runtime = 'nodejs';
 
@@ -16,10 +17,14 @@ export const POST = handle(async (req: Request) => {
   });
 
   const sub = await prisma.subscription.findFirst({
-    where: { userId: session.user.id, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+    where: { userId: session.user.id, ...liveSubscriptionWhere() },
     orderBy: { createdAt: 'desc' },
   });
   if (!sub) throw errors.notFound();
+  // 手動付与 (Stripe を通っていない契約) は Stripe で解約できない。運営に依頼してもらう
+  if (isManualSubscription(sub.stripeSubscriptionId)) {
+    throw errors.badRequest('この契約は運営が付与したものです。解約はお問い合わせからご依頼ください');
+  }
 
   const stripe = await getStripe();
   if (input.cancelAtPeriodEnd) {

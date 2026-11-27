@@ -8,6 +8,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { resolveThumbnailUrls } from '@/lib/video-delivery';
 import { listableVideoWhere, isVideoPlayable } from '@/lib/video-visibility';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const metadata: Metadata = { title: '動画' };
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,7 @@ export default async function MemberVideosPage() {
     where: { id: session.user.id },
     include: {
       subscriptions: {
-        where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+        where: liveSubscriptionWhere(),
         orderBy: { createdAt: 'desc' },
         take: 1,
       },

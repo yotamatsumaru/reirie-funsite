@@ -30,6 +30,12 @@ export async function register() {
     if (env.isProduction && !env.demoMode && process.env.NEXT_PHASE !== 'phase-production-build') {
       const { startBirthdayMailScheduler } = await import('./lib/birthday-scheduler');
       startBirthdayMailScheduler();
+
+      // 期限切れの «手動付与» サブスクを CANCELED にする (Stripe を通らないため Webhook が来ない)
+      const { startManualSubscriptionExpiryScheduler } = await import(
+        './lib/manual-subscription-expiry'
+      );
+      startManualSubscriptionExpiryScheduler();
     }
   }
 }

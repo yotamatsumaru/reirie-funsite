@@ -8,6 +8,7 @@ import { requireApiSession } from '@/lib/api-auth';
 import { verifyPassword } from '@/lib/password';
 import { env } from '@/lib/env';
 import { getStripe } from '@/lib/stripe';
+import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
 export const runtime = 'nodejs';
 
@@ -76,7 +77,7 @@ export const DELETE = handle(async (req: Request) => {
     where: { id: session.user.id },
     include: {
       subscriptions: {
-        where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+        where: liveSubscriptionWhere(),
         orderBy: { createdAt: 'desc' },
       },
     },
