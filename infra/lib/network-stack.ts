@@ -4,7 +4,9 @@
  *  - Security Groups (EC2 / RDS / Lambda)
  *  - VPC Endpoints (S3 Gateway, SES Interface など)
  */
-import { Stack, type StackProps, CfnOutput } from 'aws-cdk-lib';
+import { Aspects, Stack, type StackProps, CfnOutput, Duration } from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import { type AppConfig, prefix, commonTags } from './config';
@@ -28,12 +30,34 @@ export class NetworkStack extends Stack {
       this.tags.setTag(k, v);
     }
 
+    // ---- private サブネットの外向き出口 (NAT) ----
+    // private サブネットにいるのは Stripe Webhook Lambda だけで、外へ出る用途は
+    // Stripe API (subscriptions/customers.retrieve) と SSM (シークレット取得) のみ。
+    // EC2 は public サブネット + EIP、RDS は isolated なので NAT を使わない。
+    // NAT ゲートウェイは時間課金だけで月 $46 (ファンクラブの AWS 費用の約 4 割) かかるため、
+    // dev/stg (= 現在の本番 reirie.com) は t4g.nano の NAT インスタンス (月 $5 前後) にする。
+    const natProvider =
+      config.natMode === 'instance'
+        ? ec2.NatProvider.instanceV2({
+            instanceType: new ec2.InstanceType(config.natInstanceType),
+            // public サブネットは mapPublicIpOnLaunch=false なので明示的に付与する
+            // (NAT ゲートウェイの EIP と入れ替わるだけなので IPv4 の個数・料金は変わらない)
+            associatePublicIpAddress: true,
+            // 既定の「全 IPv4 から全ポート受信」は開けすぎ。受信は下で Lambda SG だけに絞る。
+            defaultAllowedTraffic: ec2.NatTrafficDirection.OUTBOUND_ONLY,
+            // バーストクレジット超過の追加課金を避ける (iptables の転送はほぼ CPU を使わない)
+            creditSpecification: ec2.CpuCredits.STANDARD,
+            userData: natInstanceUserData(),
+          })
+        : undefined;
+
     // VPC: 2 AZ / public + private + isolated
     this.vpc = new ec2.Vpc(this, 'Vpc', {
       vpcName: prefix(config, 'vpc'),
       ipAddresses: ec2.IpAddresses.cidr('10.10.0.0/16'),
       maxAzs: 2,
-      natGateways: config.envName === 'prod' ? 2 : 1,
+      natGateways: config.natMode === 'instance' ? 1 : config.envName === 'prod' ? 2 : 1,
+      ...(natProvider ? { natGatewayProvider: natProvider } : {}),
       subnetConfiguration: [
         {
           name: 'public',
@@ -120,6 +144,49 @@ export class NetworkStack extends Stack {
       'PostgreSQL from Stripe Webhook Lambda',
     );
 
+    // Lambda → NAT インスタンス (HTTPS のみ)
+    if (natProvider instanceof ec2.NatInstanceProviderV2) {
+      natProvider.connections.allowFrom(
+        this.lambdaSecurityGroup,
+        ec2.Port.tcp(443),
+        'HTTPS from Stripe Webhook Lambda (Stripe API / SSM)',
+      );
+      for (const natInstance of natProvider.gatewayInstances) {
+        // AWS のハードウェア障害 (システムステータスチェック失敗) では同じ IP のまま自動復旧、
+        // OS 側の異常 (インスタンスステータスチェック失敗) では自動再起動する。
+        new cloudwatch.Alarm(natInstance, 'SystemStatusRecover', {
+          alarmName: prefix(config, 'nat-instance-system-recover'),
+          alarmDescription: 'NAT instance system status check failed -> auto recover',
+          metric: new cloudwatch.Metric({
+            namespace: 'AWS/EC2',
+            metricName: 'StatusCheckFailed_System',
+            dimensionsMap: { InstanceId: natInstance.instanceId },
+            statistic: 'Maximum',
+            period: Duration.minutes(1),
+          }),
+          threshold: 1,
+          evaluationPeriods: 2,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        }).addAlarmAction(new cwActions.Ec2Action(cwActions.Ec2InstanceAction.RECOVER));
+        new cloudwatch.Alarm(natInstance, 'InstanceStatusReboot', {
+          alarmName: prefix(config, 'nat-instance-status-reboot'),
+          alarmDescription: 'NAT instance status check failed -> auto reboot',
+          metric: new cloudwatch.Metric({
+            namespace: 'AWS/EC2',
+            metricName: 'StatusCheckFailed_Instance',
+            dimensionsMap: { InstanceId: natInstance.instanceId },
+            statistic: 'Maximum',
+            period: Duration.minutes(1),
+          }),
+          threshold: 1,
+          evaluationPeriods: 3,
+          comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        }).addAlarmAction(new cwActions.Ec2Action(cwActions.Ec2InstanceAction.REBOOT));
+      }
+      // NAT インスタンスもメタデータは IMDSv2 必須にする
+      Aspects.of(this).add(new ec2.InstanceRequireImdsv2Aspect());
+    }
+
     // ---- Outputs ----
     new CfnOutput(this, 'VpcId', { value: this.vpc.vpcId, exportName: prefix(config, 'vpc-id') });
     new CfnOutput(this, 'Ec2SgId', {
@@ -131,4 +198,24 @@ export class NetworkStack extends Stack {
       exportName: prefix(config, 'rds-sg-id'),
     });
   }
+}
+
+/**
+ * NAT インスタンス (Amazon Linux 2023) の初期化。
+ * CDK 既定のコマンドは `route` (net-tools) に依存するため、標準で入っている `ip` を使う。
+ */
+function natInstanceUserData(): ec2.UserData {
+  const ud = ec2.UserData.forLinux();
+  ud.addCommands(
+    'set -eux',
+    'dnf install -y iptables-services',
+    'systemctl enable --now iptables',
+    'echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/90-nat.conf',
+    'sysctl -p /etc/sysctl.d/90-nat.conf',
+    'IFACE=$(ip route show default | awk \'{print $5; exit}\')',
+    'iptables -t nat -A POSTROUTING -o "$IFACE" -j MASQUERADE',
+    'iptables -F FORWARD',
+    'service iptables save',
+  );
+  return ud;
 }

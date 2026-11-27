@@ -91,6 +91,17 @@ export interface AppConfig {
    * (nginx は 80 で https へのリダイレクトしか返さない)。
    */
   cloudFrontPrefixListId?: string;
+
+  /**
+   * private サブネット (Stripe Webhook Lambda) の外向き通信の出口。
+   *  - instance: NAT インスタンス (t4g.nano)。月 $4 前後。単一インスタンスなので
+   *              停止中は Lambda から Stripe API / SSM へ出られない (Stripe が自動リトライ)。
+   *  - gateway : マネージド NAT ゲートウェイ。月 $46 前後 + 通信量課金。
+   * 既定: prod=gateway (AZ 冗長), dev/stg=instance。context `natMode` で上書き可。
+   */
+  natMode: 'instance' | 'gateway';
+  /** natMode=instance のインスタンスタイプ (既定 t4g.nano) */
+  natInstanceType: string;
 }
 
 function ctxBool(node: Node, key: string, fallback: boolean): boolean {
@@ -181,6 +192,8 @@ export function loadConfig(scope: Construct): AppConfig {
       globalRateAction: ctxEnum(node, 'wafGlobalRateAction', ['count', 'block'] as const, 'count'),
     },
     cloudFrontPrefixListId,
+    natMode: ctxEnum(node, 'natMode', ['instance', 'gateway'] as const, isProd ? 'gateway' : 'instance'),
+    natInstanceType: (node.tryGetContext('natInstanceType') as string | undefined) || 't4g.nano',
   };
 }
 
