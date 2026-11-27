@@ -24,6 +24,7 @@ export function B2ExportPanel({
   annualMemberCount,
   shippableCount,
   missingPhoneCount,
+  cutoffNotEnded = false,
 }: {
   cutoffDate: string;
   /** 基準日時点の年間会員数 */
@@ -32,6 +33,8 @@ export function B2ExportPanel({
   shippableCount: number;
   /** CSV には入るが電話番号が無い人数 (B2 取込時にエラーになる) */
   missingPhoneCount: number;
+  /** 基準日 (JST) がまだ終わっていないか */
+  cutoffNotEnded?: boolean;
 }) {
   const [invoiceType, setInvoiceType] = useState('0');
   const [itemName, setItemName] = useState('会報誌');
@@ -86,6 +89,13 @@ export function B2ExportPanel({
             hint="例: 会報誌 2026年 夏号"
           />
         </div>
+
+        {cutoffNotEnded && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            基準日がまだ終わっていません。今ダウンロードすると、このあと基準日のうちに入会する人が入りません。
+            基準日の翌日以降にダウンロードしてください。
+          </p>
+        )}
 
         {missingPhoneCount > 0 && (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">

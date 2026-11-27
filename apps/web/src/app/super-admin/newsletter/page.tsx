@@ -6,6 +6,8 @@
  *  - 会員の登録住所 (User.postalCode / prefecture / addressLine1 / addressLine2) を表示
  *  - 住所や氏名が未入力の会員は「要確認」として明示し、発送前に補完できるようにする
  *  - CSV ダウンロード (/api/super-admin/newsletter/export) で宛名ラベル作成に利用可能
+ *    ?cutoff= を付けると基準日時点の年間会員 (発送用はこちら)。付けないと «ダウンロード時点の有効会員»
+ *  - 個別確認 (会員番号 → 発送対象に入るか・理由・過去の CSV に入っていたか)
  *  - ヤマト B2クラウド取込CSV (/api/super-admin/newsletter/b2-export) で送り状を一括発行できる
  *    (対象は発送連絡と同じ «基準日時点の年間会員» )
  *
@@ -17,6 +19,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { NotifyPanel } from './notify-panel';
 import { B2ExportPanel } from './b2-export-panel';
+import { DiagnosePanel } from './diagnose-panel';
 import { jstDayRange, isShippable as isShippableProfile } from '@idol/shared';
 import { fetchAnnualMembersOn } from '@/lib/newsletter-mail';
 
@@ -91,6 +94,8 @@ export default async function NewsletterMailingListPage({
 
   // 発送連絡の対象: 基準日時点で年間会員だった会員 (うち発送可能な人にだけ送る)
   const annualMembers = await fetchAnnualMembersOn(cutoffDay);
+  // 基準日がまだ終わっていない (JST で当日以前) と、その日のうちに入会する人がまだ入っていない
+  const cutoffNotEnded = Date.now() < cutoffDay.end.getTime();
   const annualShippable = annualMembers.filter((u) => isShippableProfile(u));
   const annualShippableCount = annualShippable.length;
   const annualMissingPhoneCount = annualShippable.filter((u) => !u.phone?.trim()).length;
@@ -151,16 +156,35 @@ export default async function NewsletterMailingListPage({
         <div>
           <h1 className="text-xl font-bold text-slate-800">会報誌 発送リスト</h1>
           <p className="mt-1 text-sm text-slate-500">
-            PREMIUM 会員（有効な契約）への「会報誌（年2回）」発送用の宛名リストです。
+            PREMIUM 会員への「会報誌（年2回）」発送用の宛名リストです。
+            発送用の CSV は基準日時点の年間会員で出力してください（下の一覧は «いま有効な» PREMIUM 会員です）。
           </p>
         </div>
-        <a
-          href="/api/super-admin/newsletter/export"
-          className="inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700"
-        >
-          CSV をダウンロード
-        </a>
+        <div className="flex flex-col items-stretch gap-1 sm:items-end">
+          <a
+            href={`/api/super-admin/newsletter/export?cutoff=${cutoffDate}`}
+            className="inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700"
+          >
+            基準日（{cutoffDate}）時点の年間会員 CSV
+          </a>
+          <a
+            href="/api/super-admin/newsletter/export"
+            className="text-center text-xs text-slate-500 underline hover:text-slate-700"
+          >
+            いま有効な PREMIUM 会員の CSV（下の一覧と同じ）
+          </a>
+        </div>
       </header>
+
+      {cutoffNotEnded && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          基準日（{cutoffDate}）はまだ終わっていません（日本時間の 23:59 まで）。
+          今ダウンロードすると、このあと基準日のうちに入会する人が入りません。発送用の CSV は
+          <span className="font-semibold">基準日の翌日以降</span>にダウンロードしてください。
+        </p>
+      )}
+
+      <DiagnosePanel cutoffDate={cutoffDate} />
 
       {/* KPI カード */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -192,6 +216,7 @@ export default async function NewsletterMailingListPage({
         annualMemberCount={annualMembers.length}
         shippableCount={annualShippableCount}
         missingPhoneCount={annualMissingPhoneCount}
+        cutoffNotEnded={cutoffNotEnded}
       />
 
       {/* 会報誌のメール連絡（住所記入のお願い / 発送連絡） */}

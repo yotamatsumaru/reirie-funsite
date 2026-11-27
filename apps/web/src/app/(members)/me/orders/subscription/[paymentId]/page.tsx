@@ -25,7 +25,7 @@ const STATUS_TONE: Record<keyof typeof PAYMENT_STATUS_LABELS, 'gray' | 'success'
 };
 
 function formatDateTime(d: Date): string {
-  return d.toLocaleString('ja-JP', {
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -35,7 +35,7 @@ function formatDateTime(d: Date): string {
 }
 
 function formatDate(d: Date): string {
-  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  return d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 export default async function MeSubscriptionPaymentDetailPage({

@@ -376,3 +376,50 @@ describe('wasAnnualMemberOn (基準日 2026-08-15)', () => {
     expect(wasAnnualMemberOn(s, day, now)).toBe(true);
   });
 });
+
+import { explainAnnualMembership } from './newsletter-shipping';
+
+describe('explainAnnualMembership (個別確認)', () => {
+  const day = jstDayRange('2026-08-15')!;
+  const now = new Date('2026-11-27T00:00:00Z');
+  const at = (iso: string): MembershipSnapshot => ({
+    planType: 'PREMIUM',
+    billingInterval: 'YEAR',
+    status: 'ACTIVE',
+    createdAt: new Date(iso),
+    currentPeriodStart: new Date(iso),
+    currentPeriodEnd: new Date('2027-08-15T00:00:00Z'),
+    canceledAt: null,
+    updatedAt: new Date(iso),
+  });
+
+  it('基準日 8/15 の JST 04:18 / 23:59 に始まった契約は対象 (日付の取りこぼしは無い)', () => {
+    expect(explainAnnualMembership(at('2026-08-14T19:18:00Z'), day, now).included).toBe(true);
+    expect(explainAnnualMembership(at('2026-08-15T14:59:59Z'), day, now).included).toBe(true);
+    expect(explainAnnualMembership(at('2026-08-15T15:00:00Z'), day, now)).toMatchObject({
+      included: false,
+      reason: expect.stringContaining('後に始まった'),
+    });
+  });
+
+  it('月額契約・PREMIUM 以外・未決済は理由つきで対象外', () => {
+    const base = at('2026-08-14T19:18:00Z');
+    expect(explainAnnualMembership({ ...base, billingInterval: 'MONTH' }, day, now).reason).toContain('月額');
+    expect(explainAnnualMembership({ ...base, planType: 'STANDARD' }, day, now).reason).toContain('STANDARD');
+    expect(explainAnnualMembership({ ...base, status: 'INCOMPLETE' }, day, now).reason).toContain('支払い');
+  });
+
+  it('判定結果は wasAnnualMemberOn と常に一致する', () => {
+    const variants: MembershipSnapshot[] = [
+      at('2026-07-01T00:00:00Z'),
+      at('2026-09-01T00:00:00Z'),
+      { ...at('2026-01-01T00:00:00Z'), status: 'CANCELED', currentPeriodEnd: new Date('2026-08-01T00:00:00Z') },
+      { ...at('2026-01-01T00:00:00Z'), status: 'CANCELED', currentPeriodEnd: new Date('2026-08-15T03:00:00Z') },
+      { ...at('2026-08-14T19:18:00Z'), billingInterval: 'MONTH' },
+      { ...at('2026-08-14T19:18:00Z'), status: 'INCOMPLETE_EXPIRED' },
+    ];
+    for (const v of variants) {
+      expect(explainAnnualMembership(v, day, now).included).toBe(wasAnnualMemberOn(v, day, now));
+    }
+  });
+});

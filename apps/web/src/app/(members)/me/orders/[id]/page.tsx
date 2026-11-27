@@ -32,7 +32,7 @@ const STATUS_TONE: Record<keyof typeof ORDER_STATUS_LABELS, 'gray' | 'success' |
 };
 
 function formatDateTime(d: Date): string {
-  return d.toLocaleString('ja-JP', {
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

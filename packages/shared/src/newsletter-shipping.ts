@@ -340,3 +340,44 @@ export function wasAnnualMemberOn(
   if (period.end && period.end.getTime() <= day.start.getTime()) return false; // 基準日より前に終了
   return true;
 }
+
+// ---------------------------------------------------------------
+// 個別確認: «この会員がなぜ発送対象に入った / 入らなかったか»
+// ---------------------------------------------------------------
+
+export type AnnualMembershipExplanation = {
+  included: boolean;
+  /** 管理画面に出す理由 (日本語) */
+  reason: string;
+};
+
+/**
+ * wasAnnualMemberOn と同じ判定を行い、結果の理由を返す (管理画面の個別確認用)。
+ * 判定条件を変えるときは wasAnnualMemberOn と必ず揃えること (テストで一致を確認している)。
+ */
+export function explainAnnualMembership(
+  sub: MembershipSnapshot,
+  day: JstDayRange,
+  now: Date,
+): AnnualMembershipExplanation {
+  if (sub.planType !== 'PREMIUM') {
+    return { included: false, reason: `プランが PREMIUM ではありません (現在: ${sub.planType})` };
+  }
+  if (sub.billingInterval !== 'YEAR') {
+    return {
+      included: false,
+      reason: `年額契約ではありません (現在: ${sub.billingInterval === 'MONTH' ? '月額' : sub.billingInterval})`,
+    };
+  }
+  const period = membershipPeriod(sub, now);
+  if (!period) {
+    return { included: false, reason: `支払いが成立していない契約です (状態: ${sub.status})` };
+  }
+  if (period.start.getTime() >= day.end.getTime()) {
+    return { included: false, reason: '基準日より後に始まった契約です' };
+  }
+  if (period.end && period.end.getTime() <= day.start.getTime()) {
+    return { included: false, reason: '基準日より前に終了した契約です' };
+  }
+  return { included: true, reason: '基準日時点で年間会員 (PREMIUM・年額) です' };
+}
