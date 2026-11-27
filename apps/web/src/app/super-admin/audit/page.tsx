@@ -192,7 +192,7 @@ export default async function SuperAdminAuditPage({
 }
 
 function formatDateTime(d: Date): string {
-  return d.toLocaleString('ja-JP', {
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',

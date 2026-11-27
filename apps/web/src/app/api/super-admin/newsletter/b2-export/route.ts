@@ -64,6 +64,8 @@ export const GET = handle(async (req: Request) => {
       exported: result.exported,
       skippedNeedsInfo: result.skippedNeedsInfo,
       missingPhone: result.missingPhone,
+      // 「届いていない」問い合わせの調査用 (個別確認で、この CSV に入っていたかを正確に判定する)
+      memberNumbers: result.memberNumbers,
     },
   });
 

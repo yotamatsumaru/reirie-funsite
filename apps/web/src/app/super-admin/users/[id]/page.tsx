@@ -28,12 +28,12 @@ export const dynamic = 'force-dynamic';
 
 function formatDate(d: Date | null): string {
   if (!d) return '—';
-  return d.toLocaleDateString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  return d.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 function formatDateTime(d: Date | null): string {
   if (!d) return '—';
-  return d.toLocaleString('ja-JP', {
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

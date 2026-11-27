@@ -31,6 +31,8 @@ export type NewsletterB2Result = {
   skippedNeedsInfo: number;
   /** CSV には含めたが電話番号が無い人数 (B2 は電話番号必須のため取込時にエラーになる) */
   missingPhone: number;
+  /** CSV に含めた会員のお客様管理番号 (= 会員番号)。監査ログに残し、後から «入っていたか» を確認する */
+  memberNumbers: string[];
 };
 
 /** B2 のお客様管理番号 (半角英数字・記号) */
@@ -70,5 +72,11 @@ export function buildNewsletterB2Csv(
     });
   }
 
-  return { csv: buildB2ExportCsv(rows), exported: rows.length, skippedNeedsInfo, missingPhone };
+  return {
+    csv: buildB2ExportCsv(rows),
+    exported: rows.length,
+    skippedNeedsInfo,
+    missingPhone,
+    memberNumbers: rows.map((r) => r.orderNumber),
+  };
 }

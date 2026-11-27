@@ -21,7 +21,7 @@ const FOREVER_ISO = '2099-12-31T14:59:59.000Z';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString('ja-JP', {
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

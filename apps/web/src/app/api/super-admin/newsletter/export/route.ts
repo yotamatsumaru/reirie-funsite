@@ -1,8 +1,12 @@
 /**
  * GET /api/super-admin/newsletter/export
  *   - 会報誌 (年2回) の発送宛名リストを CSV でダウンロード (SUPER_ADMIN 限定)
- *   - 対象: 有効な (ACTIVE / TRIALING) PREMIUM サブスクリプションを持つ会員
- *   - 個人情報 (住所) の持ち出しになるため、実行を監査ログに記録する
+ *   - 対象 (既定): ダウンロードした瞬間に有効な (ACTIVE / TRIALING) PREMIUM 会員
+ *   - ?cutoff=YYYY-MM-DD を付けると «基準日 (JST) 時点の年間会員» (送り状CSV・発送連絡と同じ対象)
+ *     ※ 既定のままだと、基準日当日にダウンロードした場合、その時刻より後に入会した人が入らない。
+ *       2026-08 号で 8/15 入会の会員が漏れた件を受けて追加。
+ *   - 個人情報 (住所) の持ち出しになるため、実行を監査ログに記録する。
+ *     誰が入っていたかを後から確認できるよう、会員番号の一覧も記録する。
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
@@ -10,6 +14,9 @@ import { requireSuperAdmin, requireSuperAdminView } from '@/auth';
 import { handle } from '@/lib/errors';
 import { toCsv } from '@/lib/csv';
 import { logAudit } from '@/lib/audit';
+import { jstDayRange } from '@idol/shared';
+import { errors } from '@/lib/errors';
+import { fetchAnnualMembersOn } from '@/lib/newsletter-mail';
 
 export const runtime = 'nodejs';
 
@@ -48,8 +55,17 @@ function isShippable(u: NewsletterUser): boolean {
 
 export const GET = handle(async (req: Request) => {
   const session = await requireSuperAdminView();
+  const cutoffParam = new URL(req.url).searchParams.get('cutoff');
+  const cutoffDay = cutoffParam ? jstDayRange(cutoffParam) : null;
+  if (cutoffParam && !cutoffDay) throw errors.badRequest('基準日を YYYY-MM-DD 形式で指定してください');
 
-  const subs = (await prisma.subscription.findMany({
+  const subs = cutoffDay
+    ? (await fetchAnnualMembersOn(cutoffDay)).map((u) => ({
+        status: '基準日時点の年間会員',
+        currentPeriodEnd: null as Date | null,
+        user: u as unknown as NewsletterUser,
+      }))
+    : ((await prisma.subscription.findMany({
     where: {
       planType: 'PREMIUM',
       status: { in: [...LIVE_STATUSES] },
@@ -74,7 +90,7 @@ export const GET = handle(async (req: Request) => {
       },
     },
     orderBy: { createdAt: 'asc' },
-  })) as unknown as Array<{ status: string; currentPeriodEnd: Date; user: NewsletterUser | null }>;
+  })) as unknown as Array<{ status: string; currentPeriodEnd: Date | null; user: NewsletterUser | null }>);
 
   // 1 会員が複数の有効 PREMIUM サブスクを持つ場合に備え user.id で重複排除。
   const seen = new Set<string>();
@@ -113,7 +129,7 @@ export const GET = handle(async (req: Request) => {
       u.phone ?? '',
       u.email,
       s.status,
-      s.currentPeriodEnd.toISOString().slice(0, 10),
+      s.currentPeriodEnd ? s.currentPeriodEnd.toISOString().slice(0, 10) : '',
       shippable ? '発送可' : '要確認',
     ]);
   }
@@ -124,14 +140,19 @@ export const GET = handle(async (req: Request) => {
     resource: 'subscriptions',
     userAgent: req.headers.get('user-agent') ?? undefined,
     metadata: {
+      cutoff: cutoffParam ?? null,
       recipients: seen.size,
       shippable: shippableCount,
       needsInfo: seen.size - shippableCount,
+      // 「届いていない」問い合わせの調査用 (個別確認で、この CSV に入っていたかを正確に判定する)
+      memberNumbers: rows.slice(1).map((r) => r[0]).filter(Boolean),
     },
   });
 
   const body = toCsv(rows);
-  const filename = `newsletter-recipients-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = cutoffParam
+    ? `newsletter-recipients-cutoff-${cutoffParam}.csv`
+    : `newsletter-recipients-${new Date().toISOString().slice(0, 10)}.csv`;
   return new NextResponse(body, {
     status: 200,
     headers: {
