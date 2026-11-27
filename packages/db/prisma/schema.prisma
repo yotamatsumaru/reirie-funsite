@@ -54,6 +54,12 @@ enum ContactStatus {
   CLOSED // クローズ (対応不要 / スパム等)
 }
 
+/// お問い合わせスレッド内のメッセージの送り手
+enum ContactSender {
+  ADMIN // 運営 (SUPER_ADMIN / STAFF) からの返信
+  MEMBER // 会員 (問い合わせた本人) からの追加メッセージ
+}
+
 /// お問い合わせの種別
 enum ContactCategory {
   GENERAL // 一般
@@ -2307,38 +2313,51 @@ model ContactMessage {
   /// 運営通知の送信失敗理由。
   adminNotifyError String?   @map("admin_notify_error") @db.Text
 
-  // 運営からの返信 (1 問い合わせに複数返信可能。履歴として保持)
+  // スレッド内のやり取り (運営の返信 + 会員の追加メッセージ)。履歴として全件保持
   replies ContactReply[]
+
+  /// スレッドに最後に投稿された日時 (最初の問い合わせ / 返信 / 会員の追加メッセージ)。
+  /// 一覧を「最近やり取りがあった順」に並べるために持つ。
+  lastMessageAt DateTime @default(now()) @map("last_message_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
   @@index([email])
+  @@index([lastMessageAt])
+  @@index([userId, lastMessageAt])
   @@map("contact_messages")
 }
 
-/// お問い合わせへの運営 (SUPER_ADMIN) からの返信。
-/// 送信時に問い合わせ者へメール通知し、送信者がログイン会員 (ContactMessage.userId
-/// が非 null) の場合はマイページの「運営からのお知らせ」にも表示する。
-/// 1 つの問い合わせに複数返信でき、履歴として全件保持する。
+/// お問い合わせスレッドのメッセージ (チャット形式)。
+///  - sender = ADMIN : 運営 (SUPER_ADMIN / STAFF) からの返信。問い合わせ者へメール通知し、
+///                     会員ならマイページのお問い合わせ画面にも表示する。
+///  - sender = MEMBER: 会員 (問い合わせた本人) がマイページから送った追加メッセージ。
+/// 1 つの問い合わせに何件でも投稿でき、履歴として全件保持する。
 model ContactReply {
   id               String         @id @default(uuid()) @db.Uuid
   contactMessageId String         @map("contact_message_id") @db.Uuid
   contactMessage   ContactMessage @relation(fields: [contactMessageId], references: [id], onDelete: Cascade)
-  /// 返信本文 (メール本文・マイページ表示に使用)。
+  /// 送り手 (既存データはすべて運営の返信なので ADMIN)。
+  sender           ContactSender  @default(ADMIN)
+  /// 本文 (プレーンテキスト)。
   body             String         @db.Text
-  /// 返信した運営者。管理者ユーザーが削除された場合も記録は残す。
+  /// 投稿したユーザー (運営の返信なら運営者、会員メッセージなら会員本人)。
+  /// ユーザーが削除された場合も記録は残す。
   repliedById      String?        @map("replied_by_id") @db.Uuid
   repliedBy        User?          @relation("ContactReplyRepliedBy", fields: [repliedById], references: [id], onDelete: SetNull)
   /// メール送信できたか (SES 成功時 true)。false は記録のみ (エラー内容は emailError)。
   emailSent        Boolean        @default(false) @map("email_sent")
   emailError       String?        @map("email_error")
-  /// 会員がマイページで初めて閲覧した日時 (未読判定用。ゲスト送信では常に null)。
+  /// 運営の返信を会員が初めて閲覧した日時 (会員側の未読判定。ゲスト送信では常に null)。
   readAt           DateTime?      @map("read_at")
+  /// 会員メッセージを運営が初めて閲覧した日時 (運営側の未読判定。sender = MEMBER のみ使う)。
+  adminReadAt      DateTime?      @map("admin_read_at")
   createdAt        DateTime       @default(now()) @map("created_at")
 
   @@index([contactMessageId, createdAt])
+  @@index([contactMessageId, sender])
   @@map("contact_replies")
 }
 

@@ -2,7 +2,8 @@
  * /super-admin レイアウト
  *
  * - SUPER_ADMIN は全操作可 / STAFF (スタッフ管理者) は **この画面では** 閲覧のみ可
- *   (例外: お知らせは STAFF も作成・編集・削除できる。サイト運営に必要なため)
+ *   (例外: お知らせの作成・編集・削除と、お問い合わせへの返信・対応状況・管理メモは
+ *    STAFF も行える。サイト運営に必要なため)
  *   (ADMIN・一般会員はトップへリダイレクト)
  * - STAFF の場合は SuperAdminReadOnlyProvider で配下の Client Component に
  *   「閲覧のみ」を伝え、返金・サブスク変更などの書き込み UI を隠す。
@@ -101,8 +102,14 @@ export default async function SuperAdminLayout({ children }: { children: ReactNo
    */
   let pendingContactCount = 0;
   try {
+    // 未対応 (新規・対応中) に加え、会員から未読の追加メッセージがあるものも数える
     pendingContactCount = await prisma.contactMessage.count({
-      where: { status: { in: ['NEW', 'IN_PROGRESS'] } },
+      where: {
+        OR: [
+          { status: { in: ['NEW', 'IN_PROGRESS'] } },
+          { replies: { some: { sender: 'MEMBER', adminReadAt: null } } },
+        ],
+      },
     });
   } catch {
     pendingContactCount = 0;

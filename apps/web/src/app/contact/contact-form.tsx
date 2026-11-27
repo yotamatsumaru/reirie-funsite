@@ -14,9 +14,12 @@ import {
 export function ContactForm({
   defaultName = '',
   defaultEmail = '',
+  isMember = false,
 }: {
   defaultName?: string;
   defaultEmail?: string;
+  /** ログイン中か (完了画面でチャット画面へのリンクを出す) */
+  isMember?: boolean;
 }) {
   const [name, setName] = useState(defaultName);
   const [email, setEmail] = useState(defaultEmail);
@@ -31,6 +34,8 @@ export function ContactForm({
   // 完了画面でも番号を明示し、控えメールの送信結果を正直に伝える。
   const [ticketNumber, setTicketNumber] = useState<string | null>(null);
   const [ackMailSent, setAckMailSent] = useState(false);
+  // 会員なら、送信後にそのままチャット形式で続きをやり取りできる
+  const [contactId, setContactId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -51,6 +56,7 @@ export function ContactForm({
       }
       setTicketNumber(typeof json?.ticketNumber === 'string' ? json.ticketNumber : null);
       setAckMailSent(json?.ackMailSent === true);
+      setContactId(typeof json?.id === 'string' ? json.id : null);
       setSent(true);
       toast.success('お問い合わせを送信しました');
     } catch (err) {
@@ -116,6 +122,20 @@ export function ContactForm({
             お手数ですが上記の受付番号をお控えください。運営からの返信は
             <span className="font-semibold">{email}</span> 宛にお送りします。
           </p>
+        )}
+
+        {isMember && contactId && (
+          <div className="mt-4 text-center">
+            <a
+              href={`/me/contact/${contactId}`}
+              className="inline-flex rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              やり取りの画面を開く
+            </a>
+            <p className="mt-2 text-xs text-slate-500">
+              運営からの返信の確認や追加のご質問は、マイページの「お問い合わせ」からチャット形式で行えます。
+            </p>
+          </div>
         )}
       </div>
     );

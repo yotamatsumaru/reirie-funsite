@@ -348,6 +348,7 @@ export async function requireSuperAdminView() {
  * ⚠️ 使ってよい API は staff-permissions.test.ts の STAFF_WRITABLE_ROUTES に
  *    列挙したものだけ。それ以外で使うとテストが落ちる (うっかり権限を広げないため)。
  *    現在の対象: お知らせの作成・編集・公開切替・削除 (/api/super-admin/announcements)
+ *              お問い合わせへの返信・対応状況・管理メモ (/api/super-admin/contact/[id])
  */
 export async function requireSuperAdminOrStaff() {
   const session = await requireSession();

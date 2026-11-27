@@ -91,3 +91,26 @@ export const ContactUpdateSchema = z.object({
     .optional(),
 });
 export type ContactUpdateInput = z.infer<typeof ContactUpdateSchema>;
+
+// ---------------------------------------------------------------------------
+// チャット形式のやり取り (会員 ⇄ 運営)
+// ---------------------------------------------------------------------------
+
+/** スレッド内メッセージの送り手 (Prisma enum ContactSender と一致させる) */
+export const CONTACT_SENDERS = ['ADMIN', 'MEMBER'] as const;
+export type ContactSenderLiteral = (typeof CONTACT_SENDERS)[number];
+
+export const CONTACT_MEMBER_MESSAGE_MAX = 4000;
+
+/** 会員: マイページのお問い合わせ画面から追加メッセージを送るスキーマ */
+export const ContactMemberMessageSchema = z.object({
+  body: z
+    .string({ error: 'メッセージを入力してください' })
+    .trim()
+    .min(1, 'メッセージを入力してください')
+    .max(
+      CONTACT_MEMBER_MESSAGE_MAX,
+      `メッセージは${CONTACT_MEMBER_MESSAGE_MAX}文字以内で入力してください`,
+    ),
+});
+export type ContactMemberMessageInput = z.infer<typeof ContactMemberMessageSchema>;

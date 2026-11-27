@@ -40,7 +40,11 @@ export default async function ContactPage() {
       </p>
 
       <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
-        <ContactForm defaultName={defaultName} defaultEmail={defaultEmail} />
+        <ContactForm
+          defaultName={defaultName}
+          defaultEmail={defaultEmail}
+          isMember={Boolean(session?.user?.id)}
+        />
       </div>
 
       <p className="mt-6 text-xs leading-relaxed text-slate-400">

@@ -26,8 +26,8 @@ import { ProfileSection } from './profile-section';
 import { EmailSection } from './email-section';
 import { BirthdayMailSection } from './birthday-mail-section';
 import { listUserBirthdayMails } from '@/lib/birthday-mail';
-import { ContactReplySection } from './contact-reply-section';
-import { listMyContactReplies } from '@/lib/contact-reply';
+import { MessageCircle } from 'lucide-react';
+import { countUnreadForMember, listMemberThreads } from '@/lib/contact-thread';
 import { resolveMyRoomVisibility } from '@/lib/myroom-visibility';
 import { liveSubscriptionWhere } from '@/lib/subscription-status';
 
@@ -43,7 +43,7 @@ export default async function MePage() {
   const { canView: canViewMyRoom, isPreview: myRoomIsPreview } =
     await resolveMyRoomVisibility();
 
-  const [user, recentHistory, birthdayMails, contactReplies] = await Promise.all([
+  const [user, recentHistory, birthdayMails, contactThreads, contactUnread] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
@@ -59,8 +59,9 @@ export default async function MePage() {
     getUnifiedOrderHistory(session.user.id, 5),
     // 運営から届いた誕生日メール (新しい年順)。
     listUserBirthdayMails(session.user.id),
-    // 運営からのお問い合わせ返信 (新しい順)。
-    listMyContactReplies(session.user.id),
+    // お問い合わせ (チャット形式)。カードには件数と未読数だけ出す。
+    listMemberThreads(session.user.id, 3),
+    countUnreadForMember(session.user.id),
   ]);
   const orders = recentHistory.slice(0, 5);
 
@@ -202,17 +203,47 @@ export default async function MePage() {
         />
       )}
 
-      {/* 運営からのお知らせ (お問い合わせへの返信。ある場合のみ表示) */}
-      {contactReplies.length > 0 && (
-        <ContactReplySection
-          replies={contactReplies.map((r) => ({
-            id: r.id,
-            subject: r.subject,
-            body: r.body,
-            createdAt: r.createdAt.toISOString(),
-            readAt: r.readAt ? r.readAt.toISOString() : null,
-          }))}
-        />
+      {/* お問い合わせ (チャット形式のやり取り)。お問い合わせしたことがある場合のみ表示 */}
+      {contactThreads.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-brand-600"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </span>
+                <h2 className="text-lg font-semibold">お問い合わせ</h2>
+                {contactUnread > 0 && <Badge tone="brand">運営から新着 {contactUnread}</Badge>}
+              </div>
+              <Link href="/me/contact" className="text-sm text-brand-600 hover:underline">
+                すべて見る
+              </Link>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-2">
+            {contactThreads.map((t) => (
+              <Link
+                key={t.id}
+                href={`/me/contact/${t.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 hover:border-brand-200 hover:bg-brand-50/40"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-slate-800">{t.subject}</span>
+                  <span className="block truncate text-xs text-slate-500">
+                    {t.lastSender === 'ADMIN' ? '運営' : 'あなた'}: {t.lastPreview}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {t.unreadCount > 0 && <Badge tone="brand">新着</Badge>}
+                  <span className="text-xs text-slate-400">{formatJstDateTime(t.lastMessageAt)}</span>
+                </span>
+              </Link>
+            ))}
+          </CardBody>
+        </Card>
       )}
 
       {/* プラン特典の利用状況 */}

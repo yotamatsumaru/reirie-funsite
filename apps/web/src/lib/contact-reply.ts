@@ -3,7 +3,8 @@
  *
  *  - createContactReply : 返信を保存し、問い合わせ者へメール通知する。任意で
  *    対応状況を「対応済み(RESOLVED)」に更新する。送信者がログイン会員なら
- *    マイページの「運営からのお知らせ」にも表示される (ContactReply.userId 経由)。
+ *    マイページのお問い合わせ (チャット形式, /me/contact/[id]) にも表示される。
+ *    会員からの追加メッセージは lib/contact-thread.ts の postMemberMessage が扱う。
  *  - listMyContactReplies : マイページ用。ログイン会員が受け取った返信を新しい順で返す。
  *  - markContactReplyRead : マイページで返信を開いたときに既読化する (本人のもののみ)。
  *
@@ -12,8 +13,10 @@
  */
 import { prisma } from '@idol/db';
 import type { ContactReply } from '@idol/db';
+import type { ContactStatusLiteral } from '@idol/shared';
 import { sendEmail } from './email';
 import { env } from './env';
+import { statusAfterAdminReply } from './contact-thread';
 
 // ---------------------------------------------------------------------------
 // 返信の作成 + メール通知
@@ -50,6 +53,7 @@ export async function createContactReply(params: {
       subject: true,
       message: true,
       userId: true,
+      status: true,
     },
   });
   if (!contact) {
@@ -57,17 +61,25 @@ export async function createContactReply(params: {
   }
 
   // 先に返信レコードを作成 (メール送信の成否に関わらず記録を残す)。
-  const reply = await prisma.contactReply.create({
-    data: { contactMessageId, body, repliedById },
-  });
-
-  // 対応状況を更新 (任意)。返信＝対応完了とみなすデフォルト挙動。
-  if (markResolved) {
-    await prisma.contactMessage.update({
+  // 返信と同時に、スレッドの最終更新日時・対応状況を更新し、
+  // 会員の未読メッセージ (運営が返信した = 読んだ) も既読にする。
+  const now = new Date();
+  const [reply] = await prisma.$transaction([
+    prisma.contactReply.create({
+      data: { contactMessageId, sender: 'ADMIN', body, repliedById, createdAt: now },
+    }),
+    prisma.contactMessage.update({
       where: { id: contactMessageId },
-      data: { status: 'RESOLVED' },
-    });
-  }
+      data: {
+        lastMessageAt: now,
+        status: statusAfterAdminReply(contact.status as ContactStatusLiteral, markResolved),
+      },
+    }),
+    prisma.contactReply.updateMany({
+      where: { contactMessageId, sender: 'MEMBER', adminReadAt: null },
+      data: { adminReadAt: now },
+    }),
+  ]);
 
   // メール通知。失敗しても返信は残し、emailError に理由を記録する。
   let emailSent = false;
@@ -79,6 +91,7 @@ export async function createContactReply(params: {
       ? `Re: ${contact.subject}（${contact.ticketNumber}）`
       : `Re: ${contact.subject}`;
     const text = buildReplyMailText({
+      contactId: contact.id,
       name: contact.name,
       ticketNumber: contact.ticketNumber,
       originalSubject: contact.subject,
@@ -87,6 +100,7 @@ export async function createContactReply(params: {
       isMember: Boolean(contact.userId),
     });
     const html = buildReplyMailHtml({
+      contactId: contact.id,
       name: contact.name,
       ticketNumber: contact.ticketNumber,
       originalSubject: contact.subject,
@@ -126,7 +140,7 @@ export type MyContactReply = {
  */
 export async function listMyContactReplies(userId: string): Promise<MyContactReply[]> {
   const rows = await prisma.contactReply.findMany({
-    where: { contactMessage: { userId } },
+    where: { sender: 'ADMIN', contactMessage: { userId } },
     orderBy: { createdAt: 'desc' },
     take: 50,
     select: {
@@ -149,7 +163,7 @@ export async function listMyContactReplies(userId: string): Promise<MyContactRep
 /** ログイン会員の未読の運営返信件数 (マイページのバッジ用)。 */
 export async function countUnreadContactReplies(userId: string): Promise<number> {
   return prisma.contactReply.count({
-    where: { contactMessage: { userId }, readAt: null },
+    where: { sender: 'ADMIN', contactMessage: { userId }, readAt: null },
   });
 }
 
@@ -161,6 +175,7 @@ export async function markContactReplyRead(params: {
   await prisma.contactReply.updateMany({
     where: {
       id: params.replyId,
+      sender: 'ADMIN',
       readAt: null,
       contactMessage: { userId: params.userId },
     },
@@ -181,16 +196,23 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** マイページで確認できる旨の案内 (会員のみ)。 */
-function mypageNoticeText(isMember: boolean): string {
-  const mypageUrl = `${env.appBaseUrl.replace(/\/$/, '')}/me`;
+/** 会員がチャット形式で続きをやり取りできる画面の URL */
+export function contactThreadUrl(contactId: string): string {
+  return `${env.appBaseUrl.replace(/\/$/, '')}/me/contact/${contactId}`;
+}
+
+/** マイページで確認・返信できる旨の案内 (会員のみ)。 */
+function mypageNoticeText(isMember: boolean, contactId: string): string {
   return isMember
-    ? `この回答はマイページの「運営からのお知らせ」でも確認できます。\n${mypageUrl}\n\n`
+    ? `この回答の確認・続けてのご質問は、マイページの「お問い合わせ」からチャット形式で行えます。\n` +
+        `${contactThreadUrl(contactId)}\n\n`
     : '';
 }
 
 /** お問い合わせ返信メールのプレーンテキスト版。 */
 export function buildReplyMailText(params: {
+  /** 問い合わせ ID (会員向けのチャット画面へのリンクに使う) */
+  contactId: string;
   name: string;
   /** 受付番号 (控えメール機能導入前の問い合わせは null)。 */
   ticketNumber?: string | null;
@@ -206,7 +228,7 @@ export function buildReplyMailText(params: {
     `━━━━━━━━━━━━━━━━━━\n` +
     `${params.body}\n` +
     `━━━━━━━━━━━━━━━━━━\n\n` +
-    mypageNoticeText(params.isMember) +
+    mypageNoticeText(params.isMember, params.contactId) +
     `＜お問い合わせ内容＞\n` +
     (params.ticketNumber ? `受付番号: ${params.ticketNumber}\n` : '') +
     `件名: ${params.originalSubject}\n` +
@@ -222,6 +244,8 @@ export function buildReplyMailText(params: {
  * 本文の改行は <br> に変換。元の問い合わせ内容は引用として控えめに表示。
  */
 export function buildReplyMailHtml(params: {
+  /** 問い合わせ ID (会員向けのチャット画面へのリンクに使う) */
+  contactId: string;
   name: string;
   /** 受付番号 (控えメール機能導入前の問い合わせは null)。 */
   ticketNumber?: string | null;
@@ -235,12 +259,12 @@ export function buildReplyMailHtml(params: {
   const safeSubject = escapeHtml(params.originalSubject);
   const safeOriginal = escapeHtml(params.originalMessage).replace(/\n/g, '<br>');
   const siteUrl = env.appBaseUrl.replace(/\/$/, '');
-  const mypageUrl = `${siteUrl}/me`;
+  const threadUrl = contactThreadUrl(params.contactId);
 
   const mypageBlock = params.isMember
     ? `<p style="margin:0 0 20px;font-size:13px;line-height:1.7;color:#6b7280;">
-         この回答はマイページの「運営からのお知らせ」でも確認できます。<br>
-         <a href="${escapeHtml(mypageUrl)}" style="color:#a84f89;text-decoration:underline;">マイページを開く →</a>
+         この回答の確認・続けてのご質問は、マイページの「お問い合わせ」からチャット形式で行えます。<br>
+         <a href="${escapeHtml(threadUrl)}" style="color:#a84f89;text-decoration:underline;">お問い合わせのやり取りを開く →</a>
        </p>`
     : '';
 

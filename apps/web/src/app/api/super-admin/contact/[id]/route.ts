@@ -1,17 +1,17 @@
 /**
- * PATCH /api/super-admin/contact/[id] — お問い合わせの対応状況・管理メモを更新 (SUPER_ADMIN 限定)
+ * PATCH /api/super-admin/contact/[id] — お問い合わせの対応状況・管理メモを更新 (SUPER_ADMIN / STAFF)
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@idol/db';
 import { ContactUpdateSchema } from '@idol/shared';
-import { requireSuperAdmin } from '@/auth';
+import { requireSuperAdminOrStaff } from '@/auth';
 import { handle, errors } from '@/lib/errors';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 export const PATCH = handle(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await requireSuperAdmin();
+  const session = await requireSuperAdminOrStaff();
   const { id } = await ctx.params;
   const body = await req.json();
   const input = ContactUpdateSchema.parse(body);
